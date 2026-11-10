@@ -1,0 +1,102 @@
+---
+import '../styles/global.css';
+import { takeFlash } from '../lib/flash';
+import { hasRole } from '../lib/auth';
+import { ROLE_LABELS } from '../lib/labels';
+
+interface Props {
+  title: string;
+  error?: string | null;
+  bare?: boolean;
+}
+
+const { title, error, bare = false } = Astro.props;
+const flash = takeFlash(Astro.cookies);
+const profile = Astro.locals.profile;
+const path = Astro.url.pathname;
+
+const nav = [
+  { href: '/', label: 'Inicio' },
+  { href: '/empresas', label: 'Empresas' },
+  { href: '/oportunidades', label: 'Oportunidades' },
+  { href: '/convenios', label: 'Convenios' },
+  { href: '/jornadas', label: 'Jornadas' },
+  ...(hasRole(Astro.locals, 'direccion')
+    ? [
+        { href: '/admin/usuarios', label: 'Usuarios' },
+        { href: '/admin/parametros', label: 'Parámetros' },
+      ]
+    : []),
+];
+const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWith(href));
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>{title} · CRM SOE</title>
+  </head>
+  <body>
+    {
+      !bare && profile?.active && (
+        <header class="border-b border-slate-200 bg-white">
+          <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
+            <a href="/" class="font-semibold text-brand-800 hover:no-underline">
+              CRM SOE
+            </a>
+            <nav class="flex flex-1 flex-wrap gap-1">
+              {nav.map((item) => (
+                <a
+                  href={item.href}
+                  class:list={[
+                    'rounded-md px-3 py-1.5 text-sm hover:bg-slate-100 hover:no-underline',
+                    isActive(item.href) ? 'bg-brand-50 font-medium text-brand-800' : 'text-slate-600',
+                  ]}
+                >
+                  {item.label}
+                </a>
+              ))}
+            </nav>
+            <div class="flex items-center gap-3 text-sm">
+              <span class="text-slate-600">
+                {profile.full_name}
+                {profile.role && <span class="badge ml-1">{ROLE_LABELS[profile.role]}</span>}
+              </span>
+              <form method="post" action="/logout">
+                <button class="btn btn-sm" type="submit">Salir</button>
+              </form>
+            </div>
+          </div>
+        </header>
+      )
+    }
+    <main class:list={['mx-auto px-4 py-6', bare ? 'max-w-md' : 'max-w-7xl']}>
+      {
+        flash && (
+          <div
+            role="status"
+            class:list={[
+              'mb-4 rounded-md border px-4 py-3 text-sm',
+              flash.type === 'ok'
+                ? 'border-green-200 bg-green-50 text-green-800'
+                : 'border-red-200 bg-red-50 text-red-800',
+            ]}
+          >
+            {flash.message}
+          </div>
+        )
+      }
+      {
+        error && (
+          <div role="alert" class="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            {error}
+          </div>
+        )
+      }
+      <slot />
+    </main>
+  </body>
+</html>

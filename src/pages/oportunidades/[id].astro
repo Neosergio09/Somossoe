@@ -1,0 +1,333 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import { hasRole } from '../../lib/auth';
+import { cop, fmtDate, fmtDateTime } from '../../lib/format';
+import { date, ensure, FormError, int, nullify, parseForm, runActions, text, uuid, z } from '../../lib/forms';
+import {
+  AGREEMENT_STATUS_BADGE,
+  AGREEMENT_STATUS_LABELS,
+  CAMPAIGN_STATUS_BADGE,
+  CAMPAIGN_STATUS_LABELS,
+  INTERACTION_LABELS,
+  LOST_LABELS,
+  MANUAL_STAGES,
+  PAYROLL_LABELS,
+  STAGE_LABELS,
+  type DealStage,
+} from '../../lib/labels';
+import { activeOrigins, activeUsers, operationalCities } from '../../lib/options';
+
+const { supabase } = Astro.locals;
+const id = Astro.params.id!;
+
+const outcome = await runActions(Astro, {
+  update_deal: async (form) => {
+    const input = parseForm(
+      z.object({
+        deal_name_branch: text(200),
+        branch_id: uuid().optional(),
+        city_id: uuid(),
+        primary_contact_id: uuid().optional(),
+        assigned_user_id: uuid(),
+        origin_code: z.string().min(1),
+        target_employees_n: int().positive().optional(),
+        payroll_frequency: z.enum(['mensual', 'quincenal']).optional(),
+        estimated_close_date: date().optional(),
+        tentative_campaign_date: date().optional(),
+        next_action: text(300).optional(),
+        next_action_due_date: date().optional(),
+        next_action_owner_id: uuid().optional(),
+      }),
+      form,
+    );
+    ensure(await supabase.from('deals_opportunities').update(nullify(input)).eq('id', id).select('id').single());
+    return { message: 'Oportunidad actualizada.' };
+  },
+  change_stage: async (form) => {
+    const input = parseForm(
+      z.object({
+        stage: z.enum(MANUAL_STAGES as [DealStage, ...DealStage[]]),
+        lost_substatus: z.enum(['nurturing', 'no_contactar']).optional(),
+      }),
+      form,
+    );
+    if (input.stage === 'cierre_perdido' && !input.lost_substatus) {
+      throw new FormError('Seleccione el sub-estado del cierre perdido.');
+    }
+    ensure(
+      await supabase
+        .from('deals_opportunities')
+        .update({ stage: input.stage, lost_substatus: input.stage === 'cierre_perdido' ? input.lost_substatus! : null })
+        .eq('id', id)
+        .select('id')
+        .single(),
+    );
+    return { message: `Etapa cambiada a ${STAGE_LABELS[input.stage]}.` };
+  },
+  add_log: async (form) => {
+    const input = parseForm(
+      z.object({
+        interaction_type: z.enum(['reunion', 'llamada', 'whatsapp', 'correo']),
+        interaction_note: text(4000),
+      }),
+      form,
+    );
+    ensure(await supabase.from('deal_interaction_logs').insert({ ...input, deal_id: id }));
+    return { message: 'Interacción registrada en la bitácora.' };
+  },
+  recalculate: async () => {
+    const amount = ensure(await supabase.rpc('recalculate_deal_forecast', { p_deal_id: id }));
+    return { message: `Facturación estimada recalculada: ${cop(Number(amount))}.` };
+  },
+});
+if (outcome?.kind === 'redirect') return outcome.response;
+const error = outcome?.kind === 'error' ? outcome.error : null;
+
+const { data: deal } = await supabase
+  .from('deals_opportunities')
+  .select(
+    '*, companies(id, name, total_employees), cities(name), company_branches(name), contacts(full_name, role_title, phone_whatsapp, email), assigned:users_profiles!deals_opportunities_assigned_user_id_fkey(full_name), owner:users_profiles!deals_opportunities_next_action_owner_id_fkey(full_name)',
+  )
+  .eq('id', id)
+  .maybeSingle();
+if (!deal) return new Response('Oportunidad no encontrada', { status: 404 });
+
+const [board, logs, agreements, campaigns, branches, contacts, cities, users, origins] = await Promise.all([
+  supabase.from('v_deals_board').select('days_inactive, inactivity_alert, is_new_business, next_action_overdue').eq('id', id).maybeSingle(),
+  supabase.from('deal_interaction_logs').select('*, users_profiles(full_name)').eq('deal_id', id).order('created_at', { ascending: false }),
+  supabase.from('v_agreements').select('id, deal_name_branch, effective_status, max_installments, payroll_frequency, valid_until').eq('company_id', deal.company_id).or(`deal_id.eq.${id},deal_id.is.null`).order('created_at', { ascending: false }),
+  supabase.from('v_campaigns').select('id, status, first_session_date, sessions_count, attended_headcount, responsible_user_name').eq('deal_id', id).order('created_at', { ascending: false }),
+  supabase.from('company_branches').select('id, name').eq('company_id', deal.company_id).order('name'),
+  supabase.from('contacts').select('id, full_name, role_title').eq('company_id', deal.company_id).eq('active', true).order('full_name'),
+  operationalCities(supabase),
+  activeUsers(supabase, ['comercial', 'direccion']),
+  activeOrigins(supabase),
+]);
+
+const canEdit = hasRole(Astro.locals, 'comercial', 'direccion');
+const canLog = canEdit;
+const isDireccion = hasRole(Astro.locals, 'direccion');
+const canCreateAgreement = hasRole(Astro.locals, 'comercial');
+const canCreateCampaign = hasRole(Astro.locals, 'operacion') && ['convenio_firmado', 'jornada_en_ejecucion'].includes(deal.stage);
+const automaticStage = ['jornada_en_ejecucion', 'facturacion_cerrada'].includes(deal.stage);
+const closedForGood = deal.stage === 'cierre_perdido' && deal.lost_substatus === 'no_contactar';
+const flags = board.data;
+---
+
+<AppLayout title={deal.deal_name_branch} error={error}>
+  <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <a href="/oportunidades" class="text-sm">← Oportunidades</a>
+      <h1>{deal.deal_name_branch}</h1>
+      <p class="text-sm text-slate-600">
+        <a href={`/empresas/${deal.company_id}`}>{deal.companies?.name}</a> · {deal.cities?.name}
+        {deal.company_branches?.name && ` · ${deal.company_branches.name}`}
+      </p>
+      <div class="mt-2 flex flex-wrap gap-1">
+        <span class="badge badge-blue">{STAGE_LABELS[deal.stage]}</span>
+        {deal.lost_substatus && <span class="badge badge-red">{LOST_LABELS[deal.lost_substatus]}</span>}
+        {flags?.is_new_business ? <span class="badge">Nuevo negocio</span> : <span class="badge">Cliente recurrente</span>}
+        {flags?.inactivity_alert && <span class="badge badge-amber">{flags.days_inactive} días sin interacción</span>}
+        {flags?.next_action_overdue && <span class="badge badge-red">Siguiente acción vencida</span>}
+      </div>
+    </div>
+    <div class="text-right">
+      <div class="text-xs text-slate-500">Facturación estimada</div>
+      <div class="text-2xl font-semibold text-brand-800">{cop(deal.estimated_billing_amount)}</div>
+      <div class="text-xs text-slate-500">
+        {deal.target_employees_n ?? '—'} × {Math.round(Number(deal.conversion_rate_c_snapshot) * 100)}% × {cop(Number(deal.average_ticket_t_snapshot))}
+      </div>
+      {
+        isDireccion && (
+          <form method="post" class="mt-1">
+            <input type="hidden" name="_action" value="recalculate" />
+            <button class="btn btn-sm" type="submit">Recalcular con parámetros vigentes</button>
+          </form>
+        )
+      }
+    </div>
+  </div>
+
+  <div class="grid gap-4 lg:grid-cols-3">
+    <div class="space-y-4 lg:col-span-2">
+      <section class="card">
+        <h2 class="mb-3">Bitácora de interacciones</h2>
+        {
+          canLog && (
+            <form method="post" class="mb-4 space-y-2">
+              <input type="hidden" name="_action" value="add_log" />
+              <div class="flex flex-wrap gap-2">
+                {Object.entries(INTERACTION_LABELS).map(([value, label], i) => (
+                  <label class="flex items-center gap-1 text-sm">
+                    <input type="radio" name="interaction_type" value={value} required checked={i === 0} /> {label}
+                  </label>
+                ))}
+              </div>
+              <textarea class="input" name="interaction_note" rows="3" required placeholder="Resumen de lo conversado o copia del mensaje" />
+              <button class="btn btn-primary" type="submit">Registrar interacción</button>
+            </form>
+          )
+        }
+        <ol class="space-y-3">
+          {
+            logs.data?.map((l) => (
+              <li class="border-l-2 border-brand-100 pl-3 text-sm">
+                <div class="text-xs text-slate-500">
+                  <span class="badge mr-1">{INTERACTION_LABELS[l.interaction_type]}</span>
+                  {fmtDateTime(l.created_at)} · {l.users_profiles?.full_name}
+                </div>
+                <p class="mt-1 whitespace-pre-line">{l.interaction_note}</p>
+              </li>
+            ))
+          }
+          {!logs.data?.length && <li class="text-sm text-slate-500">Sin interacciones registradas.</li>}
+        </ol>
+      </section>
+
+      <section class="card">
+        <div class="mb-3 flex items-center justify-between">
+          <h2>Convenios</h2>
+          {canCreateAgreement && <a class="btn btn-sm" href={`/convenios/nuevo?deal_id=${id}`}>Nuevo convenio</a>}
+        </div>
+        <table class="table">
+          <thead><tr><th>Alcance</th><th>Estado</th><th>Cuotas</th><th>Vigencia</th></tr></thead>
+          <tbody>
+            {agreements.data?.map((a) => (
+              <tr>
+                <td><a href={`/convenios/${a.id}`}>{a.deal_name_branch ? 'Esta oportunidad' : 'Marco (todas las sedes)'}</a></td>
+                <td><span class={AGREEMENT_STATUS_BADGE[a.effective_status ?? 'borrador']}>{AGREEMENT_STATUS_LABELS[a.effective_status ?? 'borrador']}</span></td>
+                <td>{a.max_installments} {a.payroll_frequency ? PAYROLL_LABELS[a.payroll_frequency].toLowerCase() : ''}</td>
+                <td>{fmtDate(a.valid_until)}</td>
+              </tr>
+            ))}
+            {!agreements.data?.length && <tr><td colspan="4" class="text-slate-500">Sin convenios.</td></tr>}
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card">
+        <div class="mb-3 flex items-center justify-between">
+          <h2>Jornadas</h2>
+          {canCreateCampaign && <a class="btn btn-sm" href={`/jornadas/nueva?deal_id=${id}`}>Programar jornada</a>}
+        </div>
+        <table class="table">
+          <thead><tr><th>Primera sesión</th><th>Estado</th><th>Sesiones</th><th>Asistencia</th><th>Responsable</th></tr></thead>
+          <tbody>
+            {campaigns.data?.map((j) => (
+              <tr>
+                <td><a href={`/jornadas/${j.id}`}>{fmtDate(j.first_session_date)}</a></td>
+                <td><span class={j.status ? CAMPAIGN_STATUS_BADGE[j.status] : 'badge'}>{j.status ? CAMPAIGN_STATUS_LABELS[j.status] : ''}</span></td>
+                <td>{j.sessions_count}</td>
+                <td>{j.attended_headcount}</td>
+                <td>{j.responsible_user_name}</td>
+              </tr>
+            ))}
+            {!campaigns.data?.length && <tr><td colspan="5" class="text-slate-500">Sin jornadas.</td></tr>}
+          </tbody>
+        </table>
+      </section>
+    </div>
+
+    <div class="space-y-4">
+      <section class="card">
+        <h2 class="mb-3">Etapa</h2>
+        {
+          automaticStage ? (
+            <p class="text-sm text-slate-600">Esta etapa avanza automáticamente con las jornadas y la facturación.</p>
+          ) : closedForGood ? (
+            <p class="text-sm text-slate-600">Oportunidad descartada definitivamente (No Contactar).</p>
+          ) : canEdit ? (
+            <form method="post" class="space-y-2">
+              <input type="hidden" name="_action" value="change_stage" />
+              <select class="input" name="stage">
+                {MANUAL_STAGES.filter((s) => deal.stage !== 'cierre_perdido' || s !== 'convenio_firmado').map((s) => (
+                  <option value={s} selected={deal.stage === s}>{STAGE_LABELS[s]}</option>
+                ))}
+              </select>
+              <select class="input" name="lost_substatus">
+                <option value="">Sub-estado (solo para Cierre Perdido)</option>
+                {Object.entries(LOST_LABELS).map(([value, label]) => (
+                  <option value={value} selected={deal.lost_substatus === value}>{label}</option>
+                ))}
+              </select>
+              <button class="btn btn-primary w-full" type="submit">Cambiar etapa</button>
+              <p class="text-xs text-slate-500">
+                Reunión Exploratoria en adelante exige una Reunión en la bitácora. Convenio Firmado exige un convenio aprobado y la fecha tentativa de jornada.
+              </p>
+            </form>
+          ) : (
+            <p class="text-sm text-slate-600">Solo lectura.</p>
+          )
+        }
+      </section>
+
+      <section class="card text-sm">
+        <h2 class="mb-3">Datos del negocio</h2>
+        <dl class="space-y-2">
+          <div><dt class="label">Siguiente acción</dt><dd>{deal.next_action ?? '—'} {deal.next_action_due_date && `(${fmtDate(deal.next_action_due_date)} · ${deal.owner?.full_name ?? ''})`}</dd></div>
+          <div><dt class="label">Ejecutivo</dt><dd>{deal.assigned?.full_name}</dd></div>
+          <div><dt class="label">Contacto principal</dt><dd>{deal.contacts ? `${deal.contacts.full_name} · ${deal.contacts.role_title}` : '—'}</dd></div>
+          <div><dt class="label">Empleados a atender (N)</dt><dd>{deal.target_employees_n ?? '—'}{deal.companies?.total_employees ? ` de ${deal.companies.total_employees}` : ''}</dd></div>
+          <div><dt class="label">Pago de nómina</dt><dd>{deal.payroll_frequency ? PAYROLL_LABELS[deal.payroll_frequency] : '—'}</dd></div>
+          <div><dt class="label">Cierre estimado de convenio</dt><dd>{fmtDate(deal.estimated_close_date)}</dd></div>
+          <div><dt class="label">Fecha tentativa de jornada</dt><dd>{fmtDate(deal.tentative_campaign_date)}</dd></div>
+          <div><dt class="label">Origen</dt><dd>{origins.find((o) => o.code === deal.origin_code)?.label ?? deal.origin_code}</dd></div>
+        </dl>
+
+        {
+          canEdit && !closedForGood && (
+            <details class="mt-4">
+              <summary class="cursor-pointer font-medium text-brand-700">Editar datos</summary>
+              <form method="post" class="mt-3 space-y-2">
+                <input type="hidden" name="_action" value="update_deal" />
+                <label class="label">Nombre del negocio</label>
+                <input class="input" name="deal_name_branch" required value={deal.deal_name_branch} />
+                <label class="label">Ciudad</label>
+                <select class="input" name="city_id">
+                  {cities.map((c) => <option value={c.id} selected={deal.city_id === c.id}>{c.name}</option>)}
+                </select>
+                <label class="label">Sede</label>
+                <select class="input" name="branch_id">
+                  <option value="">—</option>
+                  {branches.data?.map((b) => <option value={b.id} selected={deal.branch_id === b.id}>{b.name}</option>)}
+                </select>
+                <label class="label">Contacto principal</label>
+                <select class="input" name="primary_contact_id">
+                  <option value="">—</option>
+                  {contacts.data?.map((c) => <option value={c.id} selected={deal.primary_contact_id === c.id}>{c.full_name}</option>)}
+                </select>
+                <label class="label">Ejecutivo</label>
+                <select class="input" name="assigned_user_id">
+                  {users.map((u) => <option value={u.id} selected={deal.assigned_user_id === u.id}>{u.full_name}</option>)}
+                </select>
+                <label class="label">Origen</label>
+                <select class="input" name="origin_code">
+                  {origins.map((o) => <option value={o.code} selected={deal.origin_code === o.code}>{o.label}</option>)}
+                </select>
+                <label class="label">Empleados a atender (N)</label>
+                <input class="input" name="target_employees_n" type="number" min="1" value={deal.target_employees_n ?? ''} />
+                <label class="label">Pago de nómina</label>
+                <select class="input" name="payroll_frequency">
+                  <option value="">—</option>
+                  {Object.entries(PAYROLL_LABELS).map(([value, label]) => <option value={value} selected={deal.payroll_frequency === value}>{label}</option>)}
+                </select>
+                <label class="label">Cierre estimado de convenio</label>
+                <input class="input" name="estimated_close_date" type="date" value={deal.estimated_close_date ?? ''} />
+                <label class="label">Fecha tentativa de jornada</label>
+                <input class="input" name="tentative_campaign_date" type="date" value={deal.tentative_campaign_date ?? ''} />
+                <label class="label">Siguiente acción</label>
+                <input class="input" name="next_action" value={deal.next_action ?? ''} />
+                <input class="input" name="next_action_due_date" type="date" value={deal.next_action_due_date ?? ''} />
+                <select class="input" name="next_action_owner_id">
+                  <option value="">Responsable…</option>
+                  {users.map((u) => <option value={u.id} selected={deal.next_action_owner_id === u.id}>{u.full_name}</option>)}
+                </select>
+                <button class="btn btn-primary w-full" type="submit">Guardar</button>
+              </form>
+            </details>
+          )
+        }
+      </section>
+    </div>
+  </div>
+</AppLayout>

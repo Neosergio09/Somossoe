@@ -1,0 +1,174 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import { fmtDate, todayCo } from '../../lib/format';
+import { checkbox, date, ensure, parseForm, runActions, text, time, uuid, z } from '../../lib/forms';
+import { activeUsers, operationalCities } from '../../lib/options';
+import type { TablesInsert } from '../../lib/database.types';
+
+const { supabase } = Astro.locals;
+const dealId = Astro.url.searchParams.get('deal_id');
+
+const outcome = await runActions(Astro, {
+  create: async (form) => {
+    const input = parseForm(
+      z.object({
+        deal_id: uuid(),
+        agreement_id: uuid(),
+        responsible_user_id: uuid(),
+        branch_id: uuid().optional(),
+        city_id: uuid().optional(),
+        logistics_confirmed: checkbox(),
+        notes: text(2000).optional(),
+        session_date: date().optional(),
+        start_time: time().optional(),
+        end_time: time().optional(),
+        location_detail: text(200).optional(),
+      }),
+      form,
+    );
+    const { session_date, start_time, end_time, location_detail, ...campaign } = input;
+    // company_id (y ciudad/sede por defecto) los hereda el trigger desde la oportunidad
+    const created = ensure(
+      await supabase
+        .from('campaigns_jornadas')
+        .insert(campaign as TablesInsert<'campaigns_jornadas'>)
+        .select('id')
+        .single(),
+    );
+
+    if (session_date && start_time && end_time) {
+      const { error } = await supabase.from('campaign_sessions').insert({
+        campaign_id: created.id,
+        session_date,
+        start_time,
+        end_time,
+        location_detail: location_detail ?? null,
+        responsible_user_id: input.responsible_user_id,
+      });
+      if (error) {
+        return { message: 'Jornada programada, pero la sesión no se pudo guardar. Agréguela desde el detalle.', redirect: `/jornadas/${created.id}` };
+      }
+    }
+    return { message: 'Jornada programada.', redirect: `/jornadas/${created.id}` };
+  },
+});
+if (outcome?.kind === 'redirect') return outcome.response;
+const error = outcome?.kind === 'error' ? outcome.error : null;
+const v = outcome?.kind === 'error' ? outcome.values : {};
+const selectedDeal = v.deal_id ?? dealId;
+
+const { data: deals } = await supabase
+  .from('v_deals_board')
+  .select('id, deal_name_branch, company_name, company_id, city_id, branch_id, tentative_campaign_date')
+  .in('stage', ['convenio_firmado', 'jornada_en_ejecucion'])
+  .order('deal_name_branch');
+const deal = deals?.find((d) => d.id === selectedDeal);
+
+const [agreements, branches, users, cities] = await Promise.all([
+  deal
+    ? supabase
+        .from('v_agreements')
+        .select('id, deal_id, max_installments, payroll_frequency, valid_until, effective_status')
+        .eq('company_id', deal.company_id!)
+        .eq('effective_status', 'aprobado')
+        .or(`deal_id.eq.${deal.id},deal_id.is.null`)
+    : Promise.resolve({ data: [] as { id: string; deal_id: string | null; max_installments: number; payroll_frequency: string; valid_until: string | null; effective_status: string }[] }),
+  deal
+    ? supabase.from('company_branches').select('id, name').eq('company_id', deal.company_id!).order('name')
+    : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+  activeUsers(supabase, ['operacion']),
+  operationalCities(supabase),
+]);
+---
+
+<AppLayout title="Programar jornada" error={error}>
+  <h1 class="mb-4">Programar jornada</h1>
+
+  {
+    !deal ? (
+      <form method="get" class="card max-w-xl space-y-3">
+        <label class="label" for="deal_id">Oportunidad (en Convenio Firmado o Jornada en Ejecución)</label>
+        <select class="input" id="deal_id" name="deal_id" required>
+          <option value="">Seleccione…</option>
+          {deals?.map((d) => <option value={d.id}>{d.company_name} · {d.deal_name_branch}</option>)}
+        </select>
+        {!deals?.length && <p class="text-sm text-slate-500">No hay oportunidades con convenio firmado.</p>}
+        <button class="btn btn-primary" type="submit">Continuar</button>
+      </form>
+    ) : (
+      <form method="post" class="card space-y-6">
+        <input type="hidden" name="_action" value="create" />
+        <input type="hidden" name="deal_id" value={deal.id} />
+        <p class="text-sm">
+          Oportunidad: <a href={`/oportunidades/${deal.id}`}>{deal.company_name} · {deal.deal_name_branch}</a>
+          {deal.tentative_campaign_date && <span class="text-slate-500"> · fecha tentativa {fmtDate(deal.tentative_campaign_date)}</span>}
+        </p>
+
+        <fieldset class="grid-form">
+          <div class="sm:col-span-2">
+            <label class="label" for="agreement_id">Convenio aprobado *</label>
+            <select class="input" id="agreement_id" name="agreement_id" required>
+              {agreements.data?.map((a) => (
+                <option value={a.id} selected={v.agreement_id === a.id}>
+                  {a.deal_id ? 'Convenio de esta oportunidad' : 'Convenio marco'} · {a.max_installments} cuotas {a.payroll_frequency} · vigente hasta {fmtDate(a.valid_until)}
+                </option>
+              ))}
+            </select>
+            {!agreements.data?.length && <p class="mt-1 text-sm text-red-700">No hay convenio aprobado y vigente para esta oportunidad.</p>}
+          </div>
+          <div>
+            <label class="label" for="responsible_user_id">Responsable operativo *</label>
+            <select class="input" id="responsible_user_id" name="responsible_user_id" required>
+              {users.map((u) => <option value={u.id} selected={v.responsible_user_id === u.id}>{u.full_name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label class="label" for="city_id">Ciudad</label>
+            <select class="input" id="city_id" name="city_id">
+              {cities.map((c) => <option value={c.id} selected={(v.city_id ?? deal.city_id) === c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label class="label" for="branch_id">Sede</label>
+            <select class="input" id="branch_id" name="branch_id">
+              <option value="">—</option>
+              {branches.data?.map((b) => <option value={b.id} selected={(v.branch_id ?? deal.branch_id) === b.id}>{b.name}</option>)}
+            </select>
+          </div>
+          <label class="flex items-center gap-2 self-end pb-2 text-sm">
+            <input type="checkbox" name="logistics_confirmed" checked={v.logistics_confirmed === 'on'} /> Logística confirmada
+          </label>
+          <div class="sm:col-span-2">
+            <label class="label" for="notes">Notas</label>
+            <textarea class="input" id="notes" name="notes" rows="2">{v.notes}</textarea>
+          </div>
+        </fieldset>
+
+        <fieldset class="grid-form border-t border-slate-200 pt-4">
+          <legend class="mb-2 text-sm font-semibold">Primera sesión (opcional)</legend>
+          <div>
+            <label class="label" for="session_date">Fecha</label>
+            <input class="input" id="session_date" name="session_date" type="date" min={todayCo()} value={v.session_date ?? deal.tentative_campaign_date ?? ''} />
+          </div>
+          <div>
+            <label class="label" for="location_detail">Lugar dentro de la sede</label>
+            <input class="input" id="location_detail" name="location_detail" placeholder="Ej. Auditorio piso 2" value={v.location_detail} />
+          </div>
+          <div>
+            <label class="label" for="start_time">Hora de inicio</label>
+            <input class="input" id="start_time" name="start_time" type="time" value={v.start_time} />
+          </div>
+          <div>
+            <label class="label" for="end_time">Hora de fin</label>
+            <input class="input" id="end_time" name="end_time" type="time" value={v.end_time} />
+          </div>
+        </fieldset>
+
+        <div class="flex gap-2">
+          <button class="btn btn-primary" type="submit" disabled={!agreements.data?.length}>Programar jornada</button>
+          <a class="btn" href={`/oportunidades/${deal.id}`}>Cancelar</a>
+        </div>
+      </form>
+    )
+  }
+</AppLayout>

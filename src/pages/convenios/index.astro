@@ -1,0 +1,76 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import { fmtDate } from '../../lib/format';
+import { AGREEMENT_STATUS_BADGE, AGREEMENT_STATUS_LABELS, PAYROLL_LABELS } from '../../lib/labels';
+
+const { supabase } = Astro.locals;
+const status = Astro.url.searchParams.get('estado') ?? '';
+
+let query = supabase.from('v_agreements').select('*').order('updated_at', { ascending: false }).limit(300);
+if (status) query = query.eq('effective_status', status);
+const { data: agreements } = await query;
+---
+
+<AppLayout title="Convenios">
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <h1>Convenios</h1>
+    <p class="text-sm text-slate-500">Los convenios se crean desde la ficha de la empresa o de la oportunidad.</p>
+  </div>
+
+  <nav class="mb-4 flex flex-wrap gap-1 text-sm">
+    {
+      [['', 'Todos'], ...Object.entries(AGREEMENT_STATUS_LABELS)].map(([value, label]) => (
+        <a
+          href={value ? `?estado=${value}` : '?'}
+          class:list={['rounded-md px-3 py-1.5 hover:no-underline', status === value ? 'bg-brand-700 text-white' : 'bg-white text-slate-700 border border-slate-200']}
+        >
+          {label}
+        </a>
+      ))
+    }
+  </nav>
+
+  <div class="card overflow-x-auto p-0">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Empresa</th>
+          <th>Alcance</th>
+          <th>Estado</th>
+          <th>Documentación</th>
+          <th>Cuotas</th>
+          <th>Vigencia</th>
+        </tr>
+      </thead>
+      <tbody>
+        {
+          agreements?.map((a) => (
+            <tr>
+              <td>
+                <a href={`/convenios/${a.id}`} class="font-medium">{a.company_name}</a>
+              </td>
+              <td>{a.deal_name_branch ?? 'Marco (todas las sedes)'}</td>
+              <td>
+                <span class={AGREEMENT_STATUS_BADGE[a.effective_status ?? 'borrador']}>
+                  {AGREEMENT_STATUS_LABELS[a.effective_status ?? 'borrador']}
+                </span>
+              </td>
+              <td class="text-xs">
+                {a.documents_count} doc.
+                {a.has_signed_document ? <span class="badge badge-green ml-1">Firmado</span> : <span class="badge badge-amber ml-1">Sin convenio firmado</span>}
+                {a.documents_verified && <span class="badge badge-green ml-1">Verificada</span>}
+              </td>
+              <td>
+                {a.max_installments} {a.payroll_frequency ? PAYROLL_LABELS[a.payroll_frequency].toLowerCase() : ''}
+              </td>
+              <td class="whitespace-nowrap">
+                {fmtDate(a.valid_from)} – {fmtDate(a.valid_until)}
+              </td>
+            </tr>
+          ))
+        }
+        {!agreements?.length && <tr><td colspan="6" class="py-6 text-center text-slate-500">No hay convenios.</td></tr>}
+      </tbody>
+    </table>
+  </div>
+</AppLayout>

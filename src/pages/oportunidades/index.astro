@@ -1,0 +1,103 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import { hasRole } from '../../lib/auth';
+import { cop, fmtDate } from '../../lib/format';
+import { KANBAN_STAGES, LOST_LABELS, STAGE_LABELS } from '../../lib/labels';
+import { activeUsers, operationalCities } from '../../lib/options';
+
+const { supabase, userId } = Astro.locals;
+const params = Astro.url.searchParams;
+const cityId = params.get('ciudad') ?? '';
+const owner = params.get('ejecutivo') ?? '';
+const showLost = params.get('perdidas') === '1';
+
+let query = supabase.from('v_deals_board').select('*').order('estimated_close_date', { nullsFirst: false });
+if (cityId) query = query.eq('city_id', cityId);
+if (owner === 'mias') query = query.eq('assigned_user_id', userId!);
+else if (owner) query = query.eq('assigned_user_id', owner);
+
+const [{ data: deals }, cities, users] = await Promise.all([
+  query,
+  operationalCities(supabase),
+  activeUsers(supabase, ['comercial', 'direccion']),
+]);
+
+const columns = [...KANBAN_STAGES, ...(showLost ? (['cierre_perdido'] as const) : [])].map((stage) => {
+  const items = (deals ?? []).filter((d) => d.stage === stage);
+  const total = items.reduce((sum, d) => sum + (d.estimated_billing_amount ?? 0), 0);
+  return { stage, items, total };
+});
+const filterUrl = (patch: Record<string, string>) => {
+  const p = new URLSearchParams(params);
+  for (const [k, v] of Object.entries(patch)) v ? p.set(k, v) : p.delete(k);
+  const s = p.toString();
+  return s ? `?${s}` : '?';
+};
+---
+
+<AppLayout title="Oportunidades">
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <h1>Oportunidades</h1>
+    {hasRole(Astro.locals, 'comercial') && <a class="btn btn-primary" href="/oportunidades/nueva">Nueva oportunidad</a>}
+  </div>
+
+  <form method="get" class="mb-4 flex flex-wrap items-end gap-2">
+    <div>
+      <label class="label" for="ciudad">Ciudad</label>
+      <select class="input" id="ciudad" name="ciudad">
+        <option value="">Todas</option>
+        {cities.map((c) => <option value={c.id} selected={cityId === c.id}>{c.name}</option>)}
+      </select>
+    </div>
+    <div>
+      <label class="label" for="ejecutivo">Ejecutivo</label>
+      <select class="input" id="ejecutivo" name="ejecutivo">
+        <option value="">Todos</option>
+        <option value="mias" selected={owner === 'mias'}>Mis oportunidades</option>
+        {users.map((u) => <option value={u.id} selected={owner === u.id}>{u.full_name}</option>)}
+      </select>
+    </div>
+    <label class="flex items-center gap-2 pb-2 text-sm">
+      <input type="checkbox" name="perdidas" value="1" checked={showLost} /> Ver cierres perdidos
+    </label>
+    <button class="btn" type="submit">Filtrar</button>
+    {(cityId || owner || showLost) && <a class="btn" href={filterUrl({ ciudad: '', ejecutivo: '', perdidas: '' })}>Limpiar</a>}
+  </form>
+
+  <div class="flex gap-3 overflow-x-auto pb-4">
+    {
+      columns.map((col) => (
+        <section class="flex w-72 shrink-0 flex-col rounded-lg bg-slate-100 p-2">
+          <header class="mb-2 px-1">
+            <h2 class="text-sm">{STAGE_LABELS[col.stage]}</h2>
+            <p class="text-xs text-slate-500">
+              {col.items.length} · {cop(col.total)}
+            </p>
+          </header>
+          <div class="space-y-2">
+            {col.items.map((d) => (
+              <a href={`/oportunidades/${d.id}`} class="card block p-3 text-sm text-slate-800 hover:border-brand-600 hover:no-underline">
+                <div class="font-medium">{d.deal_name_branch}</div>
+                <div class="text-xs text-slate-500">
+                  {d.company_name} · {d.city_name}
+                </div>
+                <div class="mt-1 font-semibold text-brand-800">{cop(d.estimated_billing_amount)}</div>
+                <div class="mt-1 flex flex-wrap gap-1">
+                  {d.is_new_business ? <span class="badge badge-blue">Nuevo negocio</span> : <span class="badge">Recurrente</span>}
+                  {d.inactivity_alert && <span class="badge badge-amber">{d.days_inactive} días sin interacción</span>}
+                  {d.next_action_overdue && <span class="badge badge-red">Acción vencida</span>}
+                  {d.lost_substatus && <span class="badge badge-red">{LOST_LABELS[d.lost_substatus]}</span>}
+                </div>
+                <div class="mt-2 text-xs text-slate-500">
+                  {d.assigned_user_name} · cierre {fmtDate(d.estimated_close_date)}
+                </div>
+                {d.next_action && <div class="mt-1 text-xs text-slate-600">→ {d.next_action} ({fmtDate(d.next_action_due_date)})</div>}
+              </a>
+            ))}
+            {!col.items.length && <p class="px-1 text-xs text-slate-400">Sin oportunidades</p>}
+          </div>
+        </section>
+      ))
+    }
+  </div>
+</AppLayout>

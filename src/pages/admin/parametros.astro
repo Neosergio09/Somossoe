@@ -1,0 +1,163 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import { hasRole } from '../../lib/auth';
+import { fmtDateTime } from '../../lib/format';
+import { checkbox, ensure, parseForm, runActions, text, z } from '../../lib/forms';
+
+if (!hasRole(Astro.locals, 'direccion')) return Astro.redirect('/');
+
+const { supabase } = Astro.locals;
+
+const outcome = await runActions(Astro, {
+  update_setting: async (form) => {
+    const input = parseForm(z.object({ key: z.string().min(1), value: z.coerce.number() }), form);
+    ensure(await supabase.from('system_settings').update({ value: input.value }).eq('key', input.key).select('key').single());
+    return { message: 'Parámetro actualizado. Las oportunidades existentes conservan su Facturación Estimada hasta que se recalculen.' };
+  },
+  add_city: async (form) => {
+    const input = parseForm(z.object({ name: text(80), is_operational: checkbox() }), form);
+    ensure(await supabase.from('cities').insert(input));
+    return { message: 'Ciudad agregada.' };
+  },
+  update_city: async (form) => {
+    const input = parseForm(z.object({ id: z.guid(), is_operational: checkbox(), active: checkbox() }), form);
+    ensure(await supabase.from('cities').update({ is_operational: input.is_operational, active: input.active }).eq('id', input.id).select('id').single());
+    return { message: 'Ciudad actualizada.' };
+  },
+  add_origin: async (form) => {
+    const input = parseForm(
+      z.object({ code: z.string().regex(/^[a-z_]+$/, { error: 'solo minúsculas y guion bajo' }), label: text(80) }),
+      form,
+    );
+    ensure(await supabase.from('deal_origins').insert(input));
+    return { message: 'Origen agregado.' };
+  },
+  toggle_origin: async (form) => {
+    const input = parseForm(z.object({ code: z.string(), active: checkbox() }), form);
+    ensure(await supabase.from('deal_origins').update({ active: input.active }).eq('code', input.code).select('code').single());
+    return { message: 'Origen actualizado.' };
+  },
+  add_lab: async (form) => {
+    const input = parseForm(z.object({ name: text(120), contact_info: text(300).optional() }), form);
+    ensure(await supabase.from('lab_providers').insert({ name: input.name, contact_info: input.contact_info ?? null }));
+    return { message: 'Laboratorio agregado.' };
+  },
+  toggle_lab: async (form) => {
+    const input = parseForm(z.object({ id: z.guid(), active: checkbox() }), form);
+    ensure(await supabase.from('lab_providers').update({ active: input.active }).eq('id', input.id).select('id').single());
+    return { message: 'Laboratorio actualizado.' };
+  },
+});
+if (outcome?.kind === 'redirect') return outcome.response;
+const error = outcome?.kind === 'error' ? outcome.error : null;
+
+const [{ data: settings }, { data: cities }, { data: origins }, { data: labs }] = await Promise.all([
+  supabase.from('system_settings').select('*').order('key'),
+  supabase.from('cities').select('*').order('name'),
+  supabase.from('deal_origins').select('*').order('label'),
+  supabase.from('lab_providers').select('*').order('name'),
+]);
+---
+
+<AppLayout title="Parámetros" error={error}>
+  <h1 class="mb-4">Parámetros del sistema</h1>
+
+  <div class="grid gap-4 lg:grid-cols-2">
+    <section class="card lg:col-span-2">
+      <h2 class="mb-3">Parámetros globales</h2>
+      <table class="table">
+        <thead><tr><th>Parámetro</th><th>Valor</th><th>Última modificación</th></tr></thead>
+        <tbody>
+          {settings?.map((s) => (
+            <tr>
+              <td>
+                <div class="font-medium">{s.description}</div>
+                <code class="text-xs text-slate-500">{s.key}</code>
+              </td>
+              <td>
+                <form method="post" class="flex gap-2">
+                  <input type="hidden" name="_action" value="update_setting" />
+                  <input type="hidden" name="key" value={s.key} />
+                  <input class="input w-32" name="value" type="number" step="any" value={s.value} required />
+                  <button class="btn btn-sm" type="submit">Guardar</button>
+                </form>
+              </td>
+              <td class="text-xs text-slate-500">{fmtDateTime(s.updated_at)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2 class="mb-3">Ciudades</h2>
+      <ul class="space-y-2 text-sm">
+        {cities?.map((c) => (
+          <li>
+            <form method="post" class="flex flex-wrap items-center gap-3">
+              <input type="hidden" name="_action" value="update_city" />
+              <input type="hidden" name="id" value={c.id} />
+              <span class="min-w-28 font-medium">{c.name}</span>
+              <label class="flex items-center gap-1"><input type="checkbox" name="is_operational" checked={c.is_operational} /> Operativa</label>
+              <label class="flex items-center gap-1"><input type="checkbox" name="active" checked={c.active} /> Activa</label>
+              <button class="btn btn-sm" type="submit">Guardar</button>
+            </form>
+          </li>
+        ))}
+      </ul>
+      <form method="post" class="mt-3 flex flex-wrap items-center gap-2">
+        <input type="hidden" name="_action" value="add_city" />
+        <input class="input w-48" name="name" required placeholder="Nueva ciudad" />
+        <label class="flex items-center gap-1 text-sm"><input type="checkbox" name="is_operational" /> Operativa</label>
+        <button class="btn btn-sm" type="submit">Agregar</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2 class="mb-3">Orígenes de prospecto</h2>
+      <ul class="space-y-2 text-sm">
+        {origins?.map((o) => (
+          <li>
+            <form method="post" class="flex items-center gap-3">
+              <input type="hidden" name="_action" value="toggle_origin" />
+              <input type="hidden" name="code" value={o.code} />
+              <span class="min-w-40">{o.label} <code class="text-xs text-slate-400">{o.code}</code></span>
+              <label class="flex items-center gap-1"><input type="checkbox" name="active" checked={o.active} /> Activo</label>
+              <button class="btn btn-sm" type="submit">Guardar</button>
+            </form>
+          </li>
+        ))}
+      </ul>
+      <form method="post" class="mt-3 flex flex-wrap gap-2">
+        <input type="hidden" name="_action" value="add_origin" />
+        <input class="input w-36" name="code" required placeholder="codigo_interno" pattern="[a-z_]+" />
+        <input class="input w-44" name="label" required placeholder="Etiqueta" />
+        <button class="btn btn-sm" type="submit">Agregar</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2 class="mb-3">Laboratorios proveedores</h2>
+      <ul class="space-y-2 text-sm">
+        {labs?.map((l) => (
+          <li>
+            <form method="post" class="flex items-center gap-3">
+              <input type="hidden" name="_action" value="toggle_lab" />
+              <input type="hidden" name="id" value={l.id} />
+              <span class="min-w-40">{l.name} <span class="text-xs text-slate-400">{l.contact_info}</span></span>
+              <label class="flex items-center gap-1"><input type="checkbox" name="active" checked={l.active} /> Activo</label>
+              <button class="btn btn-sm" type="submit">Guardar</button>
+            </form>
+          </li>
+        ))}
+        {!labs?.length && <li class="text-slate-500">Sin laboratorios registrados.</li>}
+      </ul>
+      <form method="post" class="mt-3 flex flex-wrap gap-2">
+        <input type="hidden" name="_action" value="add_lab" />
+        <input class="input w-44" name="name" required placeholder="Nombre" />
+        <input class="input w-56" name="contact_info" placeholder="Contacto" />
+        <button class="btn btn-sm" type="submit">Agregar</button>
+      </form>
+    </section>
+  </div>
+</AppLayout>

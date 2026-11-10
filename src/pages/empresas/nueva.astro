@@ -1,0 +1,202 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import { checkbox, ensure, FormError, int, parseForm, runActions, text, uuid, z } from '../../lib/forms';
+import { PAYROLL_LABELS } from '../../lib/labels';
+import { activeUsers, allActiveCities } from '../../lib/options';
+
+const { supabase, userId } = Astro.locals;
+
+type Duplicate = { id: string; name: string; nit: string | null; match_reason: string };
+let duplicates: Duplicate[] = [];
+
+const schema = z.object({
+  name: text(200),
+  nit: z.string().regex(/^\d{5,10}$/, { error: 'solo dígitos, sin puntos ni DV' }).optional(),
+  nit_dv: z.coerce.number().int().min(0).max(9).optional(),
+  sector: text(120),
+  total_employees: int().positive().optional(),
+  payroll_frequency: z.enum(['mensual', 'quincenal']).optional(),
+  website: text(200).optional(),
+  assigned_user_id: uuid().optional(),
+  branch_name: text(120).optional(),
+  branch_city_id: uuid().optional(),
+  branch_city_other: text(80).optional(),
+  branch_address: text(200).optional(),
+  confirm_not_duplicate: checkbox(),
+});
+
+const outcome = await runActions(Astro, {
+  create: async (form) => {
+    const input = parseForm(schema, form);
+
+    const found = ensure(
+      await supabase.rpc('find_company_duplicates', { p_name: input.name, p_nit: input.nit }),
+    ) as Duplicate[];
+    const hardDuplicate = found.find((d) => d.match_reason !== 'nombre_similar');
+    if (hardDuplicate) {
+      duplicates = found;
+      throw new FormError(
+        hardDuplicate.match_reason === 'nit'
+          ? `Ya existe una empresa con ese NIT: ${hardDuplicate.name}.`
+          : `Ya existe una empresa con esa razón social: ${hardDuplicate.name}.`,
+      );
+    }
+    if (found.length && !input.confirm_not_duplicate) {
+      duplicates = found;
+      throw new FormError('Hay empresas con nombre parecido. Revíselas y confirme que no es un duplicado.');
+    }
+
+    const company = ensure(
+      await supabase
+        .from('companies')
+        .insert({
+          name: input.name,
+          nit: input.nit ?? null,
+          nit_dv: input.nit_dv ?? null,
+          sector: input.sector,
+          total_employees: input.total_employees ?? null,
+          payroll_frequency: input.payroll_frequency ?? null,
+          website: input.website ?? null,
+          assigned_user_id: input.assigned_user_id ?? userId,
+        })
+        .select('id')
+        .single(),
+    );
+
+    if (input.branch_name) {
+      const { error } = await supabase.from('company_branches').insert({
+        company_id: company.id,
+        name: input.branch_name,
+        city_id: input.branch_city_other ? null : (input.branch_city_id ?? null),
+        city_other: input.branch_city_other ?? null,
+        address: input.branch_address ?? null,
+        is_main: true,
+      });
+      if (error) {
+        return {
+          message: 'Empresa creada, pero la sede no se pudo guardar. Agréguela desde la ficha.',
+          redirect: `/empresas/${company.id}`,
+        };
+      }
+    }
+    return { message: 'Empresa creada.', redirect: `/empresas/${company.id}` };
+  },
+});
+if (outcome?.kind === 'redirect') return outcome.response;
+const error = outcome?.kind === 'error' ? outcome.error : null;
+const v = outcome?.kind === 'error' ? outcome.values : {};
+
+const [users, cities] = await Promise.all([
+  activeUsers(supabase, ['comercial', 'direccion']),
+  allActiveCities(supabase),
+]);
+---
+
+<AppLayout title="Nueva empresa" error={error}>
+  <h1 class="mb-4">Nueva empresa</h1>
+
+  {
+    duplicates.length > 0 && (
+      <div class="card mb-4 border-amber-300 bg-amber-50">
+        <h2 class="mb-2">Posibles duplicados</h2>
+        <ul class="list-disc pl-5 text-sm">
+          {duplicates.map((d) => (
+            <li>
+              <a href={`/empresas/${d.id}`} target="_blank">
+                {d.name}
+              </a>
+              {d.nit && <span class="text-slate-500"> · NIT {d.nit}</span>}
+            </li>
+          ))}
+        </ul>
+      </div>
+    )
+  }
+
+  <form method="post" class="card space-y-6">
+    <input type="hidden" name="_action" value="create" />
+    <fieldset class="grid-form">
+      <div class="sm:col-span-2">
+        <label class="label" for="name">Razón social *</label>
+        <input class="input" id="name" name="name" required value={v.name} />
+      </div>
+      <div>
+        <label class="label" for="nit">NIT (sin DV)</label>
+        <input class="input" id="nit" name="nit" inputmode="numeric" pattern="\d{5,10}" value={v.nit} />
+      </div>
+      <div>
+        <label class="label" for="nit_dv">DV</label>
+        <input class="input" id="nit_dv" name="nit_dv" inputmode="numeric" pattern="\d" maxlength="1" value={v.nit_dv} />
+      </div>
+      <div>
+        <label class="label" for="sector">Sector económico *</label>
+        <input class="input" id="sector" name="sector" required value={v.sector} />
+      </div>
+      <div>
+        <label class="label" for="total_employees">Total de empleados</label>
+        <input class="input" id="total_employees" name="total_employees" type="number" min="1" value={v.total_employees} />
+      </div>
+      <div>
+        <label class="label" for="payroll_frequency">Pago de nómina</label>
+        <select class="input" id="payroll_frequency" name="payroll_frequency">
+          <option value="">Sin definir</option>
+          {Object.entries(PAYROLL_LABELS).map(([value, label]) => (
+            <option value={value} selected={v.payroll_frequency === value}>{label}</option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label class="label" for="website">Sitio web</label>
+        <input class="input" id="website" name="website" value={v.website} />
+      </div>
+      <div>
+        <label class="label" for="assigned_user_id">Ejecutivo asignado</label>
+        <select class="input" id="assigned_user_id" name="assigned_user_id">
+          {users.map((u) => (
+            <option value={u.id} selected={(v.assigned_user_id ?? userId) === u.id}>{u.full_name}</option>
+          ))}
+        </select>
+      </div>
+    </fieldset>
+    <p class="text-xs text-slate-500">
+      El NIT queda como provisional hasta que Administración / Cartera lo confirme.
+    </p>
+
+    <fieldset class="grid-form border-t border-slate-200 pt-4">
+      <legend class="mb-2 text-sm font-semibold">Sede principal (opcional)</legend>
+      <div>
+        <label class="label" for="branch_name">Nombre de la sede</label>
+        <input class="input" id="branch_name" name="branch_name" placeholder="Ej. Sede Medellín" value={v.branch_name} />
+      </div>
+      <div>
+        <label class="label" for="branch_city_id">Ciudad</label>
+        <select class="input" id="branch_city_id" name="branch_city_id">
+          <option value="">—</option>
+          {cities.map((c) => <option value={c.id} selected={v.branch_city_id === c.id}>{c.name}</option>)}
+        </select>
+      </div>
+      <div>
+        <label class="label" for="branch_city_other">Otra ciudad (si no está en la lista)</label>
+        <input class="input" id="branch_city_other" name="branch_city_other" value={v.branch_city_other} />
+      </div>
+      <div>
+        <label class="label" for="branch_address">Dirección</label>
+        <input class="input" id="branch_address" name="branch_address" value={v.branch_address} />
+      </div>
+    </fieldset>
+
+    {
+      duplicates.length > 0 && (
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="confirm_not_duplicate" />
+          Revisé los posibles duplicados y esta empresa es distinta.
+        </label>
+      )
+    }
+
+    <div class="flex gap-2">
+      <button class="btn btn-primary" type="submit">Crear empresa</button>
+      <a class="btn" href="/empresas">Cancelar</a>
+    </div>
+  </form>
+</AppLayout>

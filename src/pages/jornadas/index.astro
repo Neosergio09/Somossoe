@@ -1,0 +1,130 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import { fmtDate, fmtMonth, fmtTime, fmtWeekday, todayCo } from '../../lib/format';
+import { CAMPAIGN_STATUS_BADGE, CAMPAIGN_STATUS_LABELS } from '../../lib/labels';
+import { operationalCities } from '../../lib/options';
+
+const { supabase } = Astro.locals;
+const params = Astro.url.searchParams;
+const month = /^\d{4}-\d{2}$/.test(params.get('mes') ?? '') ? params.get('mes')! : todayCo().slice(0, 7);
+const cityId = params.get('ciudad') ?? '';
+
+const [y, m] = month.split('-').map(Number);
+const start = `${month}-01`;
+const next = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
+const prev = new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7);
+const nextMonth = next.slice(0, 7);
+
+let sessionsQuery = supabase
+  .from('v_campaign_calendar')
+  .select('*')
+  .gte('session_date', start)
+  .lt('session_date', next)
+  .order('session_date')
+  .order('start_time');
+if (cityId) sessionsQuery = sessionsQuery.eq('city_id', cityId);
+
+let campaignsQuery = supabase
+  .from('v_campaigns')
+  .select('id, company_name, deal_name_branch, city_name, status, first_session_date, sessions_count, attended_headcount, responsible_user_name, logistics_confirmed')
+  .in('status', ['programada', 'en_ejecucion'])
+  .order('first_session_date', { nullsFirst: true });
+if (cityId) campaignsQuery = campaignsQuery.eq('city_id', cityId);
+
+const [{ data: sessions }, { data: campaigns }, cities] = await Promise.all([
+  sessionsQuery,
+  campaignsQuery,
+  operationalCities(supabase),
+]);
+
+const byDay = new Map<string, NonNullable<typeof sessions>>();
+for (const s of sessions ?? []) {
+  if (!s.session_date) continue;
+  const list = byDay.get(s.session_date) ?? [];
+  list.push(s);
+  byDay.set(s.session_date, list);
+}
+const q = (patch: Record<string, string>) => {
+  const p = new URLSearchParams(params);
+  for (const [k, v] of Object.entries(patch)) v ? p.set(k, v) : p.delete(k);
+  return `?${p.toString()}`;
+};
+---
+
+<AppLayout title="Jornadas">
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <h1>Jornadas</h1>
+    <p class="text-sm text-slate-500">Las jornadas se programan desde una oportunidad en Convenio Firmado.</p>
+  </div>
+
+  <div class="grid gap-4 lg:grid-cols-3">
+    <section class="card lg:col-span-2">
+      <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <a class="btn btn-sm" href={q({ mes: prev })}>←</a>
+          <h2 class="capitalize">{fmtMonth(month)}</h2>
+          <a class="btn btn-sm" href={q({ mes: nextMonth })}>→</a>
+        </div>
+        <form method="get" class="flex gap-2">
+          <input type="hidden" name="mes" value={month} />
+          <select class="input" name="ciudad">
+            <option value="">Todas las ciudades</option>
+            {cities.map((c) => <option value={c.id} selected={cityId === c.id}>{c.name}</option>)}
+          </select>
+          <button class="btn" type="submit">Filtrar</button>
+        </form>
+      </div>
+
+      {
+        byDay.size ? (
+          <ol class="space-y-4">
+            {[...byDay.entries()].map(([day, items]) => (
+              <li>
+                <h3 class="mb-1 text-sm font-semibold capitalize text-slate-700">{fmtWeekday(day)}</h3>
+                <ul class="space-y-1">
+                  {items.map((s) => (
+                    <li class:list={['flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm', s.has_conflict ? 'border-red-300 bg-red-50' : 'border-slate-200']}>
+                      <div>
+                        <span class="font-medium">{fmtTime(s.start_time)}–{fmtTime(s.end_time)}</span>{' '}
+                        <a href={`/jornadas/${s.campaign_id}`}>{s.company_name}</a>
+                        <span class="text-slate-500"> · {s.city_name}{s.branch_name && ` · ${s.branch_name}`}{s.location_detail && ` · ${s.location_detail}`}</span>
+                      </div>
+                      <div class="flex items-center gap-2 text-xs">
+                        <span>{s.responsible_user_name}</span>
+                        {s.campaign_status && <span class={CAMPAIGN_STATUS_BADGE[s.campaign_status]}>{CAMPAIGN_STATUS_LABELS[s.campaign_status]}</span>}
+                        {s.has_conflict && <span class="badge badge-red">Cruce de horario</span>}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p class="text-sm text-slate-500">No hay sesiones en este mes.</p>
+        )
+      }
+    </section>
+
+    <section class="card">
+      <h2 class="mb-3">Jornadas activas</h2>
+      <ul class="space-y-3 text-sm">
+        {
+          campaigns?.map((j) => (
+            <li>
+              <div class="flex items-center justify-between gap-2">
+                <a href={`/jornadas/${j.id}`} class="font-medium">{j.company_name}</a>
+                {j.status && <span class={CAMPAIGN_STATUS_BADGE[j.status]}>{CAMPAIGN_STATUS_LABELS[j.status]}</span>}
+              </div>
+              <div class="text-xs text-slate-500">
+                {j.deal_name_branch} · {j.city_name} · {fmtDate(j.first_session_date)} · {j.sessions_count} sesión(es) · {j.attended_headcount} asistentes
+              </div>
+              {!j.logistics_confirmed && j.status === 'programada' && <span class="badge badge-amber mt-1">Logística sin confirmar</span>}
+            </li>
+          ))
+        }
+        {!campaigns?.length && <li class="text-slate-500">No hay jornadas programadas ni en ejecución.</li>}
+      </ul>
+    </section>
+  </div>
+</AppLayout>

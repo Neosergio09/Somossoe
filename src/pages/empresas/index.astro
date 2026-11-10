@@ -1,0 +1,76 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import { hasRole } from '../../lib/auth';
+import { PAYROLL_LABELS } from '../../lib/labels';
+import { safeSearch } from '../../lib/options';
+
+const { supabase } = Astro.locals;
+const q = safeSearch(Astro.url.searchParams.get('q'));
+
+let query = supabase
+  .from('companies')
+  .select('id, name, nit, nit_dv, is_nit_provisional, sector, total_employees, payroll_frequency, users_profiles!companies_assigned_user_id_fkey(full_name), company_branches(id)')
+  .order('name')
+  .limit(200);
+if (q) query = query.or(`name.ilike.%${q}%,nit.ilike.%${q}%,sector.ilike.%${q}%`);
+const { data: companies } = await query;
+---
+
+<AppLayout title="Empresas">
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <h1>Empresas</h1>
+    {hasRole(Astro.locals, 'comercial') && <a class="btn btn-primary" href="/empresas/nueva">Nueva empresa</a>}
+  </div>
+
+  <form method="get" class="mb-4 flex gap-2">
+    <input class="input max-w-md" type="search" name="q" value={q} placeholder="Buscar por razón social, NIT o sector" />
+    <button class="btn" type="submit">Buscar</button>
+  </form>
+
+  <div class="card overflow-x-auto p-0">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Razón social</th>
+          <th>NIT</th>
+          <th>Sector</th>
+          <th>Empleados</th>
+          <th>Nómina</th>
+          <th>Sedes</th>
+          <th>Ejecutivo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {
+          companies?.map((c) => (
+            <tr>
+              <td>
+                <a href={`/empresas/${c.id}`} class="font-medium">
+                  {c.name}
+                </a>
+              </td>
+              <td class="whitespace-nowrap">
+                {c.nit ? `${c.nit}${c.nit_dv != null ? `-${c.nit_dv}` : ''}` : '—'}
+                {c.is_nit_provisional && <span class="badge badge-amber ml-1">Provisional</span>}
+              </td>
+              <td>{c.sector}</td>
+              <td>{c.total_employees ?? '—'}</td>
+              <td>{c.payroll_frequency ? PAYROLL_LABELS[c.payroll_frequency] : '—'}</td>
+              <td>{c.company_branches.length}</td>
+              <td>{c.users_profiles?.full_name ?? '—'}</td>
+            </tr>
+          ))
+        }
+        {
+          !companies?.length && (
+            <tr>
+              <td colspan="7" class="py-6 text-center text-slate-500">
+                {q ? 'No hay empresas que coincidan con la búsqueda.' : 'Todavía no hay empresas registradas.'}
+              </td>
+            </tr>
+          )
+        }
+      </tbody>
+    </table>
+  </div>
+</AppLayout>

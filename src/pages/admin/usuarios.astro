@@ -1,0 +1,158 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import { hasRole } from '../../lib/auth';
+import { fmtDateTime } from '../../lib/format';
+import { checkbox, ensure, FormError, parseForm, runActions, text, uuid, z } from '../../lib/forms';
+import { ROLE_LABELS, type AppRole } from '../../lib/labels';
+import { createSupabaseAdminClient } from '../../lib/supabase';
+
+if (!hasRole(Astro.locals, 'direccion')) return Astro.redirect('/');
+
+const { supabase } = Astro.locals;
+const roles = Object.keys(ROLE_LABELS) as [AppRole, ...AppRole[]];
+
+const outcome = await runActions(Astro, {
+  create_user: async (form) => {
+    const input = parseForm(
+      z.object({
+        full_name: text(150),
+        email: z.email({ error: 'Correo inválido' }),
+        password: z.string().min(10, { error: 'mínimo 10 caracteres' }),
+        role: z.enum(roles),
+        lab_provider_id: uuid().optional(),
+      }),
+      form,
+    );
+    if (input.role === 'proveedor_lab' && !input.lab_provider_id) {
+      throw new FormError('Un usuario de laboratorio necesita un laboratorio asignado.');
+    }
+    // Solo Dirección llega aquí (comprobado arriba); la clave secreta no sale del servidor.
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin.auth.admin.createUser({
+      email: input.email,
+      password: input.password,
+      email_confirm: true,
+      user_metadata: { full_name: input.full_name },
+    });
+    if (error || !data.user) {
+      throw new FormError(
+        /already|registered|exists/i.test(error?.message ?? '')
+          ? 'Ya existe un usuario con ese correo.'
+          : 'No se pudo crear el usuario.',
+      );
+    }
+    ensure(
+      await supabase
+        .from('users_profiles')
+        .update({ role: input.role, active: true, lab_provider_id: input.lab_provider_id ?? null })
+        .eq('id', data.user.id)
+        .select('id')
+        .single(),
+    );
+    return { message: `Usuario ${input.email} creado y activado como ${ROLE_LABELS[input.role]}.` };
+  },
+  update_user: async (form) => {
+    const input = parseForm(
+      z.object({
+        user_id: uuid(),
+        full_name: text(150),
+        role: z.enum(roles).optional(),
+        lab_provider_id: uuid().optional(),
+        active: checkbox(),
+      }),
+      form,
+    );
+    if (input.user_id === Astro.locals.userId && (!input.active || input.role !== 'direccion')) {
+      throw new FormError('No puede desactivarse ni quitarse el rol de Dirección a sí mismo.');
+    }
+    ensure(
+      await supabase
+        .from('users_profiles')
+        .update({
+          full_name: input.full_name,
+          role: input.role ?? null,
+          lab_provider_id: input.role === 'proveedor_lab' ? (input.lab_provider_id ?? null) : null,
+          active: input.active,
+        })
+        .eq('id', input.user_id)
+        .select('id')
+        .single(),
+    );
+    return { message: 'Usuario actualizado.' };
+  },
+});
+if (outcome?.kind === 'redirect') return outcome.response;
+const error = outcome?.kind === 'error' ? outcome.error : null;
+const v = outcome?.kind === 'error' && outcome.action === 'create_user' ? outcome.values : {};
+
+const [{ data: users }, { data: labs }] = await Promise.all([
+  supabase.from('users_profiles').select('*').order('active', { ascending: false }).order('full_name'),
+  supabase.from('lab_providers').select('id, name').eq('active', true).order('name'),
+]);
+---
+
+<AppLayout title="Usuarios" error={error}>
+  <h1 class="mb-4">Usuarios</h1>
+
+  <section class="card mb-4">
+    <h2 class="mb-3">Crear usuario</h2>
+    <form method="post" class="grid grid-cols-1 gap-3 sm:grid-cols-5 sm:items-end">
+      <input type="hidden" name="_action" value="create_user" />
+      <div><label class="label">Nombre completo</label><input class="input" name="full_name" required value={v.full_name} /></div>
+      <div><label class="label">Correo</label><input class="input" name="email" type="email" required value={v.email} /></div>
+      <div><label class="label">Contraseña temporal</label><input class="input" name="password" type="text" minlength="10" required autocomplete="off" /></div>
+      <div>
+        <label class="label">Rol</label>
+        <select class="input" name="role">
+          {roles.map((r) => <option value={r} selected={v.role === r}>{ROLE_LABELS[r]}</option>)}
+        </select>
+      </div>
+      <button class="btn btn-primary" type="submit">Crear y activar</button>
+      {labs?.length ? (
+        <div class="sm:col-span-2">
+          <label class="label">Laboratorio (solo rol Laboratorio)</label>
+          <select class="input" name="lab_provider_id">
+            <option value="">—</option>
+            {labs.map((l) => <option value={l.id}>{l.name}</option>)}
+          </select>
+        </div>
+      ) : null}
+    </form>
+    <p class="mt-2 text-xs text-slate-500">Comparta la contraseña temporal por un canal seguro.</p>
+  </section>
+
+  <section class="card overflow-x-auto p-0">
+    <table class="table">
+      <thead><tr><th>Usuario</th><th>Rol</th><th>Laboratorio</th><th>Activo</th><th>Alta</th><th></th></tr></thead>
+      <tbody>
+        {
+          users?.map((u) => (
+            <tr class:list={[!u.active && 'bg-amber-50']}>
+              <td colspan="6" class="p-0">
+                <form method="post" class="grid grid-cols-1 items-center gap-2 px-2 py-2 sm:grid-cols-[2fr_1.3fr_1.3fr_0.6fr_1fr_auto]">
+                  <input type="hidden" name="_action" value="update_user" />
+                  <input type="hidden" name="user_id" value={u.id} />
+                  <div>
+                    <input class="input" name="full_name" value={u.full_name} required />
+                    <div class="mt-1 text-xs text-slate-500">{u.email}</div>
+                  </div>
+                  <select class="input" name="role">
+                    <option value="">Sin rol</option>
+                    {roles.map((r) => <option value={r} selected={u.role === r}>{ROLE_LABELS[r]}</option>)}
+                  </select>
+                  <select class="input" name="lab_provider_id">
+                    <option value="">—</option>
+                    {labs?.map((l) => <option value={l.id} selected={u.lab_provider_id === l.id}>{l.name}</option>)}
+                  </select>
+                  <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="active" checked={u.active} /> Activo</label>
+                  <span class="text-xs text-slate-500">{fmtDateTime(u.created_at)}</span>
+                  <button class="btn btn-sm" type="submit">Guardar</button>
+                </form>
+              </td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </section>
+</AppLayout>

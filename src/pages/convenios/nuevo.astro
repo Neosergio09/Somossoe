@@ -1,0 +1,127 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import { checkbox, date, ensure, FormError, int, parseForm, runActions, text, uuid, z } from '../../lib/forms';
+import { PAYROLL_LABELS } from '../../lib/labels';
+
+const { supabase } = Astro.locals;
+const dealId = Astro.url.searchParams.get('deal_id');
+let companyId = Astro.url.searchParams.get('company_id');
+
+if (dealId && !companyId) {
+  const { data } = await supabase.from('deals_opportunities').select('company_id').eq('id', dealId).maybeSingle();
+  companyId = data?.company_id ?? null;
+}
+
+const outcome = await runActions(Astro, {
+  create: async (form) => {
+    const input = parseForm(
+      z.object({
+        company_id: uuid(),
+        deal_id: uuid().optional(),
+        payroll_frequency: z.enum(['mensual', 'quincenal']),
+        max_installments: int().min(1),
+        payroll_conditions: text(2000).optional(),
+        hr_approval_required: checkbox(),
+        valid_from: date().optional(),
+        valid_until: date().optional(),
+      }),
+      form,
+    );
+    if (input.valid_from && input.valid_until && input.valid_until < input.valid_from) {
+      throw new FormError('La fecha final de vigencia debe ser posterior a la inicial.');
+    }
+    const agreement = ensure(await supabase.from('agreements_convenios').insert(input).select('id').single());
+    return {
+      message: 'Convenio creado en Borrador. Registre el convenio firmado y envíelo a aprobación.',
+      redirect: `/convenios/${agreement.id}`,
+    };
+  },
+});
+if (outcome?.kind === 'redirect') return outcome.response;
+const error = outcome?.kind === 'error' ? outcome.error : null;
+const v = outcome?.kind === 'error' ? outcome.values : {};
+const selectedCompany = v.company_id ?? companyId;
+
+const [{ data: companies }, deals, company, settings] = await Promise.all([
+  supabase.from('companies').select('id, name').order('name'),
+  selectedCompany
+    ? supabase.from('deals_opportunities').select('id, deal_name_branch, payroll_frequency').eq('company_id', selectedCompany).neq('stage', 'cierre_perdido').order('deal_name_branch')
+    : Promise.resolve({ data: [] as { id: string; deal_name_branch: string; payroll_frequency: 'mensual' | 'quincenal' | null }[] }),
+  selectedCompany
+    ? supabase.from('companies').select('name, payroll_frequency, is_nit_provisional').eq('id', selectedCompany).maybeSingle()
+    : Promise.resolve({ data: null }),
+  supabase.from('system_settings').select('key, value').in('key', ['max_installments_monthly', 'max_installments_biweekly']),
+]);
+const maxMonthly = Number(settings.data?.find((s) => s.key === 'max_installments_monthly')?.value ?? 4);
+const maxBiweekly = Number(settings.data?.find((s) => s.key === 'max_installments_biweekly')?.value ?? 8);
+const selectedDeal = v.deal_id ?? dealId ?? '';
+const defaultFrequency = v.payroll_frequency ?? deals.data?.find((d) => d.id === selectedDeal)?.payroll_frequency ?? company.data?.payroll_frequency ?? 'mensual';
+---
+
+<AppLayout title="Nuevo convenio" error={error}>
+  <h1 class="mb-4">Nuevo convenio</h1>
+
+  {
+    !selectedCompany ? (
+      <form method="get" class="card max-w-xl space-y-3">
+        <label class="label" for="company_id">Empresa</label>
+        <select class="input" id="company_id" name="company_id" required>
+          <option value="">Seleccione…</option>
+          {companies?.map((c) => <option value={c.id}>{c.name}</option>)}
+        </select>
+        <button class="btn btn-primary" type="submit">Continuar</button>
+      </form>
+    ) : (
+      <form method="post" class="card space-y-4">
+        <input type="hidden" name="_action" value="create" />
+        <input type="hidden" name="company_id" value={selectedCompany} />
+        <p class="text-sm">
+          Empresa: <a href={`/empresas/${selectedCompany}`}>{company.data?.name}</a>
+          {company.data?.is_nit_provisional && (
+            <span class="badge badge-amber ml-2">NIT provisional: Administración debe confirmarlo antes de la aprobación</span>
+          )}
+        </p>
+        <div class="grid-form">
+          <div class="sm:col-span-2">
+            <label class="label" for="deal_id">Alcance</label>
+            <select class="input" id="deal_id" name="deal_id">
+              <option value="">Convenio marco (todas las sedes de la empresa)</option>
+              {deals.data?.map((d) => <option value={d.id} selected={selectedDeal === d.id}>{d.deal_name_branch}</option>)}
+            </select>
+          </div>
+          <div>
+            <label class="label" for="payroll_frequency">Periodicidad de nómina *</label>
+            <select class="input" id="payroll_frequency" name="payroll_frequency" required>
+              {Object.entries(PAYROLL_LABELS).map(([value, label]) => <option value={value} selected={defaultFrequency === value}>{label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label class="label" for="max_installments">Máximo de cuotas *</label>
+            <input class="input" id="max_installments" name="max_installments" type="number" min="1" max={maxBiweekly} required value={v.max_installments ?? (defaultFrequency === 'quincenal' ? maxBiweekly : maxMonthly)} />
+            <p class="mt-1 text-xs text-slate-500">Hasta {maxMonthly} mensuales o {maxBiweekly} quincenales.</p>
+          </div>
+          <div>
+            <label class="label" for="valid_from">Vigente desde</label>
+            <input class="input" id="valid_from" name="valid_from" type="date" value={v.valid_from} />
+          </div>
+          <div>
+            <label class="label" for="valid_until">Vigente hasta</label>
+            <input class="input" id="valid_until" name="valid_until" type="date" value={v.valid_until} />
+          </div>
+          <div class="sm:col-span-2">
+            <label class="label" for="payroll_conditions">Condiciones acordadas</label>
+            <textarea class="input" id="payroll_conditions" name="payroll_conditions" rows="3">{v.payroll_conditions}</textarea>
+          </div>
+          <label class="flex items-center gap-2 text-sm sm:col-span-2">
+            <input type="checkbox" name="hr_approval_required" checked={v.hr_approval_required ? v.hr_approval_required === 'on' : true} />
+            Requiere aval de RRHH para cada descuento de nómina
+          </label>
+        </div>
+        <div class="flex gap-2">
+          <button class="btn btn-primary" type="submit">Crear convenio</button>
+          <a class="btn" href={dealId ? `/oportunidades/${dealId}` : `/empresas/${selectedCompany}`}>Cancelar</a>
+        </div>
+      </form>
+    )
+  }
+</AppLayout>

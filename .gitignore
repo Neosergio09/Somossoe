@@ -1,9 +1,15 @@
+# dependencias y builds
 node_modules/
-.env
-.env.*
-!.env.example
 dist/
 .astro/
 .vercel/
-.DS_Store
+
+# variables de entorno
+.env
+.env.*
+!.env.example
+
+# logs y sistema
 *.log
+.DS_Store
+.idea/

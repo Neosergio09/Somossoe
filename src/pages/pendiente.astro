@@ -1,0 +1,19 @@
+---
+import AppLayout from '../layouts/AppLayout.astro';
+
+const profile = Astro.locals.profile;
+if (profile?.active) return Astro.redirect('/');
+---
+
+<AppLayout title="Pendiente de activación" bare>
+  <div class="card mt-16 space-y-4">
+    <h1>Usuario pendiente de activación</h1>
+    <p class="text-sm text-slate-600">
+      Su cuenta {profile?.email ? <strong>{profile.email}</strong> : null} existe, pero Dirección todavía no le ha asignado
+      un rol ni la ha activado. Cuando lo haga, podrá ingresar normalmente.
+    </p>
+    <form method="post" action="/logout">
+      <button class="btn" type="submit">Salir</button>
+    </form>
+  </div>
+</AppLayout>
