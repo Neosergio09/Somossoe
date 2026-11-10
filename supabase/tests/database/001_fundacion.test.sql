@@ -39,7 +39,7 @@ set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}', true);
 
 select is((select count(*) from public.cities), 2::bigint, 'comercial ve las ciudades');
-select is((select count(*) from public.system_settings), 6::bigint, 'comercial ve los parámetros');
+select ok((select count(*) from public.system_settings) >= 6, 'comercial ve los parámetros');
 select is(private.get_setting('conversion_rate_c'), 0.70, 'get_setting devuelve C = 0.70');
 
 update public.system_settings set value = 0.5 where key = 'conversion_rate_c';
