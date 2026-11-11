@@ -117,6 +117,7 @@ const sessionRows = j.status === 'cancelada'
 const status = j.status!;
 const isOps = hasRole(Astro.locals, 'operacion');
 const canEdit = hasRole(Astro.locals, 'operacion', 'comercial') && (status === 'programada' || status === 'en_ejecucion');
+const canCancel = hasRole(Astro.locals, 'operacion', 'direccion') && status === 'programada';
 const canAttend = hasRole(Astro.locals, 'operacion', 'comercial') && status === 'en_ejecucion';
 const attendees = attendance.data ?? [];
 const orderList = orders.data ?? [];
@@ -309,7 +310,7 @@ const sessionLabel = (sid: string) => {
           )
         }
         {
-          canEdit && status === 'programada' && (
+          canCancel && (
             <details>
               <summary class="cursor-pointer text-red-700">Cancelar jornada</summary>
               <form method="post" class="mt-2 space-y-2">

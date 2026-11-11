@@ -163,8 +163,10 @@ const isCancelled = !!o.is_cancelled;
 const verified = o.doc_status === 'requisitos_verificados';
 const released = o.ops_status !== 'pendiente_liberar';
 const isAdmin = hasRole(Astro.locals, 'administracion_cartera');
-const canEdit = !isCancelled && !released && (verified ? isAdmin : hasRole(Astro.locals, 'comercial', 'administracion_cartera'));
-const canCancel = !isCancelled && (isAdmin || (hasRole(Astro.locals, 'comercial') && !verified));
+// Comercial solo modifica las órdenes que registró
+const isCreator = hasRole(Astro.locals, 'comercial') && o.created_by === Astro.locals.userId;
+const canEdit = !isCancelled && !released && (verified ? isAdmin : isAdmin || isCreator);
+const canCancel = !isCancelled && (isAdmin || (isCreator && !verified));
 const canException = !isCancelled && !released && o.payment_modality === 'contado' && hasRole(Astro.locals, 'direccion');
 const isPayroll = o.payment_modality === 'nomina_empresa';
 

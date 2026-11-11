@@ -31,7 +31,8 @@ Contraseña de todos: `Somossoe2026!`
 | Correo | Rol |
 | :--- | :--- |
 | `direccion@somossoe.test` | Dirección |
-| `comercial@somossoe.test` | Comercial |
+| `comercial@somossoe.test` | Comercial (ejecutiva de la empresa de ejemplo) |
+| `comercial2@somossoe.test` | Comercial (sin cuentas asignadas: para probar que cada Comercial edita solo lo suyo) |
 | `operacion@somossoe.test` | Operación |
 | `cartera@somossoe.test` | Administración / Cartera |
 | `nuevo@somossoe.test` | Sin activar (para ver la pantalla de pendiente) |

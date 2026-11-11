@@ -3,7 +3,7 @@ import AppLayout from '../../layouts/AppLayout.astro';
 import { checkbox, date, ensure, FormError, int, parseForm, runActions, text, uuid, z } from '../../lib/forms';
 import { PAYROLL_LABELS } from '../../lib/labels';
 
-const { supabase } = Astro.locals;
+const { supabase, userId } = Astro.locals;
 const dealId = Astro.url.searchParams.get('deal_id');
 let companyId = Astro.url.searchParams.get('company_id');
 
@@ -43,7 +43,7 @@ const v = outcome?.kind === 'error' ? outcome.values : {};
 const selectedCompany = v.company_id ?? companyId;
 
 const [{ data: companies }, deals, company, settings] = await Promise.all([
-  supabase.from('companies').select('id, name').order('name'),
+  supabase.from('companies').select('id, name').or(`assigned_user_id.is.null,assigned_user_id.eq.${userId}`).order('name'),
   selectedCompany
     ? supabase.from('deals_opportunities').select('id, deal_name_branch, payroll_frequency').eq('company_id', selectedCompany).neq('stage', 'cierre_perdido').order('deal_name_branch')
     : Promise.resolve({ data: [] as { id: string; deal_name_branch: string; payroll_frequency: 'mensual' | 'quincenal' | null }[] }),
