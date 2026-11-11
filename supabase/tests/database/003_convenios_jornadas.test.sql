@@ -51,6 +51,13 @@ create function pg_temp.marisol_agreement() returns uuid language sql as $$
   join public.companies c on c.id = a.company_id where c.name = 'Marisol SAS';
 $$;
 
+-- Desde la revisión de RLS las funciones nuevas no son ejecutables por PUBLIC
+do $$ declare f regprocedure; begin
+  for f in select p.oid::regprocedure from pg_proc p where p.pronamespace = pg_my_temp_schema() loop
+    execute format('grant execute on function %s to authenticated', f);
+  end loop;
+end $$;
+
 set local role authenticated;
 
 -- ---------------- Convenio: Comercial ----------------

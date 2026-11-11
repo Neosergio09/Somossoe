@@ -63,6 +63,13 @@ create function pg_temp.cash_order() returns uuid language sql as $$
 $$;
 
 
+-- Desde la revisión de RLS las funciones nuevas no son ejecutables por PUBLIC
+do $$ declare f regprocedure; begin
+  for f in select p.oid::regprocedure from pg_proc p where p.pronamespace = pg_my_temp_schema() loop
+    execute format('grant execute on function %s to authenticated', f);
+  end loop;
+end $$;
+
 set local role authenticated;
 
 -- ---------------- Comprador ----------------
