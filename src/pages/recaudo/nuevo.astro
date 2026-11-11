@@ -1,0 +1,161 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import { hasRole } from '../../lib/auth';
+import { todayCo } from '../../lib/format';
+import { checkbox, date, ensure, FormError, parseForm, runActions, text, uuid, z } from '../../lib/forms';
+import { BUYER_DOCUMENT_LABELS } from '../../lib/labels';
+import { money } from '../../lib/orders';
+
+if (!hasRole(Astro.locals, 'administracion_cartera')) return Astro.redirect('/recaudo');
+const { supabase } = Astro.locals;
+
+// Desde una orden se propone el pagador según quién responde por el cobro
+const orderId = Astro.url.searchParams.get('order_id');
+const { data: order } = orderId
+  ? await supabase.from('v_receivables').select('id, company_id, buyer_id, collection_responsible, balance_due').eq('id', orderId).maybeSingle()
+  : { data: null };
+
+const outcome = await runActions(Astro, {
+  create: async (form) => {
+    const input = parseForm(
+      z.object({
+        payer_type: z.enum(['empresa', 'comprador']),
+        company_id: uuid().optional(),
+        buyer_document_type: z.enum(['cc', 'ce', 'ti', 'pasaporte', 'otro']).optional(),
+        buyer_document_id: text(20).optional(),
+        payment_date: date(),
+        total_received_bank: money(),
+        bank_reference: text(80),
+        support_received: checkbox(),
+        notes: text(2000).optional(),
+      }),
+      form,
+    );
+    if (!input.support_received) throw new FormError('Registre el soporte bancario del pago.');
+    let companyId: string | null = null;
+    let buyerId: string | null = null;
+    if (input.payer_type === 'empresa') {
+      if (!input.company_id) throw new FormError('Seleccione la empresa que pagó.');
+      companyId = input.company_id;
+    } else {
+      const doc = (input.buyer_document_id ?? '').toUpperCase().replace(/[\s.-]/g, '');
+      const { data: buyer } = await supabase
+        .from('buyers')
+        .select('id')
+        .eq('document_type', input.buyer_document_type ?? 'cc')
+        .eq('document_id', doc)
+        .maybeSingle();
+      if (!buyer) throw new FormError('No hay un comprador registrado con ese documento.');
+      buyerId = buyer.id;
+    }
+    const payment = ensure(
+      await supabase
+        .from('collections_payments')
+        .insert({
+          company_id: companyId,
+          buyer_id: buyerId,
+          payment_date: input.payment_date,
+          total_received_bank: input.total_received_bank,
+          bank_reference: input.bank_reference,
+          support_received: true,
+          notes: input.notes ?? null,
+        })
+        .select('id')
+        .single(),
+    );
+    return {
+      message: 'Pago registrado. Ahora asígnelo a las órdenes.',
+      redirect: `/recaudo/${payment.id}${orderId ? `?order_id=${orderId}` : ''}`,
+    };
+  },
+});
+if (outcome?.kind === 'redirect') return outcome.response;
+const error = outcome?.kind === 'error' ? outcome.error : null;
+const v = outcome?.kind === 'error' ? outcome.values : {};
+
+const [{ data: companies }, buyer] = await Promise.all([
+  supabase.from('companies').select('id, name, nit').order('name'),
+  order?.buyer_id ? supabase.from('buyers').select('document_type, document_id').eq('id', order.buyer_id).maybeSingle() : Promise.resolve({ data: null }),
+]);
+const payerType = v.payer_type ?? (order && order.collection_responsible === 'empresa' && order.company_id ? 'empresa' : order ? 'comprador' : 'empresa');
+---
+
+<AppLayout title="Registrar pago" error={error}>
+  <a href={orderId ? `/ordenes/${orderId}` : '/recaudo'} class="text-sm">← {orderId ? 'Orden' : 'Recaudo'}</a>
+  <h1 class="mb-1">Registrar pago verificado en bancos</h1>
+  <p class="mb-4 text-sm text-slate-500">Registre solo dinero efectivamente recibido y verificado en el extracto bancario.</p>
+
+  <form method="post" class="space-y-4" id="payment-form">
+    <input type="hidden" name="_action" value="create" />
+    <section class="card space-y-3">
+      <h2>Pagador</h2>
+      <div class="flex flex-wrap gap-4 text-sm">
+        <label class="flex items-center gap-2"><input type="radio" name="payer_type" value="empresa" checked={payerType === 'empresa'} /> Empresa (giro corporativo)</label>
+        <label class="flex items-center gap-2"><input type="radio" name="payer_type" value="comprador" checked={payerType === 'comprador'} /> Comprador (persona)</label>
+      </div>
+      <div data-payer="empresa">
+        <label class="label" for="company_id">Empresa</label>
+        <select class="input" id="company_id" name="company_id">
+          <option value="">Seleccione…</option>
+          {companies?.map((c) => <option value={c.id} selected={(v.company_id ?? order?.company_id) === c.id}>{c.name}{c.nit && ` · NIT ${c.nit}`}</option>)}
+        </select>
+      </div>
+      <div class="grid grid-cols-1 gap-2 sm:grid-cols-3" data-payer="comprador">
+        <div>
+          <label class="label" for="buyer_document_type">Tipo de documento</label>
+          <select class="input" id="buyer_document_type" name="buyer_document_type">
+            {Object.entries(BUYER_DOCUMENT_LABELS).map(([value, label]) => <option value={value} selected={(v.buyer_document_type ?? buyer.data?.document_type) === value}>{label}</option>)}
+          </select>
+        </div>
+        <div class="sm:col-span-2">
+          <label class="label" for="buyer_document_id">Documento del comprador</label>
+          <input class="input" id="buyer_document_id" name="buyer_document_id" value={v.buyer_document_id ?? buyer.data?.document_id ?? ''} />
+        </div>
+      </div>
+    </section>
+
+    <section class="card space-y-3">
+      <h2>Movimiento bancario</h2>
+      <div class="grid-form">
+        <div>
+          <label class="label" for="payment_date">Fecha del pago *</label>
+          <input class="input" id="payment_date" name="payment_date" type="date" required max={todayCo()} value={v.payment_date ?? todayCo()} />
+        </div>
+        <div>
+          <label class="label" for="total_received_bank">Valor recibido en bancos (COP) *</label>
+          <input class="input" id="total_received_bank" name="total_received_bank" type="number" min="1" step="1" required value={v.total_received_bank ?? order?.balance_due ?? ''} />
+        </div>
+        <div class="sm:col-span-2">
+          <label class="label" for="bank_reference">Referencia bancaria *</label>
+          <input class="input" id="bank_reference" name="bank_reference" required placeholder="N.º de transacción o consignación" value={v.bank_reference} />
+        </div>
+        <div class="sm:col-span-2">
+          <label class="label" for="notes">Notas</label>
+          <textarea class="input" id="notes" name="notes" rows="2">{v.notes}</textarea>
+        </div>
+      </div>
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="support_received" required />
+        Soporte bancario verificado (extracto o comprobante)
+      </label>
+      <p class="text-xs text-slate-500">La carga del archivo de soporte se habilitará con Cloudflare R2.</p>
+    </section>
+
+    <div class="flex gap-2">
+      <button class="btn btn-primary" type="submit">Registrar pago</button>
+      <a class="btn" href={orderId ? `/ordenes/${orderId}` : '/recaudo'}>Cancelar</a>
+    </div>
+  </form>
+</AppLayout>
+
+<script>
+  const form = document.getElementById('payment-form');
+  if (form) {
+    const refresh = () => {
+      const type = (form.querySelector('input[name="payer_type"]:checked') as HTMLInputElement | null)?.value;
+      form.querySelectorAll<HTMLElement>('[data-payer]').forEach((el) => (el.hidden = el.dataset.payer !== type));
+    };
+    form.addEventListener('change', refresh);
+    refresh();
+  }
+</script>
