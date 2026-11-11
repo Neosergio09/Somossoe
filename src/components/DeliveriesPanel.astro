@@ -1,0 +1,129 @@
+---
+import { fmtDate, fmtDateTime, todayCo } from '../lib/format';
+import { ITEM_TYPE_LABELS, type OrderItemType } from '../lib/labels';
+
+export type DeliveryRow = {
+  order_item_id: string;
+  item_type: OrderItemType;
+  label: string;
+  quantity: number;
+  delivered: number;
+  pending: number;
+};
+
+export type DeliveryRecord = {
+  id: string;
+  delivered_at: string;
+  receiver_name: string;
+  delivered_by_name: string | null;
+  created_at: string;
+  notes: string | null;
+  items: string;
+};
+
+interface Props {
+  title: string;
+  rows: DeliveryRow[];
+  deliveries: DeliveryRecord[];
+  /** Operación puede registrar entregas en el estado actual */
+  canDeliver: boolean;
+  /** La producción está lista (habilita gafas completas y lentes) */
+  labReady: boolean;
+  /** Las reposiciones de garantía siempre requieren la producción lista */
+  onlyWhenReady?: boolean;
+  canDelete: boolean;
+  note?: string;
+  values?: Record<string, string>;
+}
+
+const { title, rows, deliveries, canDeliver, labReady, onlyWhenReady = false, canDelete, note, values: v = {} } = Astro.props;
+const today = todayCo();
+const needsLab = (t: OrderItemType) => onlyWhenReady || t === 'gafas_completas' || t === 'lentes';
+const deliverable = rows.filter((r) => r.pending > 0 && (labReady || !needsLab(r.item_type)));
+---
+
+<section class="card space-y-3 text-sm">
+  <h2>{title}</h2>
+  {note && <p class="text-xs text-slate-500">{note}</p>}
+
+  <div class="overflow-x-auto">
+    <table class="table">
+      <thead><tr><th>Ítem</th><th class="text-right">Vendido</th><th class="text-right">Entregado</th><th class="text-right">Pendiente</th></tr></thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr>
+            <td>{ITEM_TYPE_LABELS[r.item_type]} · {r.label}</td>
+            <td class="text-right">{r.quantity}</td>
+            <td class="text-right">{r.delivered}</td>
+            <td class:list={['text-right', r.pending > 0 && 'font-medium text-amber-700']}>{r.pending}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+
+  {
+    canDeliver && deliverable.length > 0 && (
+      <details open={v._action === 'deliver'}>
+        <summary class="cursor-pointer font-medium text-brand-700">+ Registrar entrega</summary>
+        <form method="post" class="mt-2 space-y-3">
+          <input type="hidden" name="_action" value="deliver" />
+          <div class="space-y-2">
+            {deliverable.map((r) => (
+              <label class="flex items-center justify-between gap-2">
+                <span>{ITEM_TYPE_LABELS[r.item_type]} · {r.label}</span>
+                <input class="input w-24" type="number" name={`qty[${r.order_item_id}]`} min="0" max={r.pending} value={v[`qty[${r.order_item_id}]`] ?? r.pending} />
+              </label>
+            ))}
+          </div>
+          {!labReady && rows.some((r) => r.pending > 0 && needsLab(r.item_type)) && (
+            <p class="text-xs text-slate-500">Las gafas completas y los lentes se entregan cuando la producción esté lista.</p>
+          )}
+          <div class="grid-form">
+            <div>
+              <label class="label">Fecha de entrega *</label>
+              <input class="input" type="date" name="delivered_at" required max={today} value={v.delivered_at ?? today} />
+            </div>
+            <div>
+              <label class="label">Quién recibe *</label>
+              <input class="input" name="receiver_name" required value={v.receiver_name} />
+            </div>
+            <div class="sm:col-span-2">
+              <label class="label">Notas</label>
+              <input class="input" name="notes" value={v.notes} />
+            </div>
+          </div>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" name="evidence_received" required />
+            Evidencia recibida (foto o acta firmada)
+          </label>
+          <p class="text-xs text-slate-500">La carga del archivo de evidencia se habilitará con Cloudflare R2.</p>
+          <button class="btn btn-primary w-full" type="submit">Registrar entrega</button>
+        </form>
+      </details>
+    )
+  }
+
+  {
+    deliveries.length > 0 && (
+      <ul class="divide-y divide-slate-100">
+        {deliveries.map((d) => (
+          <li class="flex items-start justify-between gap-2 py-2">
+            <div>
+              <div class="font-medium">{fmtDate(d.delivered_at)} · recibió {d.receiver_name}</div>
+              <div class="text-xs text-slate-600">{d.items}</div>
+              <div class="text-xs text-slate-500">Registró {d.delivered_by_name ?? '—'} el {fmtDateTime(d.created_at)}{d.notes && ` · ${d.notes}`}</div>
+            </div>
+            {canDelete && (
+              <form method="post">
+                <input type="hidden" name="_action" value="delete_delivery" />
+                <input type="hidden" name="delivery_id" value={d.id} />
+                <button class="btn btn-sm btn-danger" type="submit">Borrar</button>
+              </form>
+            )}
+          </li>
+        ))}
+      </ul>
+    )
+  }
+</section>

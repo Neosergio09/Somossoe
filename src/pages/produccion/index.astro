@@ -1,0 +1,113 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import { cop, fmtDate } from '../../lib/format';
+import { OPS_STATUS_BADGE, OPS_STATUS_LABELS, PAYMENT_MODALITY_LABELS, PRODUCTION_STATUS_BADGE, PRODUCTION_STATUS_LABELS } from '../../lib/labels';
+import { orderNumber } from '../../lib/orders';
+
+const { supabase } = Astro.locals;
+const tab = Astro.url.searchParams.get('vista') ?? 'por_liberar';
+
+const [toRelease, inProgress, ready, warrantyDeliveries] = await Promise.all([
+  supabase
+    .from('v_orders')
+    .select('id, order_number, buyer_name, company_name, city_name, payment_modality, total_amount, release_blockers, requirements_verified_at')
+    .eq('doc_status', 'requisitos_verificados')
+    .eq('ops_status', 'pendiente_liberar')
+    .eq('is_cancelled', false)
+    .order('requirements_verified_at'),
+  supabase.from('v_productions').select('*').eq('status', 'en_produccion').order('promised_date'),
+  supabase.from('v_productions').select('*').eq('status', 'listo_para_entregar').order('ready_at'),
+  supabase.from('order_deliveries').select('warranty_id').not('warranty_id', 'is', null),
+]);
+const deliveredWarranties = new Set((warrantyDeliveries.data ?? []).map((d) => d.warranty_id));
+const overdue = (inProgress.data ?? []).filter((p) => p.is_overdue).length;
+// En "listas" solo interesan las que aún tienen algo por entregar
+const readyRows = (ready.data ?? []).filter((p) =>
+  p.warranty_id ? !deliveredWarranties.has(p.warranty_id) : p.ops_status !== 'entrega_completa',
+);
+const tabs: [string, string, number][] = [
+  ['por_liberar', 'Por liberar', toRelease.data?.length ?? 0],
+  ['en_produccion', 'En producción', inProgress.data?.length ?? 0],
+  ['listas', 'Listas para entregar', readyRows.length],
+];
+const rows = tab === 'en_produccion' ? inProgress.data ?? [] : readyRows;
+const href = (p: { order_id: string | null; warranty_id: string | null }) => (p.warranty_id ? `/garantias/${p.warranty_id}` : `/ordenes/${p.order_id}`);
+---
+
+<AppLayout title="Producción">
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <h1>Producción y entregas</h1>
+    {overdue > 0 && <span class="badge badge-red">{overdue} atrasadas frente a la fecha prometida</span>}
+  </div>
+
+  <nav class="mb-4 flex flex-wrap gap-1 text-sm">
+    {
+      tabs.map(([value, label, count]) => (
+        <a
+          href={`?vista=${value}`}
+          class:list={['rounded-md px-3 py-1.5 hover:no-underline', tab === value ? 'bg-brand-700 text-white' : 'border border-slate-200 bg-white text-slate-700']}
+        >
+          {label} ({count})
+        </a>
+      ))
+    }
+  </nav>
+
+  {
+    tab === 'por_liberar' ? (
+      <div class="card overflow-x-auto p-0">
+        <table class="table">
+          <thead><tr><th>Orden</th><th>Comprador</th><th>Empresa / ciudad</th><th>Modalidad</th><th class="text-right">Valor</th><th>Liberación</th></tr></thead>
+          <tbody>
+            {toRelease.data?.map((o) => (
+              <tr>
+                <td><a href={`/ordenes/${o.id}`} class="font-medium">{orderNumber(o.order_number)}</a><div class="text-xs text-slate-500">Verificada {fmtDate(o.requirements_verified_at?.slice(0, 10))}</div></td>
+                <td>{o.buyer_name}</td>
+                <td>{o.company_name ?? 'Particular'}{o.city_name && <div class="text-xs text-slate-500">{o.city_name}</div>}</td>
+                <td class="text-xs">{PAYMENT_MODALITY_LABELS[o.payment_modality!]}</td>
+                <td class="text-right whitespace-nowrap">{cop(o.total_amount)}</td>
+                <td>
+                  {o.release_blockers?.length ? (
+                    <span class="badge badge-amber" title={o.release_blockers.join('; ')}>Bloqueada: {o.release_blockers[0]}</span>
+                  ) : (
+                    <span class="badge badge-green">Lista para liberar</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {!toRelease.data?.length && <tr><td colspan="6" class="py-6 text-center text-slate-500">No hay órdenes verificadas pendientes de liberar.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <div class="card overflow-x-auto p-0">
+        <table class="table">
+          <thead><tr><th>Orden</th><th>Comprador</th><th>Laboratorio</th><th>Envío</th><th>Prometida</th><th>Lista</th><th>Estado</th></tr></thead>
+          <tbody>
+            {rows.map((p) => (
+              <tr class:list={[p.is_overdue && 'bg-red-50']}>
+                <td>
+                  <a href={href(p)} class="font-medium">{orderNumber(p.order_number)}</a>
+                  {p.warranty_id && <span class="badge ml-1">Reposición</span>}
+                </td>
+                <td>{p.buyer_name}{p.company_name && <div class="text-xs text-slate-500">{p.company_name}</div>}</td>
+                <td>{p.lab_name}</td>
+                <td class="whitespace-nowrap">{fmtDate(p.sent_to_lab_at)}</td>
+                <td class="whitespace-nowrap">{fmtDate(p.promised_date)} {p.is_overdue && <span class="badge badge-red">Atrasada</span>}</td>
+                <td class="whitespace-nowrap">{fmtDate(p.ready_at)}</td>
+                <td>
+                  {p.warranty_id || !p.ops_status ? (
+                    <span class={p.status ? PRODUCTION_STATUS_BADGE[p.status] : 'badge'}>{p.status ? PRODUCTION_STATUS_LABELS[p.status] : ''}</span>
+                  ) : (
+                    <span class={OPS_STATUS_BADGE[p.ops_status]}>{OPS_STATUS_LABELS[p.ops_status]}</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {!rows.length && <tr><td colspan="7" class="py-6 text-center text-slate-500">Nada en esta vista.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+</AppLayout>

@@ -1,0 +1,194 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import ProductionPanel from '../../components/ProductionPanel.astro';
+import DeliveriesPanel from '../../components/DeliveriesPanel.astro';
+import { hasRole } from '../../lib/auth';
+import { fmtDateTime } from '../../lib/format';
+import { checkbox, ensure, FormError, parseForm, runActions, text, uuid, z } from '../../lib/forms';
+import { activeLabs, fulfillmentActions } from '../../lib/fulfillment';
+import { itemLabel, loadDeliveries } from '../../lib/deliveries';
+import { WARRANTY_STATUS_BADGE, WARRANTY_STATUS_LABELS, WARRANTY_TYPE_LABELS } from '../../lib/labels';
+import { activeUsers } from '../../lib/options';
+import { orderNumber } from '../../lib/orders';
+
+const { supabase } = Astro.locals;
+const id = Astro.params.id!;
+
+const { data: w } = await supabase.from('v_warranties').select('*').eq('id', id).maybeSingle();
+if (!w) return new Response('Caso no encontrado', { status: 404 });
+const orderId = w.order_id!;
+
+const outcome = await runActions(Astro, {
+  ...fulfillmentActions(supabase, { orderId, warrantyId: id }),
+  update: async (form) => {
+    const input = parseForm(
+      z.object({
+        incident_type: z.enum(['garantia', 'reclamo', 'ajuste', 'otro']),
+        description: text(2000),
+        responsible_user_id: uuid(),
+        resolution: text(2000).optional(),
+        evidence_received: checkbox(),
+      }),
+      form,
+    );
+    ensure(
+      await supabase
+        .from('post_sale_warranties')
+        .update({ ...input, resolution: input.resolution ?? null })
+        .eq('id', id)
+        .select('id')
+        .single(),
+    );
+    return { message: 'Caso actualizado.' };
+  },
+  close: async (form) => {
+    const input = parseForm(z.object({ resolution: text(2000).optional(), evidence_received: checkbox() }), form);
+    if (!input.resolution) throw new FormError('Registre la solución aplicada.');
+    ensure(
+      await supabase
+        .from('post_sale_warranties')
+        .update({ status: 'cerrada', resolution: input.resolution, evidence_received: input.evidence_received })
+        .eq('id', id)
+        .select('id')
+        .single(),
+    );
+    return { message: 'Caso cerrado.' };
+  },
+});
+if (outcome?.kind === 'redirect') return outcome.response;
+const error = outcome?.kind === 'error' ? outcome.error : null;
+const v = outcome?.kind === 'error' ? outcome.values : {};
+const lastAction = outcome?.kind === 'error' ? outcome.action : '';
+
+const [items, productions, deliveries, labs, responsibles] = await Promise.all([
+  supabase.from('order_items').select('*').eq('order_id', orderId).order('created_at'),
+  supabase.from('v_productions').select('*').eq('warranty_id', id).order('released_at', { ascending: false }),
+  loadDeliveries(supabase, orderId, id),
+  activeLabs(supabase),
+  activeUsers(supabase, ['operacion', 'direccion']),
+]);
+
+const closed = w.status === 'cerrada';
+const isOps = hasRole(Astro.locals, 'operacion');
+const isDireccion = hasRole(Astro.locals, 'direccion');
+const canEdit = !closed && (isOps || isDireccion);
+const production = productions.data?.find((p) => p.status !== 'cancelada') ?? null;
+const cancelled = productions.data?.filter((p) => p.status === 'cancelada') ?? [];
+const hasDeliveries = deliveries.records.length > 0;
+const rows = (items.data ?? []).map((i) => {
+  const delivered = deliveries.byItem.get(i.id) ?? 0;
+  return { order_item_id: i.id, item_type: i.item_type, label: itemLabel(i), quantity: i.quantity, delivered, pending: i.quantity - delivered };
+});
+const pendingReplacement = !!production && !hasDeliveries;
+---
+
+<AppLayout title={`Posventa · ${orderNumber(w.order_number)}`} error={error}>
+  <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <a href="/garantias" class="text-sm">← Posventa</a>
+      <h1>{WARRANTY_TYPE_LABELS[w.incident_type!]} · Orden <a href={`/ordenes/${orderId}`}>{orderNumber(w.order_number)}</a></h1>
+      <p class="text-sm text-slate-600">{w.buyer_name} · {w.buyer_document_id}{w.company_name && ` · ${w.company_name}`}</p>
+      <p class="text-xs text-slate-500">Abierto por {w.opened_by_name ?? '—'} el {fmtDateTime(w.created_at)} · Responsable: {w.responsible_name}</p>
+    </div>
+    <span class={`${WARRANTY_STATUS_BADGE[w.status!]} text-sm`}>{WARRANTY_STATUS_LABELS[w.status!]}</span>
+  </div>
+
+  <p class="mb-4 rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+    Una reposición por garantía no crea un nuevo ingreso, no modifica el valor de la orden, no duplica la cartera y no altera su estado operativo.
+  </p>
+
+  <div class="grid gap-4 lg:grid-cols-3">
+    <div class="space-y-4 lg:col-span-2">
+      <section class="card space-y-2 text-sm">
+        <h2>Caso</h2>
+        <p class="whitespace-pre-line">{w.description}</p>
+        {w.resolution && (
+          <div>
+            <div class="label">Solución aplicada</div>
+            <p class="whitespace-pre-line">{w.resolution}</p>
+          </div>
+        )}
+        <p class:list={[w.evidence_received ? 'text-green-700' : 'text-amber-700']}>
+          {w.evidence_received ? '✓ Evidencia de cierre recibida' : '○ Sin evidencia de cierre'}
+        </p>
+        {closed && <p class="text-green-700">Cerrado por {w.closed_by_name} el {fmtDateTime(w.closed_at)}</p>}
+      </section>
+
+      {
+        (!closed || production || cancelled.length > 0) && (
+          <ProductionPanel
+            title="Reposición con laboratorio"
+            production={production}
+            cancelled={cancelled}
+            labs={labs}
+            canOperate={isOps && !closed}
+            canRelease={!closed && !production}
+            hasDeliveries={hasDeliveries}
+            releaseLabel="Enviar reposición al laboratorio"
+            values={v}
+            lastAction={lastAction}
+          />
+        )
+      }
+
+      {
+        (production || hasDeliveries) && (
+          <DeliveriesPanel
+            title="Entrega de la reposición"
+            rows={rows}
+            deliveries={deliveries.records}
+            canDeliver={isOps && !closed && production?.status === 'listo_para_entregar'}
+            labReady={production?.status === 'listo_para_entregar'}
+            onlyWhenReady
+            canDelete={isOps && !closed}
+            values={v}
+          />
+        )
+      }
+    </div>
+
+    <div class="space-y-4">
+      {
+        canEdit && (
+          <section class="card text-sm">
+            <h2 class="mb-3">Datos del caso</h2>
+            <form method="post" class="space-y-2">
+              <input type="hidden" name="_action" value="update" />
+              <label class="label">Tipo</label>
+              <select class="input" name="incident_type">
+                {Object.entries(WARRANTY_TYPE_LABELS).map(([value, label]) => <option value={value} selected={(v.incident_type ?? w.incident_type) === value}>{label}</option>)}
+              </select>
+              <label class="label">Responsable</label>
+              <select class="input" name="responsible_user_id">
+                {responsibles.map((u) => <option value={u.id} selected={(v.responsible_user_id ?? w.responsible_user_id) === u.id}>{u.full_name}</option>)}
+              </select>
+              <label class="label">Descripción</label>
+              <textarea class="input" name="description" rows="3" required>{v.description ?? w.description}</textarea>
+              <label class="label">Solución aplicada</label>
+              <textarea class="input" name="resolution" rows="3">{v.resolution ?? w.resolution ?? ''}</textarea>
+              <label class="flex items-center gap-2"><input type="checkbox" name="evidence_received" checked={!!w.evidence_received} /> Evidencia de cierre recibida</label>
+              <button class="btn w-full" type="submit">Guardar</button>
+            </form>
+          </section>
+        )
+      }
+
+      {
+        isDireccion && !closed && (
+          <section class="card space-y-2 text-sm">
+            <h2>Cierre (Dirección)</h2>
+            {pendingReplacement && <p class="text-amber-700">○ Falta entregar la reposición.</p>}
+            <form method="post" class="space-y-2">
+              <input type="hidden" name="_action" value="close" />
+              <label class="label">Solución aplicada *</label>
+              <textarea class="input" name="resolution" rows="3" required>{v.resolution ?? w.resolution ?? ''}</textarea>
+              <label class="flex items-center gap-2"><input type="checkbox" name="evidence_received" required checked={!!w.evidence_received} /> Evidencia de cierre recibida</label>
+              <p class="text-xs text-slate-500">La carga del archivo de evidencia se habilitará con Cloudflare R2.</p>
+              <button class="btn btn-primary w-full" type="submit" disabled={pendingReplacement}>Cerrar caso</button>
+            </form>
+          </section>
+        )
+      }
+    </div>
+  </div>
+</AppLayout>
