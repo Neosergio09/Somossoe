@@ -30,8 +30,13 @@ const columns = [...KANBAN_STAGES, ...(showLost ? (['cierre_perdido'] as const) 
   const total = items.reduce((sum, d) => sum + (d.estimated_billing_amount ?? 0), 0);
   return { stage, items, total, droppable: canMove && MANUAL_STAGES.includes(stage) };
 });
-const isDraggable = (d: { stage: string | null; lost_substatus: string | null }) =>
-  canMove && !AUTOMATIC.has(d.stage ?? '') && !(d.stage === 'cierre_perdido' && d.lost_substatus === 'no_contactar');
+const isDireccion = hasRole(Astro.locals, 'direccion');
+// Comercial solo mueve sus oportunidades; Dirección mueve todas
+const isDraggable = (d: { stage: string | null; lost_substatus: string | null; assigned_user_id: string | null }) =>
+  canMove &&
+  (isDireccion || d.assigned_user_id === userId) &&
+  !AUTOMATIC.has(d.stage ?? '') &&
+  !(d.stage === 'cierre_perdido' && d.lost_substatus === 'no_contactar');
 
 const filterUrl = (patch: Record<string, string>) => {
   const p = new URLSearchParams(params);
