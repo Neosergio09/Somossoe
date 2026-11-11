@@ -1,0 +1,200 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import { hasRole } from '../../lib/auth';
+import { cop, todayCo } from '../../lib/format';
+import { checkbox, date, ensure, FormError, parseForm, runActions, text, uuid, z } from '../../lib/forms';
+import { BUYER_DOCUMENT_LABELS, RADICATION_LABELS } from '../../lib/labels';
+import { money, orderNumber } from '../../lib/orders';
+
+const { supabase } = Astro.locals;
+if (!hasRole(Astro.locals, 'administracion_cartera')) return Astro.redirect('/facturas');
+
+const orderId = Astro.url.searchParams.get('order_id');
+const { data: order } = orderId
+  ? await supabase.from('v_orders_to_invoice').select('*').eq('id', orderId).maybeSingle()
+  : { data: null };
+
+const outcome = await runActions(Astro, {
+  create: async (form) => {
+    const input = parseForm(
+      z.object({
+        subject_type: z.enum(['empresa', 'comprador']),
+        company_id: uuid().optional(),
+        buyer_document_type: z.enum(['cc', 'ce', 'ti', 'pasaporte', 'otro']).optional(),
+        buyer_document_id: text(20).optional(),
+        alegra_invoice_number: text(40),
+        invoice_date: date(),
+        invoiced_amount: money(),
+        radication_status: z.enum(['pendiente', 'radicada', 'rechazada']),
+        alegra_external_id: text(40).optional(),
+        notes: text(2000).optional(),
+        link_order: checkbox(),
+        link_amount: money().optional(),
+      }),
+      form,
+    );
+    let companyId: string | null = null;
+    let buyerId: string | null = null;
+    if (input.subject_type === 'empresa') {
+      if (!input.company_id) throw new FormError('Seleccione la empresa facturada.');
+      companyId = input.company_id;
+    } else {
+      const doc = (input.buyer_document_id ?? '').toUpperCase().replace(/[\s.-]/g, '');
+      if (!doc) throw new FormError('Indique el documento del comprador facturado.');
+      const { data: buyer } = await supabase
+        .from('buyers')
+        .select('id')
+        .eq('document_type', input.buyer_document_type ?? 'cc')
+        .eq('document_id', doc)
+        .maybeSingle();
+      if (!buyer) throw new FormError('No hay un comprador registrado con ese documento.');
+      buyerId = buyer.id;
+    }
+
+    const invoice = ensure(
+      await supabase
+        .from('alegra_invoices')
+        .insert({
+          alegra_invoice_number: input.alegra_invoice_number,
+          invoice_date: input.invoice_date,
+          invoiced_amount: input.invoiced_amount,
+          company_id: companyId,
+          buyer_id: buyerId,
+          radication_status: input.radication_status,
+          alegra_external_id: input.alegra_external_id ?? null,
+          notes: input.notes ?? null,
+        })
+        .select('id')
+        .single(),
+    );
+
+    if (order && input.link_order && input.link_amount) {
+      const { error } = await supabase
+        .from('alegra_invoice_orders')
+        .insert({ invoice_id: invoice.id, order_id: order.id!, amount_assigned: input.link_amount });
+      if (error) {
+        return {
+          message: 'Factura registrada, pero no se pudo vincular la orden: revise el vínculo en la factura.',
+          redirect: `/facturas/${invoice.id}`,
+        };
+      }
+    }
+    return { message: 'Factura registrada.', redirect: `/facturas/${invoice.id}` };
+  },
+});
+if (outcome?.kind === 'redirect') return outcome.response;
+const error = outcome?.kind === 'error' ? outcome.error : null;
+const v = outcome?.kind === 'error' ? outcome.values : {};
+
+const [{ data: companies }, buyer] = await Promise.all([
+  supabase.from('companies').select('id, name, nit, nit_dv').eq('is_nit_provisional', false).order('name'),
+  order && !order.company_id
+    ? supabase.from('buyers').select('document_type, document_id').eq('id', order.buyer_id!).maybeSingle()
+    : Promise.resolve({ data: null }),
+]);
+const subjectType = v.subject_type ?? (order && !order.company_id ? 'comprador' : 'empresa');
+---
+
+<AppLayout title="Registrar factura" error={error}>
+  <a href={order ? `/ordenes/${order.id}` : '/facturas'} class="text-sm">← {order ? 'Orden' : 'Facturación'}</a>
+  <h1 class="mb-1">Registrar factura de Alegra</h1>
+  <p class="mb-4 text-sm text-slate-500">Copie los datos de la factura emitida en Alegra y vincúlela a las órdenes que cubre.</p>
+
+  <form method="post" class="space-y-4" id="invoice-form">
+    <input type="hidden" name="_action" value="create" />
+
+    <section class="card space-y-3">
+      <h2>Facturado a</h2>
+      <p class="text-xs text-slate-500">En ventas por nómina se factura según lo definido con SOE (empresa o empleado).</p>
+      <div class="flex flex-wrap gap-4 text-sm">
+        <label class="flex items-center gap-2"><input type="radio" name="subject_type" value="empresa" checked={subjectType === 'empresa'} /> Empresa</label>
+        <label class="flex items-center gap-2"><input type="radio" name="subject_type" value="comprador" checked={subjectType === 'comprador'} /> Comprador (persona)</label>
+      </div>
+      <div data-subject="empresa">
+        <label class="label" for="company_id">Empresa (solo NIT en firme)</label>
+        <select class="input" id="company_id" name="company_id">
+          <option value="">Seleccione…</option>
+          {companies?.map((c) => <option value={c.id} selected={(v.company_id ?? order?.company_id) === c.id}>{c.name} · NIT {c.nit}-{c.nit_dv}</option>)}
+        </select>
+      </div>
+      <div class="grid grid-cols-1 gap-2 sm:grid-cols-3" data-subject="comprador">
+        <div>
+          <label class="label" for="buyer_document_type">Tipo de documento</label>
+          <select class="input" id="buyer_document_type" name="buyer_document_type">
+            {Object.entries(BUYER_DOCUMENT_LABELS).map(([value, label]) => <option value={value} selected={(v.buyer_document_type ?? buyer.data?.document_type) === value}>{label}</option>)}
+          </select>
+        </div>
+        <div class="sm:col-span-2">
+          <label class="label" for="buyer_document_id">Documento del comprador</label>
+          <input class="input" id="buyer_document_id" name="buyer_document_id" value={v.buyer_document_id ?? buyer.data?.document_id ?? ''} />
+        </div>
+      </div>
+    </section>
+
+    <section class="card space-y-3">
+      <h2>Factura</h2>
+      <div class="grid-form">
+        <div>
+          <label class="label" for="alegra_invoice_number">Número de factura *</label>
+          <input class="input" id="alegra_invoice_number" name="alegra_invoice_number" required placeholder="FE-1234" value={v.alegra_invoice_number} />
+        </div>
+        <div>
+          <label class="label" for="invoice_date">Fecha *</label>
+          <input class="input" id="invoice_date" name="invoice_date" type="date" required max={todayCo()} value={v.invoice_date ?? todayCo()} />
+        </div>
+        <div>
+          <label class="label" for="invoiced_amount">Monto facturado (COP) *</label>
+          <input class="input" id="invoiced_amount" name="invoiced_amount" type="number" min="1" step="1" required value={v.invoiced_amount ?? order?.pending_amount ?? ''} />
+        </div>
+        <div>
+          <label class="label" for="radication_status">Radicación</label>
+          <select class="input" id="radication_status" name="radication_status">
+            {Object.entries(RADICATION_LABELS).map(([value, label]) => <option value={value} selected={(v.radication_status ?? 'pendiente') === value}>{label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label class="label" for="alegra_external_id">ID en Alegra (opcional)</label>
+          <input class="input" id="alegra_external_id" name="alegra_external_id" value={v.alegra_external_id} />
+          <p class="mt-1 text-xs text-slate-500">Permitirá consultar la factura en Alegra cuando la integración esté activa.</p>
+        </div>
+        <div class="sm:col-span-2">
+          <label class="label" for="notes">Notas</label>
+          <textarea class="input" id="notes" name="notes" rows="2">{v.notes}</textarea>
+        </div>
+      </div>
+    </section>
+
+    {
+      order && (
+        <section class="card space-y-2 text-sm">
+          <h2>Vincular la orden {orderNumber(order.order_number)}</h2>
+          <p>
+            {order.buyer_name} · valor {cop(order.total_amount)} · ya facturado {cop(order.billed_amount)} · pendiente <strong>{cop(order.pending_amount)}</strong>
+          </p>
+          <div class="flex flex-wrap items-end gap-3">
+            <label class="flex items-center gap-2"><input type="checkbox" name="link_order" checked={v.link_order ? v.link_order === 'on' : true} /> Vincular por</label>
+            <input class="input w-40" type="number" name="link_amount" min="1" step="1" value={v.link_amount ?? order.pending_amount ?? ''} />
+          </div>
+          <p class="text-xs text-slate-500">Si lo vinculado difiere del valor de la orden, queda con Diferencia Visible.</p>
+        </section>
+      )
+    }
+
+    <div class="flex gap-2">
+      <button class="btn btn-primary" type="submit">Registrar factura</button>
+      <a class="btn" href={order ? `/ordenes/${order.id}` : '/facturas'}>Cancelar</a>
+    </div>
+  </form>
+</AppLayout>
+
+<script>
+  const form = document.getElementById('invoice-form');
+  if (form) {
+    const refresh = () => {
+      const type = (form.querySelector('input[name="subject_type"]:checked') as HTMLInputElement | null)?.value;
+      form.querySelectorAll<HTMLElement>('[data-subject]').forEach((el) => (el.hidden = el.dataset.subject !== type));
+    };
+    form.addEventListener('change', refresh);
+    refresh();
+  }
+</script>

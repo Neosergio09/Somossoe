@@ -161,6 +161,11 @@ const FIELD_LABELS: Record<string, string> = {
   delivered_at: 'Fecha de entrega',
   resolution: 'Solución aplicada',
   responsible_user_id: 'Responsable',
+  alegra_invoice_number: 'Número de factura',
+  invoice_date: 'Fecha de la factura',
+  invoiced_amount: 'Monto facturado',
+  amount_assigned: 'Monto asignado',
+  alegra_external_id: 'ID en Alegra',
 };
 
 const UNIQUE_MESSAGES: Record<string, string> = {
@@ -177,6 +182,8 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   order_productions_one_active_key: 'La orden ya está liberada a producción.',
   order_productions_one_active_warranty_key: 'La garantía ya tiene una reposición en curso.',
   order_delivery_items_unique_item: 'Un ítem aparece dos veces en la misma entrega.',
+  alegra_invoices_number_key: 'Ya existe una factura con ese número.',
+  alegra_invoice_orders_unique: 'Esa orden ya está vinculada a esta factura; corrija su monto.',
 };
 
 const CHECK_MESSAGES: Record<string, string> = {
@@ -216,6 +223,11 @@ const CHECK_MESSAGES: Record<string, string> = {
   post_sale_warranties_closed: 'Para cerrar la garantía registre la solución aplicada.',
   post_sale_warranties_description_check: 'Describa el caso.',
   order_delivery_items_quantity_check: 'La cantidad entregada debe ser mayor que cero.',
+  alegra_invoices_subject: 'La factura se emite a una empresa o a un comprador (uno de los dos).',
+  alegra_invoices_void_reason: 'Indique el motivo de la anulación.',
+  alegra_invoices_invoiced_amount_check: 'El monto facturado debe ser mayor que cero.',
+  alegra_invoices_alegra_external_id_check: 'El ID de Alegra solo admite letras, números y guiones.',
+  alegra_invoice_orders_amount_assigned_check: 'El monto asignado debe ser mayor que cero.',
 };
 
 /** Reemplaza códigos internos (etapas, estados) por su etiqueta. */
