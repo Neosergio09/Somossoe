@@ -45,7 +45,14 @@ const filterUrl = (patch: Record<string, string>) => {
   <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
     <div>
       <h1>Oportunidades</h1>
-      {canMove && <p class="text-xs text-slate-500">Arrastre las tarjetas para cambiar de etapa. Jornada en Ejecución y Facturación Cerrada avanzan solas.</p>}
+      {
+        canMove && (
+          <p class="text-xs text-slate-500">
+            Arrastre las tarjetas para cambiar de etapa (en el celular, mantenga presionada la tarjeta). Jornada en Ejecución y
+            Facturación Cerrada avanzan solas.
+          </p>
+        )
+      }
     </div>
     {hasRole(Astro.locals, 'comercial') && <a class="btn btn-primary" href="/oportunidades/nueva">Nueva oportunidad</a>}
   </div>
@@ -99,9 +106,10 @@ const filterUrl = (patch: Record<string, string>) => {
                 href={`/oportunidades/${d.id}`}
                 class:list={[
                   'card block p-3 text-sm text-slate-800 hover:border-brand-600 hover:no-underline',
-                  isDraggable(d) && 'cursor-grab active:cursor-grabbing',
+                  isDraggable(d) && 'cursor-grab touch-manipulation select-none [-webkit-touch-callout:none]',
                 ]}
-                draggable={isDraggable(d) ? 'true' : 'false'}
+                draggable="false"
+                data-can-drag={isDraggable(d) ? 'true' : 'false'}
                 data-deal-id={d.id}
                 data-stage={d.stage}
               >
@@ -137,7 +145,7 @@ const filterUrl = (patch: Record<string, string>) => {
         data-stage="cierre_perdido"
         data-droppable="true"
         data-lost-zone
-        class="fixed inset-x-0 bottom-4 z-10 mx-auto flex w-80 items-center justify-center rounded-lg border-2 border-dashed border-red-300 bg-red-50 px-4 py-5 text-sm font-medium text-red-700 shadow-lg transition"
+        class="fixed inset-x-4 bottom-4 z-40 mx-auto flex max-w-80 items-center justify-center rounded-lg border-2 border-dashed border-red-300 bg-red-50 px-4 py-5 text-center text-sm font-medium text-red-700 shadow-lg transition"
       >
         Soltar aquí para marcar como Cierre Perdido
         <div data-list hidden></div>
@@ -159,25 +167,49 @@ const filterUrl = (patch: Record<string, string>) => {
 </AppLayout>
 
 <script>
+  // Arrastre con Pointer Events: funciona con mouse, dedo y lápiz.
+  // Mouse: se arrastra al mover más de 5 px. Táctil: mantener presionado ~300 ms.
   const board = document.querySelector<HTMLElement>('[data-kanban]');
   const lostZone = document.querySelector<HTMLElement>('[data-lost-zone]');
   const lostDialog = document.querySelector<HTMLDialogElement>('#lost-dialog');
   const errorBox = document.querySelector<HTMLElement>('#kanban-error');
   const HIGHLIGHT = ['ring-2', 'ring-brand-600', 'bg-brand-50'];
+  const LONG_PRESS_MS = 300;
+  const MOUSE_THRESHOLD = 5;
+  const TOUCH_CANCEL = 10;
+  const EDGE = 48;
 
-  let dragged: HTMLElement | null = null;
-  let origin: { list: HTMLElement; next: Element | null } | null = null;
+  type Pending = { card: HTMLElement; pointerId: number; type: string; x: number; y: number; timer?: number };
+  type Active = {
+    card: HTMLElement;
+    ghost: HTMLElement;
+    offsetX: number;
+    offsetY: number;
+    x: number;
+    y: number;
+    over: HTMLElement | null;
+    origin: { list: HTMLElement; next: Element | null };
+  };
+
+  let pending: Pending | null = null;
+  let active: Active | null = null;
+  let suppressClick = false;
+  let raf = 0;
 
   const columns = () => [...document.querySelectorAll<HTMLElement>('[data-column]')];
-  const columnOf = (el: EventTarget | null) => (el instanceof Element ? el.closest<HTMLElement>('[data-column]') : null);
+  const columnAt = (x: number, y: number) => document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-column]') ?? null;
   const canDropOn = (col: HTMLElement | null) =>
-    !!col && !!dragged && col.dataset.droppable === 'true' && col.dataset.stage !== dragged.dataset.stage;
+    !!col && !!active && col.dataset.droppable === 'true' && col.dataset.stage !== active.card.dataset.stage;
 
   function showError(message: string) {
     if (!errorBox) return alert(message);
     errorBox.textContent = message;
     errorBox.hidden = false;
     errorBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function highlight(col: HTMLElement | null) {
+    for (const c of columns()) HIGHLIGHT.forEach((cls) => c.classList.toggle(cls, c === col));
   }
 
   function askLostSubstatus(): Promise<string | null> {
@@ -189,16 +221,93 @@ const filterUrl = (patch: Record<string, string>) => {
     });
   }
 
-  function revert(card: HTMLElement) {
-    if (origin) origin.list.insertBefore(card, origin.next);
+  function clearPending() {
+    if (pending?.timer) clearTimeout(pending.timer);
+    pending = null;
   }
 
-  async function move(card: HTMLElement, target: HTMLElement) {
+  function startDrag(card: HTMLElement, x: number, y: number, viaTouch: boolean) {
+    const rect = card.getBoundingClientRect();
+    const ghost = card.cloneNode(true) as HTMLElement;
+    ghost.removeAttribute('data-deal-id');
+    Object.assign(ghost.style, {
+      position: 'fixed',
+      left: `${rect.left}px`,
+      top: `${rect.top}px`,
+      width: `${rect.width}px`,
+      pointerEvents: 'none',
+      zIndex: '50',
+      transform: 'rotate(2deg) scale(1.03)',
+      boxShadow: '0 12px 28px rgba(15, 23, 42, 0.25)',
+      opacity: '0.95',
+    });
+    document.body.appendChild(ghost);
+
+    active = {
+      card,
+      ghost,
+      offsetX: x - rect.left,
+      offsetY: y - rect.top,
+      x,
+      y,
+      over: null,
+      origin: { list: card.parentElement as HTMLElement, next: card.nextElementSibling },
+    };
+    card.classList.add('opacity-40');
+    document.body.classList.add('select-none');
+    if (errorBox) errorBox.hidden = true;
+    if (lostZone) lostZone.hidden = false;
+    if (viaTouch) navigator.vibrate?.(15);
+    raf = requestAnimationFrame(autoScroll);
+  }
+
+  // Desplaza el tablero (horizontal) y la página (vertical) cerca de los bordes
+  function autoScroll() {
+    if (!active) return;
+    const { x, y } = active;
+    if (board) {
+      const r = board.getBoundingClientRect();
+      if (x < r.left + EDGE) board.scrollLeft -= 12;
+      else if (x > r.right - EDGE) board.scrollLeft += 12;
+    }
+    if (y < EDGE) window.scrollBy(0, -12);
+    else if (y > window.innerHeight - EDGE) window.scrollBy(0, 12);
+    updateOver();
+    raf = requestAnimationFrame(autoScroll);
+  }
+
+  function updateOver() {
+    if (!active) return;
+    const col = columnAt(active.x, active.y);
+    active.over = canDropOn(col) ? col : null;
+    highlight(active.over);
+  }
+
+  function endDrag(): { card: HTMLElement; target: HTMLElement | null; origin: Active['origin'] } | null {
+    if (!active) return null;
+    cancelAnimationFrame(raf);
+    const { card, ghost, over, origin } = active;
+    ghost.remove();
+    card.classList.remove('opacity-40');
+    document.body.classList.remove('select-none');
+    highlight(null);
+    if (lostZone) lostZone.hidden = true;
+    active = null;
+    suppressClick = true;
+    setTimeout(() => (suppressClick = false), 0);
+    return { card, target: over, origin };
+  }
+
+  async function move(card: HTMLElement, target: HTMLElement, origin: Active['origin']) {
+    const revert = () => {
+      origin.list.insertBefore(card, origin.next);
+      card.classList.remove('opacity-60', 'pointer-events-none');
+    };
     const stage = target.dataset.stage!;
     let lost: string | null = null;
     if (stage === 'cierre_perdido') {
       lost = await askLostSubstatus();
-      if (!lost) return revert(card);
+      if (!lost) return;
     }
 
     // Movimiento optimista; si la BD lo rechaza, la tarjeta vuelve a su lugar
@@ -218,56 +327,68 @@ const filterUrl = (patch: Record<string, string>) => {
       if (res.redirected) return location.assign(res.url);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        revert(card);
-        card.classList.remove('opacity-60', 'pointer-events-none');
+        revert();
         showError(data.error ?? 'No se pudo mover la oportunidad.');
         return;
       }
       location.reload();
     } catch {
-      revert(card);
-      card.classList.remove('opacity-60', 'pointer-events-none');
+      revert();
       showError('Sin conexión. Intente de nuevo.');
     }
   }
 
-  board?.addEventListener('dragstart', (event) => {
-    const card = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-deal-id]') : null;
-    if (!card || card.getAttribute('draggable') !== 'true') return;
-    dragged = card;
-    origin = { list: card.parentElement as HTMLElement, next: card.nextElementSibling };
-    event.dataTransfer?.setData('text/plain', card.dataset.dealId ?? '');
-    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
-    if (errorBox) errorBox.hidden = true;
-    requestAnimationFrame(() => card.classList.add('opacity-40'));
-    if (lostZone) lostZone.hidden = false;
+  board?.addEventListener('pointerdown', (event) => {
+    if (active || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    const card = (event.target as Element).closest<HTMLElement>('[data-deal-id]');
+    if (!card || card.dataset.canDrag !== 'true') return;
+    pending = { card, pointerId: event.pointerId, type: event.pointerType, x: event.clientX, y: event.clientY };
+    if (event.pointerType !== 'mouse') {
+      pending.timer = window.setTimeout(() => {
+        if (pending) {
+          const p = pending;
+          clearPending();
+          startDrag(p.card, p.x, p.y, true);
+        }
+      }, LONG_PRESS_MS);
+    }
   });
 
-  document.addEventListener('dragend', () => {
-    dragged?.classList.remove('opacity-40');
-    columns().forEach((c) => c.classList.remove(...HIGHLIGHT));
-    if (lostZone) lostZone.hidden = true;
-    dragged = null;
+  document.addEventListener('pointermove', (event) => {
+    if (pending && event.pointerId === pending.pointerId) {
+      const distance = Math.hypot(event.clientX - pending.x, event.clientY - pending.y);
+      if (pending.type === 'mouse' && distance > MOUSE_THRESHOLD) {
+        const p = pending;
+        clearPending();
+        startDrag(p.card, p.x, p.y, false);
+      } else if (pending.type !== 'mouse' && distance > TOUCH_CANCEL) {
+        clearPending(); // es un desplazamiento, no un arrastre
+      }
+    }
+    if (active) {
+      active.x = event.clientX;
+      active.y = event.clientY;
+      active.ghost.style.left = `${event.clientX - active.offsetX}px`;
+      active.ghost.style.top = `${event.clientY - active.offsetY}px`;
+      updateOver();
+    }
   });
 
-  document.addEventListener('dragover', (event) => {
-    const col = columnOf(event.target);
-    if (!canDropOn(col)) return;
-    event.preventDefault();
-    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-    columns().forEach((c) => c.classList.toggle(HIGHLIGHT[0], c === col));
-    columns().forEach((c) => HIGHLIGHT.slice(1).forEach((cls) => c.classList.toggle(cls, c === col)));
+  document.addEventListener('pointerup', () => {
+    clearPending();
+    const result = endDrag();
+    if (result?.target) move(result.card, result.target, result.origin);
   });
 
-  document.addEventListener('drop', (event) => {
-    const col = columnOf(event.target);
-    if (!dragged || !canDropOn(col)) return;
-    event.preventDefault();
-    const card = dragged;
-    card.classList.remove('opacity-40');
-    columns().forEach((c) => c.classList.remove(...HIGHLIGHT));
-    if (lostZone) lostZone.hidden = true;
-    dragged = null;
-    move(card, col!);
+  document.addEventListener('pointercancel', () => {
+    clearPending();
+    endDrag();
   });
+
+  // Mientras se arrastra con el dedo, la página no hace scroll ni abre menús
+  document.addEventListener('touchmove', (event) => { if (active) event.preventDefault(); }, { passive: false });
+  board?.addEventListener('contextmenu', (event) => { if (active || pending) event.preventDefault(); });
+  board?.addEventListener('dragstart', (event) => event.preventDefault());
+  board?.addEventListener('click', (event) => { if (suppressClick) { event.preventDefault(); event.stopPropagation(); } }, true);
+  document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && active) endDrag(); });
 </script>
