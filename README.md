@@ -23,6 +23,8 @@ Variables (`.env`):
 | `PUBLIC_SUPABASE_URL` | `API_URL` | Cliente con la sesión del usuario |
 | `PUBLIC_SUPABASE_PUBLISHABLE_KEY` | `PUBLISHABLE_KEY` | Cliente con la sesión del usuario |
 | `SUPABASE_SECRET_KEY` | `SECRET_KEY` | Solo servidor: alta de usuarios por Dirección |
+| `ALEGRA_API_USER` / `ALEGRA_API_TOKEN` | Cuenta de Alegra (opcional) | Consulta de facturas en Alegra (F2). Sin ellas la integración queda desactivada |
+| `ALEGRA_API_URL` | Opcional | Por defecto `https://api.alegra.com/api/v1` |
 
 ### Usuarios de prueba (solo local)
 
@@ -67,10 +69,17 @@ Desde ahí, Dirección crea, asigna roles y activa al resto de usuarios en `/adm
 
 - `src/middleware.ts`: sesión de Supabase por petición, protección de rutas y usuarios sin activar.
 - `src/lib/forms.ts`: POST con `_action`, validación con Zod y traducción de errores de la BD.
-- `src/pages/`: empresas, oportunidades (Kanban y bitácora), convenios, jornadas (calendario, sesiones y asistencia), órdenes (comprador, ítems, plan de cuotas y verificación de requisitos), producción y entregas (liberación con candado, laboratorio y entregas parciales), posventa (garantías y reposiciones) y administración.
+- `src/pages/`: empresas, oportunidades (Kanban y bitácora), convenios, jornadas (calendario, sesiones y asistencia), órdenes (comprador, ítems, plan de cuotas y verificación de requisitos), producción y entregas (liberación con candado, laboratorio y entregas parciales), posventa (garantías y reposiciones), facturación (facturas de Alegra vinculadas a órdenes con Diferencia Visible) y administración.
 - Las reglas de negocio y permisos viven en la base de datos (triggers + RLS); la interfaz solo oculta lo que el rol no puede hacer.
 
 ```bash
 pnpm check   # tipos (astro check)
 pnpm build   # build de producción (adaptador de Vercel)
 ```
+
+## Integración con Alegra
+
+Hoy las facturas se registran a mano (RF-M06-01 F1). La consulta automática (F2, solo lectura) está implementada en `src/lib/alegra.ts` y se activa al definir `ALEGRA_API_USER` y `ALEGRA_API_TOKEN` (en Vercel: variables de entorno del proyecto). Con la cuenta activa:
+
+1. Validar contra la documentación vigente de Alegra la autenticación (Basic con correo y token), la ruta `GET /invoices/{id}` y los campos leídos (`total`, `status`, `date`, `numberTemplate.fullNumber`).
+2. Registrar en cada factura su **ID en Alegra** y usar **Consultar en Alegra**: el resultado se guarda en la factura y en `alegra_sync_events`, y se marca si el total difiere.

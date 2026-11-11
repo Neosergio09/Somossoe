@@ -234,3 +234,18 @@ export const WARRANTY_TYPE_LABELS: Record<Enums['warranty_incident_type'], strin
   ajuste: 'Ajuste',
   otro: 'Otro',
 };
+
+// ---------------------------------------------------------------------
+// M06 Facturación
+// ---------------------------------------------------------------------
+export const RADICATION_LABELS: Record<Enums['invoice_radication_status'], string> = {
+  pendiente: 'Radicación pendiente',
+  radicada: 'Radicada',
+  rechazada: 'Rechazada',
+};
+
+export const RADICATION_BADGE: Record<Enums['invoice_radication_status'], string> = {
+  pendiente: 'badge badge-amber',
+  radicada: 'badge badge-green',
+  rechazada: 'badge badge-red',
+};

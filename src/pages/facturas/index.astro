@@ -1,0 +1,109 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import { hasRole } from '../../lib/auth';
+import { cop, fmtDate } from '../../lib/format';
+import { ACCOUNTING_STATUS_BADGE, ACCOUNTING_STATUS_LABELS, OPS_STATUS_LABELS, PAYMENT_MODALITY_LABELS, RADICATION_BADGE, RADICATION_LABELS } from '../../lib/labels';
+import { safeSearch } from '../../lib/options';
+import { orderNumber } from '../../lib/orders';
+
+const { supabase } = Astro.locals;
+const view = Astro.url.searchParams.get('vista') ?? 'facturas';
+const q = safeSearch(Astro.url.searchParams.get('q'));
+const isAdmin = hasRole(Astro.locals, 'administracion_cartera');
+
+let invoicesQuery = supabase.from('v_invoices').select('*').order('invoice_date', { ascending: false }).limit(300);
+invoicesQuery = view === 'anuladas' ? invoicesQuery.eq('is_voided', true) : invoicesQuery.eq('is_voided', false);
+if (q) invoicesQuery = invoicesQuery.or(`alegra_invoice_number.ilike.%${q}%,subject_name.ilike.%${q}%`);
+
+let pendingQuery = supabase.from('v_orders_to_invoice').select('*').order('created_at').limit(300);
+if (q) pendingQuery = pendingQuery.or(`buyer_name.ilike.%${q}%,company_name.ilike.%${q}%,buyer_document_id.ilike.%${q}%`);
+
+const [invoices, pending] = await Promise.all([
+  view === 'por_facturar' ? Promise.resolve({ data: [] }) : invoicesQuery,
+  pendingQuery,
+]);
+const tabs: [string, string][] = [
+  ['facturas', 'Facturas'],
+  ['por_facturar', `Órdenes por facturar (${pending.data?.length ?? 0})`],
+  ['anuladas', 'Anuladas'],
+];
+---
+
+<AppLayout title="Facturación">
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <h1>Facturación (Alegra)</h1>
+    {isAdmin && <a class="btn btn-primary" href="/facturas/nueva">Registrar factura</a>}
+  </div>
+
+  <div class="mb-4 flex flex-wrap items-center gap-2">
+    <nav class="flex flex-wrap gap-1 text-sm">
+      {
+        tabs.map(([value, label]) => (
+          <a
+            href={`?vista=${value}`}
+            class:list={['rounded-md px-3 py-1.5 hover:no-underline', view === value ? 'bg-brand-700 text-white' : 'border border-slate-200 bg-white text-slate-700']}
+          >
+            {label}
+          </a>
+        ))
+      }
+    </nav>
+    <form method="get" class="ml-auto flex gap-2">
+      <input type="hidden" name="vista" value={view} />
+      <input class="input w-64" name="q" value={q} placeholder={view === 'por_facturar' ? 'Comprador, documento o empresa' : 'Número o cliente facturado'} />
+      <button class="btn" type="submit">Buscar</button>
+    </form>
+  </div>
+
+  {
+    view === 'por_facturar' ? (
+      <div class="card overflow-x-auto p-0">
+        <table class="table">
+          <thead><tr><th>Orden</th><th>Comprador</th><th>Empresa</th><th>Modalidad</th><th class="text-right">Valor</th><th class="text-right">Facturado</th><th class="text-right">Pendiente</th><th>Estado</th><th></th></tr></thead>
+          <tbody>
+            {pending.data?.map((o) => (
+              <tr>
+                <td><a href={`/ordenes/${o.id}`} class="font-medium">{orderNumber(o.order_number)}</a><div class="text-xs text-slate-500">{o.ops_status && OPS_STATUS_LABELS[o.ops_status]}</div></td>
+                <td>{o.buyer_name}<div class="text-xs text-slate-500">{o.buyer_document_id}</div></td>
+                <td>{o.company_name ?? 'Particular'}{o.company_nit_provisional && <span class="badge badge-amber ml-1">NIT provisional</span>}</td>
+                <td class="text-xs">{o.payment_modality && PAYMENT_MODALITY_LABELS[o.payment_modality]}</td>
+                <td class="text-right whitespace-nowrap">{cop(o.total_amount)}</td>
+                <td class="text-right whitespace-nowrap">{cop(o.billed_amount)}</td>
+                <td class="text-right whitespace-nowrap font-medium">{cop(o.pending_amount)}</td>
+                <td><span class={ACCOUNTING_STATUS_BADGE[o.accounting_status!]}>{ACCOUNTING_STATUS_LABELS[o.accounting_status!]}</span></td>
+                <td>{isAdmin && <a class="btn btn-sm" href={`/facturas/nueva?order_id=${o.id}`}>Facturar</a>}</td>
+              </tr>
+            ))}
+            {!pending.data?.length && <tr><td colspan="9" class="py-6 text-center text-slate-500">No hay órdenes verificadas pendientes de factura.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <div class="card overflow-x-auto p-0">
+        <table class="table">
+          <thead><tr><th>Factura</th><th>Fecha</th><th>Facturado a</th><th class="text-right">Monto</th><th class="text-right">Sin asignar</th><th>Órdenes</th><th>Radicación</th><th>Alegra</th></tr></thead>
+          <tbody>
+            {invoices.data?.map((i) => (
+              <tr class:list={[i.is_voided && 'opacity-60']}>
+                <td><a href={`/facturas/${i.id}`} class="font-medium">{i.alegra_invoice_number}</a></td>
+                <td class="whitespace-nowrap">{fmtDate(i.invoice_date)}</td>
+                <td>{i.subject_name}<div class="text-xs text-slate-500">{i.company_id ? `NIT ${i.company_nit}` : `C.C. ${i.buyer_document_id}`}</div></td>
+                <td class="text-right whitespace-nowrap">{cop(i.invoiced_amount)}</td>
+                <td class:list={['text-right whitespace-nowrap', Number(i.unassigned_amount) > 0 && 'text-amber-700']}>{cop(i.unassigned_amount)}</td>
+                <td>
+                  {i.orders_count}
+                  {Number(i.orders_with_difference) > 0 && <span class="badge badge-red ml-1">{i.orders_with_difference} con diferencia</span>}
+                </td>
+                <td>{i.is_voided ? <span class="badge badge-red">Anulada</span> : <span class={RADICATION_BADGE[i.radication_status!]}>{RADICATION_LABELS[i.radication_status!]}</span>}</td>
+                <td class="text-xs">
+                  {i.alegra_synced_at ? (i.alegra_discrepancy ? <span class="badge badge-red">Difiere</span> : <span class="badge badge-green">Coincide</span>) : <span class="text-slate-400">Sin consultar</span>}
+                </td>
+              </tr>
+            ))}
+            {!invoices.data?.length && <tr><td colspan="8" class="py-6 text-center text-slate-500">No hay facturas.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+</AppLayout>

@@ -164,7 +164,7 @@ const lastAction = outcome?.kind === 'error' ? outcome.action : '';
 const { data: o } = await supabase.from('v_orders').select('*').eq('id', id).maybeSingle();
 if (!o) return new Response('Orden no encontrada', { status: 404 });
 
-const [items, installments, buyer, agreements, settings, people, productions, deliveries, warranties, labs, responsibles] = await Promise.all([
+const [items, installments, buyer, agreements, settings, people, productions, deliveries, warranties, labs, responsibles, invoiceLinks] = await Promise.all([
   supabase.from('order_items').select('*').eq('order_id', id).order('created_at'),
   supabase.from('v_order_installments').select('*').eq('order_id', id).order('installment_number'),
   supabase.from('buyers').select('*').eq('id', o.buyer_id!).single(),
@@ -181,6 +181,7 @@ const [items, installments, buyer, agreements, settings, people, productions, de
   supabase.from('v_warranties').select('*').eq('order_id', id).order('created_at', { ascending: false }),
   activeLabs(supabase),
   activeUsers(supabase, ['operacion', 'direccion']),
+  supabase.from('v_invoice_orders').select('*').eq('order_id', id).order('invoice_date'),
 ]);
 const personName = (uid: string | null) => people.data?.find((p) => p.id === uid)?.full_name ?? '—';
 const setting = (key: string) => Number(settings.data?.find((s) => s.key === key)?.value ?? 0);
@@ -222,6 +223,10 @@ const deliveryRows = itemList.map((i) => {
   return { order_item_id: i.id, item_type: i.item_type, label: itemLabel(i), quantity: i.quantity, delivered, pending: i.quantity - delivered };
 });
 const hasDeliveries = deliveries.records.length > 0;
+// M06: facturas de Alegra vinculadas
+const activeLinks = (invoiceLinks.data ?? []).filter((l) => !l.invoice_voided);
+const billedTotal = activeLinks.reduce((sum, l) => sum + Number(l.amount_assigned ?? 0), 0);
+const canInvoice = isAdmin && !isCancelled && verified && o.accounting_status !== 'factura_vinculada';
 ---
 
 <AppLayout title={`Orden ${orderNumber(o.order_number)}`} error={error}>
@@ -575,6 +580,30 @@ const hasDeliveries = deliveries.records.length > 0;
           </section>
         )
       }
+
+      <section class="card space-y-2 text-sm">
+        <h2>Facturación (Etapa 10)</h2>
+        <span class={ACCOUNTING_STATUS_BADGE[o.accounting_status!]}>{ACCOUNTING_STATUS_LABELS[o.accounting_status!]}</span>
+        {
+          (invoiceLinks.data ?? []).length > 0 ? (
+            <ul class="space-y-1">
+              {invoiceLinks.data!.map((l) => (
+                <li class:list={[l.invoice_voided && 'line-through opacity-60']}>
+                  <a href={`/facturas/${l.invoice_id}`}>{l.alegra_invoice_number}</a> · {fmtDate(l.invoice_date)} · {cop(l.amount_assigned)}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p class="text-slate-500">Sin factura de Alegra vinculada.</p>
+          )
+        }
+        {
+          activeLinks.length > 0 && billedTotal !== Number(o.total_amount) && (
+            <p class="font-medium text-red-700">Diferencia Visible: facturado {cop(billedTotal)} frente a un valor de {cop(o.total_amount)}.</p>
+          )
+        }
+        {canInvoice && <a class="btn w-full" href={`/facturas/nueva?order_id=${o.id}`}>Registrar factura</a>}
+      </section>
 
       <section class="card space-y-2 text-sm">
         <h2>Comprador</h2>
