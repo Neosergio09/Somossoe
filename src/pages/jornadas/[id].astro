@@ -3,7 +3,8 @@ import AppLayout from '../../layouts/AppLayout.astro';
 import { hasRole } from '../../lib/auth';
 import { cop, fmtDate, fmtDateTime, fmtTime, fmtWeekday } from '../../lib/format';
 import { checkbox, date, ensure, FormError, parseForm, runActions, text, time, uuid, z } from '../../lib/forms';
-import { CAMPAIGN_STATUS_BADGE, CAMPAIGN_STATUS_LABELS } from '../../lib/labels';
+import { CAMPAIGN_STATUS_BADGE, CAMPAIGN_STATUS_LABELS, DOC_STATUS_BADGE, DOC_STATUS_LABELS, PAYMENT_MODALITY_LABELS } from '../../lib/labels';
+import { orderNumber } from '../../lib/orders';
 import { activeUsers, operationalCities } from '../../lib/options';
 
 const { supabase } = Astro.locals;
@@ -94,7 +95,7 @@ const lastAction = outcome?.kind === 'error' ? outcome.action : '';
 const { data: j } = await supabase.from('v_campaigns').select('*').eq('id', id).maybeSingle();
 if (!j) return new Response('Jornada no encontrada', { status: 404 });
 
-const [sessions, attendance, agreement, branches, opsUsers, sessionUsers, cities] = await Promise.all([
+const [sessions, attendance, agreement, branches, opsUsers, sessionUsers, cities, orders] = await Promise.all([
   supabase.from('v_campaign_calendar').select('*').eq('campaign_id', id).order('session_date').order('start_time'),
   supabase.from('campaign_attendance').select('*').eq('campaign_id', id).order('created_at', { ascending: false }),
   supabase.from('v_agreements').select('id, max_installments, payroll_frequency, valid_from, valid_until, effective_status').eq('id', j.agreement_id!).maybeSingle(),
@@ -102,6 +103,11 @@ const [sessions, attendance, agreement, branches, opsUsers, sessionUsers, cities
   activeUsers(supabase, ['operacion']),
   activeUsers(supabase, ['operacion', 'comercial']),
   operationalCities(supabase),
+  supabase
+    .from('v_orders')
+    .select('id, order_number, buyer_name, buyer_document_id, payment_modality, installments_count, total_amount, doc_status, is_cancelled')
+    .eq('campaign_id', id)
+    .order('order_number'),
 ]);
 // Las sesiones de una jornada cancelada no salen en el calendario: se consultan directo
 const sessionRows = j.status === 'cancelada'
@@ -113,6 +119,14 @@ const isOps = hasRole(Astro.locals, 'operacion');
 const canEdit = hasRole(Astro.locals, 'operacion', 'comercial') && (status === 'programada' || status === 'en_ejecucion');
 const canAttend = hasRole(Astro.locals, 'operacion', 'comercial') && status === 'en_ejecucion';
 const attendees = attendance.data ?? [];
+const orderList = orders.data ?? [];
+const activeOrders = orderList.filter((o) => !o.is_cancelled);
+// RF-M03-04: valor real vendido = órdenes no anuladas; conversión = compradores ÷ asistentes
+const realSold = activeOrders.reduce((sum, o) => sum + (o.total_amount ?? 0), 0);
+const buyersCount = new Set(activeOrders.map((o) => o.buyer_document_id)).size;
+const canOrder = hasRole(Astro.locals, 'comercial') && (status === 'en_ejecucion' || status === 'cerrada');
+const orderLink = (a?: { document_id: string; full_name: string }) =>
+  `/ordenes/nueva?campaign_id=${id}${a ? `&document_type=cc&document_id=${encodeURIComponent(a.document_id)}&full_name=${encodeURIComponent(a.full_name)}` : ''}`;
 const sessionLabel = (sid: string) => {
   const s = sessionRows.find((x) => x.session_id === sid);
   return s ? `${fmtDate(s.session_date)} ${fmtTime(s.start_time)}` : '';
@@ -134,6 +148,10 @@ const sessionLabel = (sid: string) => {
         Asistencia: <strong>{j.attended_headcount}</strong>{j.target_employees_n ? ` de ${j.target_employees_n} proyectados` : ''}
       </div>
       <div class="text-xs text-slate-500">Facturación estimada de la oportunidad: {cop(j.estimated_billing_amount)}</div>
+      <div class="text-sm text-slate-600">
+        Valor real vendido: <strong>{cop(realSold)}</strong> · {buyersCount} compradores
+        {j.attended_headcount ? ` (${Math.round((buyersCount / Number(j.attended_headcount)) * 100)}% de conversión)` : ''}
+      </div>
     </div>
   </div>
 
@@ -212,7 +230,7 @@ const sessionLabel = (sid: string) => {
         }
         {status === 'programada' && <p class="mb-3 text-sm text-slate-500">La asistencia se registra cuando la jornada está En ejecución.</p>}
         <table class="table">
-          <thead><tr><th>Nombre</th><th>Documento</th><th>Área</th><th>Sesión</th><th>Registro</th><th></th></tr></thead>
+          <thead><tr><th>Nombre</th><th>Documento</th><th>Área</th><th>Sesión</th><th>Registro</th><th>Compra</th><th></th></tr></thead>
           <tbody>
             {attendees.map((a) => (
               <tr>
@@ -221,6 +239,13 @@ const sessionLabel = (sid: string) => {
                 <td>{a.area ?? '—'}</td>
                 <td class="text-xs">{sessionLabel(a.session_id)}</td>
                 <td class="text-xs text-slate-500">{fmtDateTime(a.created_at)}</td>
+                <td class="whitespace-nowrap">
+                  {a.buyer_id ? (
+                    <span class="badge badge-green">Compró</span>
+                  ) : (
+                    canOrder && <a class="btn btn-sm" href={orderLink(a)}>Registrar orden</a>
+                  )}
+                </td>
                 <td>
                   {canAttend && (
                     <form method="post">
@@ -232,9 +257,34 @@ const sessionLabel = (sid: string) => {
                 </td>
               </tr>
             ))}
-            {!attendees.length && <tr><td colspan="6" class="text-slate-500">Sin asistentes registrados.</td></tr>}
+            {!attendees.length && <tr><td colspan="7" class="text-slate-500">Sin asistentes registrados.</td></tr>}
           </tbody>
         </table>
+      </section>
+
+      <section class="card">
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2>Órdenes de la jornada</h2>
+          {canOrder && <a class="btn btn-primary btn-sm" href={orderLink()}>Registrar orden</a>}
+        </div>
+        {status === 'programada' && <p class="mb-3 text-sm text-slate-500">Las órdenes se registran con la jornada En ejecución o Cerrada.</p>}
+        <div class="overflow-x-auto">
+          <table class="table">
+            <thead><tr><th>Orden</th><th>Comprador</th><th>Modalidad</th><th class="text-right">Valor</th><th>Documental</th></tr></thead>
+            <tbody>
+              {orderList.map((o) => (
+                <tr class:list={[o.is_cancelled && 'opacity-60']}>
+                  <td><a href={`/ordenes/${o.id}`}>{orderNumber(o.order_number)}</a></td>
+                  <td>{o.buyer_name} <span class="text-xs text-slate-500">{o.buyer_document_id}</span></td>
+                  <td class="text-xs">{PAYMENT_MODALITY_LABELS[o.payment_modality!]}{o.installments_count && ` · ${o.installments_count} cuotas`}</td>
+                  <td class="text-right whitespace-nowrap">{cop(o.total_amount)}</td>
+                  <td>{o.is_cancelled ? <span class="badge badge-red">Anulada</span> : <span class={DOC_STATUS_BADGE[o.doc_status!]}>{DOC_STATUS_LABELS[o.doc_status!]}</span>}</td>
+                </tr>
+              ))}
+              {!orderList.length && <tr><td colspan="5" class="text-slate-500">Sin órdenes registradas.</td></tr>}
+            </tbody>
+          </table>
+        </div>
       </section>
     </div>
 

@@ -1,0 +1,127 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import { hasRole } from '../../lib/auth';
+import { cop, fmtDateTime } from '../../lib/format';
+import {
+  ACCOUNTING_STATUS_BADGE,
+  ACCOUNTING_STATUS_LABELS,
+  COLLECTION_STATUS_BADGE,
+  COLLECTION_STATUS_LABELS,
+  DOC_STATUS_BADGE,
+  DOC_STATUS_LABELS,
+  OPS_STATUS_BADGE,
+  OPS_STATUS_LABELS,
+  PAYMENT_MODALITY_LABELS,
+} from '../../lib/labels';
+import { safeSearch } from '../../lib/options';
+import { orderNumber } from '../../lib/orders';
+
+const { supabase } = Astro.locals;
+const status = Astro.url.searchParams.get('estado') ?? '';
+const modality = Astro.url.searchParams.get('modalidad') ?? '';
+const q = safeSearch(Astro.url.searchParams.get('q'));
+
+let query = supabase.from('v_orders').select('*').order('created_at', { ascending: false }).limit(300);
+if (status === 'anuladas') query = query.eq('is_cancelled', true);
+else {
+  query = query.eq('is_cancelled', false);
+  if (status) query = query.eq('doc_status', status as 'pendiente_soportes' | 'requisitos_verificados');
+}
+if (modality) query = query.eq('payment_modality', modality as 'contado' | 'nomina_empresa');
+if (q) {
+  const num = /^#?0*(\d{1,9})$/.exec(q)?.[1];
+  query = num
+    ? query.or(`order_number.eq.${num},buyer_document_id.ilike.%${q}%`)
+    : query.or(`buyer_name.ilike.%${q}%,buyer_document_id.ilike.%${q}%,company_name.ilike.%${q}%`);
+}
+const { data: orders } = await query;
+
+const tabs: [string, string][] = [['', 'Activas'], ...Object.entries(DOC_STATUS_LABELS), ['anuladas', 'Anuladas']];
+const link = (params: Record<string, string>) => {
+  const u = new URLSearchParams({ ...(status && { estado: status }), ...(modality && { modalidad: modality }), ...(q && { q }), ...params });
+  for (const [k, val] of [...u.entries()]) if (!val) u.delete(k);
+  return `?${u}`;
+};
+---
+
+<AppLayout title="Órdenes">
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <h1>Órdenes</h1>
+    {hasRole(Astro.locals, 'comercial') && <a class="btn btn-primary" href="/ordenes/nueva">Nueva venta directa</a>}
+  </div>
+  <p class="mb-3 text-sm text-slate-500">Las órdenes de jornada se registran desde la ficha de la jornada.</p>
+
+  <div class="mb-4 flex flex-wrap items-center gap-2">
+    <nav class="flex flex-wrap gap-1 text-sm">
+      {
+        tabs.map(([value, label]) => (
+          <a
+            href={link({ estado: value })}
+            class:list={['rounded-md px-3 py-1.5 hover:no-underline', status === value ? 'bg-brand-700 text-white' : 'border border-slate-200 bg-white text-slate-700']}
+          >
+            {label}
+          </a>
+        ))
+      }
+    </nav>
+    <form method="get" class="ml-auto flex flex-wrap gap-2">
+      {status && <input type="hidden" name="estado" value={status} />}
+      <select class="input w-auto" name="modalidad">
+        <option value="">Toda modalidad</option>
+        {Object.entries(PAYMENT_MODALITY_LABELS).map(([value, label]) => <option value={value} selected={modality === value}>{label}</option>)}
+      </select>
+      <input class="input w-56" name="q" value={q} placeholder="N.º, comprador, documento o empresa" />
+      <button class="btn" type="submit">Buscar</button>
+    </form>
+  </div>
+
+  <div class="card overflow-x-auto p-0">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Orden</th>
+          <th>Comprador</th>
+          <th>Origen</th>
+          <th>Modalidad</th>
+          <th class="text-right">Valor</th>
+          <th>Documental</th>
+          <th>Operativo</th>
+          <th>Contable</th>
+          <th>Cartera</th>
+        </tr>
+      </thead>
+      <tbody>
+        {
+          orders?.map((o) => (
+            <tr class:list={[o.is_cancelled && 'opacity-60']}>
+              <td class="whitespace-nowrap">
+                <a href={`/ordenes/${o.id}`} class="font-medium">{orderNumber(o.order_number)}</a>
+                <div class="text-xs text-slate-500">{fmtDateTime(o.created_at)}</div>
+              </td>
+              <td>
+                {o.buyer_name}
+                <div class="text-xs text-slate-500">{o.buyer_document_id}</div>
+              </td>
+              <td>
+                {o.campaign_id ? <a href={`/jornadas/${o.campaign_id}`}>Jornada {o.company_name}</a> : <span>Venta directa{o.company_name && ` · ${o.company_name}`}</span>}
+                {o.city_name && <div class="text-xs text-slate-500">{o.city_name}</div>}
+              </td>
+              <td class="text-xs">
+                {PAYMENT_MODALITY_LABELS[o.payment_modality!]}
+                {o.installments_count && ` · ${o.installments_count} cuotas`}
+              </td>
+              <td class="text-right whitespace-nowrap">{cop(o.total_amount)}</td>
+              <td>
+                {o.is_cancelled ? <span class="badge badge-red">Anulada</span> : <span class={DOC_STATUS_BADGE[o.doc_status!]}>{DOC_STATUS_LABELS[o.doc_status!]}</span>}
+              </td>
+              <td><span class={OPS_STATUS_BADGE[o.ops_status!]}>{OPS_STATUS_LABELS[o.ops_status!]}</span></td>
+              <td><span class={ACCOUNTING_STATUS_BADGE[o.accounting_status!]}>{ACCOUNTING_STATUS_LABELS[o.accounting_status!]}</span></td>
+              <td><span class={COLLECTION_STATUS_BADGE[o.collection_status!]}>{COLLECTION_STATUS_LABELS[o.collection_status!]}</span></td>
+            </tr>
+          ))
+        }
+        {!orders?.length && <tr><td colspan="9" class="py-6 text-center text-slate-500">No hay órdenes.</td></tr>}
+      </tbody>
+    </table>
+  </div>
+</AppLayout>

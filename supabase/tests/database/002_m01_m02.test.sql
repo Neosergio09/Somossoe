@@ -26,6 +26,13 @@ select is(private.nit_check_digit('800197268'), 4::smallint, 'DV del NIT de la D
 select is(private.normalize_company_name('Marisol S.A.S.'), 'marisol', 'normaliza "Marisol S.A.S."');
 select is(private.normalize_company_name('ÓPTICA  Andina Ltda.'), 'optica andina', 'normaliza tildes, espacios y LTDA');
 
+-- Desde la revisión de RLS las funciones nuevas no son ejecutables por PUBLIC
+do $$ declare f regprocedure; begin
+  for f in select p.oid::regprocedure from pg_proc p where p.pronamespace = pg_my_temp_schema() loop
+    execute format('grant execute on function %s to authenticated', f);
+  end loop;
+end $$;
+
 set local role authenticated;
 
 -- ---------------- Empresas (Comercial) ----------------

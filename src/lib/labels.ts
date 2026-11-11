@@ -105,3 +105,98 @@ export const CAMPAIGN_STATUS_BADGE: Record<Enums['campaign_status'], string> = {
   cerrada: 'badge badge-green',
   cancelada: 'badge badge-red',
 };
+
+// ---------------------------------------------------------------------
+// M04 Órdenes
+// ---------------------------------------------------------------------
+export type PaymentModality = Enums['payment_modality'];
+export type OrderItemType = Enums['order_item_type'];
+
+export const BUYER_DOCUMENT_LABELS: Record<Enums['buyer_document_type'], string> = {
+  cc: 'C.C.',
+  ce: 'C.E.',
+  ti: 'T.I.',
+  pasaporte: 'Pasaporte',
+  otro: 'Otro',
+};
+
+export const PAYMENT_MODALITY_LABELS: Record<PaymentModality, string> = {
+  contado: 'Contado',
+  nomina_empresa: 'Descuento de nómina',
+};
+
+export const COLLECTION_RESPONSIBLE_LABELS: Record<Enums['collection_responsible'], string> = {
+  empresa: 'Empresa (nómina)',
+  empleado: 'Comprador',
+};
+
+export const ITEM_TYPE_LABELS: Record<OrderItemType, string> = {
+  gafas_completas: 'Gafas completas',
+  montura: 'Montura',
+  lentes: 'Lentes',
+  otro: 'Otro',
+};
+
+export const DOC_STATUS_LABELS: Record<Enums['order_doc_status'], string> = {
+  pendiente_soportes: 'Pendiente de soportes',
+  requisitos_verificados: 'Requisitos verificados',
+};
+
+export const DOC_STATUS_BADGE: Record<Enums['order_doc_status'], string> = {
+  pendiente_soportes: 'badge badge-amber',
+  requisitos_verificados: 'badge badge-green',
+};
+
+export const OPS_STATUS_LABELS: Record<Enums['order_ops_status'], string> = {
+  pendiente_liberar: 'Pendiente de liberar',
+  en_produccion: 'En producción',
+  listo_para_entregar: 'Listo para entregar',
+  entrega_parcial: 'Entrega parcial',
+  entrega_completa: 'Entrega completa',
+};
+
+export const OPS_STATUS_BADGE: Record<Enums['order_ops_status'], string> = {
+  pendiente_liberar: 'badge',
+  en_produccion: 'badge badge-blue',
+  listo_para_entregar: 'badge badge-amber',
+  entrega_parcial: 'badge badge-amber',
+  entrega_completa: 'badge badge-green',
+};
+
+export const ACCOUNTING_STATUS_LABELS: Record<Enums['order_accounting_status'], string> = {
+  pendiente_vincular: 'Factura pendiente',
+  factura_vinculada: 'Factura vinculada',
+  factura_con_diferencia: 'Factura con diferencia',
+};
+
+export const ACCOUNTING_STATUS_BADGE: Record<Enums['order_accounting_status'], string> = {
+  pendiente_vincular: 'badge',
+  factura_vinculada: 'badge badge-green',
+  factura_con_diferencia: 'badge badge-red',
+};
+
+export const COLLECTION_STATUS_LABELS: Record<Enums['order_collection_status'], string> = {
+  con_saldo: 'Con saldo',
+  parcialmente_recaudado: 'Recaudo parcial',
+  recaudado_total: 'Recaudado',
+};
+
+export const COLLECTION_STATUS_BADGE: Record<Enums['order_collection_status'], string> = {
+  con_saldo: 'badge',
+  parcialmente_recaudado: 'badge badge-amber',
+  recaudado_total: 'badge badge-green',
+};
+
+export const INSTALLMENT_STATUS_LABELS: Record<string, string> = {
+  pendiente: 'Pendiente',
+  parcial: 'Parcial',
+  pagada: 'Pagada',
+  vencida: 'Vencida',
+};
+
+export const INSTALLMENT_STATUS_BADGE: Record<string, string> = {
+  pendiente: 'badge',
+  parcial: 'badge badge-amber',
+  pagada: 'badge badge-green',
+  vencida: 'badge badge-red',
+};

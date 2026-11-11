@@ -1,0 +1,417 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import OrderItemFields from '../../components/OrderItemFields.astro';
+import { hasRole } from '../../lib/auth';
+import { fmtDate, fmtDateTime } from '../../lib/format';
+import { checkbox, date, ensure, FormError, int, parseForm, runActions, text, uuid, z } from '../../lib/forms';
+import { BUYER_DOCUMENT_LABELS, PAYMENT_MODALITY_LABELS, PAYROLL_LABELS } from '../../lib/labels';
+import { itemRows, parseItems } from '../../lib/orders';
+
+const { supabase } = Astro.locals;
+const params = Astro.url.searchParams;
+const campaignId = params.get('campaign_id');
+const docType = (params.get('document_type') ?? 'cc') as keyof typeof BUYER_DOCUMENT_LABELS;
+const docId = (params.get('document_id') ?? '').toUpperCase().replace(/[\s.-]/g, '');
+const prefillName = params.get('full_name') ?? '';
+const canCreate = hasRole(Astro.locals, 'comercial');
+const canSaveBuyer = hasRole(Astro.locals, 'comercial', 'administracion_cartera');
+
+const { data: campaign } = campaignId
+  ? await supabase.from('v_campaigns').select('*').eq('id', campaignId).maybeSingle()
+  : { data: null };
+if (campaignId && !campaign) return new Response('Jornada no encontrada', { status: 404 });
+const companyId = campaign?.company_id ?? params.get('company_id') ?? null;
+
+/** URL de esta pantalla conservando el contexto */
+function selfUrl(extra: Record<string, string | null | undefined> = {}) {
+  const q = new URLSearchParams();
+  const all = { campaign_id: campaignId, company_id: campaign ? null : companyId, document_type: docType, document_id: docId, ...extra };
+  for (const [k, v] of Object.entries(all)) if (v) q.set(k, v);
+  return `/ordenes/nueva?${q}`;
+}
+
+const outcome = await runActions(Astro, {
+  save_buyer: async (form) => {
+    const input = parseForm(
+      z.object({
+        buyer_id: uuid().optional(),
+        document_type: z.enum(['cc', 'ce', 'ti', 'pasaporte', 'otro']),
+        document_id: z.string().transform((s) => s.toUpperCase().replace(/[\s.-]/g, '')).pipe(
+          z.string().regex(/^[0-9A-Z]{4,15}$/, { error: 'entre 4 y 15 letras o números' }),
+        ),
+        full_name: text(150),
+        phone: text(25).optional(),
+        email: z.email({ error: 'Correo inválido' }).optional(),
+        data_consent: checkbox(),
+      }),
+      form,
+    );
+    if (!input.data_consent) {
+      throw new FormError('El comprador debe autorizar el tratamiento de sus datos personales para registrar la orden.');
+    }
+    const row = {
+      document_type: input.document_type,
+      document_id: input.document_id,
+      full_name: input.full_name,
+      phone: input.phone ?? null,
+      email: input.email ?? null,
+      data_consent_at: new Date().toISOString(),
+    };
+    if (input.buyer_id) {
+      ensure(await supabase.from('buyers').update(row).eq('id', input.buyer_id).select('id').single());
+    } else {
+      ensure(await supabase.from('buyers').insert(row).select('id').single());
+    }
+    return { message: 'Comprador registrado con su autorización de datos.', redirect: selfUrl({ document_type: input.document_type, document_id: input.document_id }) };
+  },
+  create: async (form) => {
+    const input = parseForm(
+      z.object({
+        buyer_id: uuid(),
+        company_id: uuid().optional(),
+        branch_id: uuid().optional(),
+        agreement_id: uuid().optional(),
+        payment_modality: z.enum(['contado', 'nomina_empresa']),
+        installments_count: int().min(1).optional(),
+        first_due_date: date().optional(),
+        employee_auth_received: checkbox(),
+        hr_approval_received: checkbox(),
+        notes: text(2000).optional(),
+      }),
+      form,
+    );
+    const items = parseItems(Object.fromEntries([...form.entries()].map(([k, v]) => [k, String(v).trim()])));
+    const payroll = input.payment_modality === 'nomina_empresa';
+    if (payroll && (!input.installments_count || !input.first_due_date)) {
+      throw new FormError('Con descuento de nómina indique el número de cuotas y la fecha de la primera cuota.');
+    }
+    const order = {
+      campaign_id: campaignId,
+      company_id: campaign ? null : (input.company_id ?? null),
+      branch_id: campaign ? null : (input.branch_id ?? null),
+      agreement_id: campaign ? null : (input.agreement_id ?? null),
+      buyer_id: input.buyer_id,
+      payment_modality: input.payment_modality,
+      installments_count: payroll ? input.installments_count : null,
+      first_due_date: payroll ? input.first_due_date : null,
+      employee_auth_received: payroll && input.employee_auth_received,
+      hr_approval_received: payroll && input.hr_approval_received,
+      notes: input.notes ?? null,
+    };
+    const id = ensure(await supabase.rpc('create_order', { p_order: order, p_items: items }));
+    return { message: 'Orden registrada. Queda pendiente de la verificación de Administración.', redirect: `/ordenes/${id}` };
+  },
+});
+if (outcome?.kind === 'redirect') return outcome.response;
+const error = outcome?.kind === 'error' ? outcome.error : null;
+const v = outcome?.kind === 'error' ? outcome.values : {};
+const lastAction = outcome?.kind === 'error' ? outcome.action : '';
+
+const [buyerRes, companies, branches, agreements, settings] = await Promise.all([
+  docId ? supabase.from('buyers').select('*').eq('document_type', docType).eq('document_id', docId).maybeSingle() : Promise.resolve({ data: null }),
+  campaign ? Promise.resolve({ data: [] as { id: string; name: string }[] }) : supabase.from('companies').select('id, name').order('name'),
+  companyId && !campaign
+    ? supabase.from('company_branches').select('id, name').eq('company_id', companyId).order('name')
+    : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+  campaign
+    ? supabase.from('v_agreements').select('*').eq('id', campaign.agreement_id!)
+    : companyId
+      ? supabase.from('v_agreements').select('*').eq('company_id', companyId).eq('effective_status', 'aprobado').order('approved_at', { ascending: false })
+      : Promise.resolve({ data: [] }),
+  supabase.from('system_settings').select('key, value').in('key', ['max_installments_monthly', 'max_installments_biweekly']),
+]);
+const buyer = buyerRes.data;
+// En jornada, el convenio es el de la jornada (debe seguir aprobado); en venta directa, aprobado y vigente
+const payrollAgreements = (agreements.data ?? []).filter((a) => (campaign ? a.status === 'aprobado' : a.effective_status === 'aprobado'));
+const selectedAgreement = payrollAgreements.find((a) => a.id === v.agreement_id) ?? payrollAgreements[0];
+const settingMax = (freq: string | null) =>
+  Number(settings.data?.find((s) => s.key === (freq === 'mensual' ? 'max_installments_monthly' : 'max_installments_biweekly'))?.value ?? 1);
+const maxInstallments = selectedAgreement ? Math.min(selectedAgreement.max_installments ?? 1, settingMax(selectedAgreement.payroll_frequency)) : 1;
+
+const orderStep = !!docId && !!buyer?.data_consent_at;
+const modality = v.payment_modality ?? (payrollAgreements.length ? 'nomina_empresa' : 'contado');
+const rows = lastAction === 'create' ? itemRows(v) : [];
+const initialRows = rows.length ? rows : [{}];
+const backHref = campaign ? `/jornadas/${campaign.id}` : '/ordenes';
+---
+
+<AppLayout title="Nueva orden" error={error}>
+  <a href={backHref} class="text-sm">← {campaign ? 'Jornada' : 'Órdenes'}</a>
+  <h1 class="mb-4">{campaign ? 'Nueva orden de jornada' : 'Nueva venta directa'}</h1>
+
+  {!canCreate && <div class="mb-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">Solo Comercial registra órdenes. Puede consultar el formulario, pero no guardarlo.</div>}
+
+  <section class="card mb-4 text-sm">
+    {
+      campaign ? (
+        <p>
+          Jornada de <a href={`/jornadas/${campaign.id}`}>{campaign.company_name}</a> · {campaign.deal_name_branch} · {campaign.city_name}
+          {campaign.branch_name && ` · ${campaign.branch_name}`}
+          <span class="text-slate-500"> · la orden hereda empresa, sede, ciudad y convenio.</span>
+        </p>
+      ) : (
+        <form method="get" class="flex flex-wrap items-end gap-2">
+          {docId && <input type="hidden" name="document_type" value={docType} />}
+          {docId && <input type="hidden" name="document_id" value={docId} />}
+          <div class="min-w-64 flex-1">
+            <label class="label" for="company_id">Empresa del comprador (opcional)</label>
+            <select class="input" id="company_id" name="company_id">
+              <option value="">Particular (sin empresa)</option>
+              {companies.data?.map((c) => <option value={c.id} selected={c.id === companyId}>{c.name}</option>)}
+            </select>
+          </div>
+          <button class="btn" type="submit">Aplicar</button>
+          <p class="w-full text-xs text-slate-500">El descuento de nómina solo está disponible si la empresa tiene un convenio aprobado y vigente.</p>
+        </form>
+      )
+    }
+  </section>
+
+  <section class="card mb-4">
+    <h2 class="mb-3">1. Comprador</h2>
+    {
+      !docId ? (
+        <form method="get" class="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:items-end">
+          {campaignId && <input type="hidden" name="campaign_id" value={campaignId} />}
+          {!campaign && companyId && <input type="hidden" name="company_id" value={companyId} />}
+          <div>
+            <label class="label" for="document_type">Tipo de documento</label>
+            <select class="input" id="document_type" name="document_type">
+              {Object.entries(BUYER_DOCUMENT_LABELS).map(([value, label]) => <option value={value} selected={docType === value}>{label}</option>)}
+            </select>
+          </div>
+          <div class="sm:col-span-2">
+            <label class="label" for="document_id">Número de documento</label>
+            <input class="input" id="document_id" name="document_id" required autofocus inputmode="numeric" />
+          </div>
+          <button class="btn btn-primary" type="submit">Buscar</button>
+        </form>
+      ) : !orderStep ? (
+        <form method="post" class="space-y-3">
+          <input type="hidden" name="_action" value="save_buyer" />
+          {buyer && <input type="hidden" name="buyer_id" value={buyer.id} />}
+          <input type="hidden" name="document_type" value={docType} />
+          <input type="hidden" name="document_id" value={docId} />
+          <p class="text-sm">
+            {BUYER_DOCUMENT_LABELS[docType]} <strong>{docId}</strong>
+            {buyer ? ' · comprador registrado sin autorización de datos.' : ' · comprador nuevo.'}
+            <a class="ml-2" href={selfUrl({ document_id: null })}>Cambiar documento</a>
+          </p>
+          <div class="grid-form">
+            <div class="sm:col-span-2">
+              <label class="label" for="full_name">Nombre completo *</label>
+              <input class="input" id="full_name" name="full_name" required value={v.full_name ?? buyer?.full_name ?? prefillName} />
+            </div>
+            <div>
+              <label class="label" for="phone">Teléfono</label>
+              <input class="input" id="phone" name="phone" type="tel" value={v.phone ?? buyer?.phone ?? ''} />
+            </div>
+            <div>
+              <label class="label" for="email">Correo</label>
+              <input class="input" id="email" name="email" type="email" value={v.email ?? buyer?.email ?? ''} />
+            </div>
+          </div>
+          <label class="flex items-start gap-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
+            <input type="checkbox" name="data_consent" required class="mt-1" />
+            <span>
+              El comprador autoriza a Somos SOE el tratamiento de sus datos personales conforme a la Ley 1581 de 2012 y a la
+              política de tratamiento de datos vigente. <span class="text-slate-500">(Requisito previo a la orden.)</span>
+            </span>
+          </label>
+          <button class="btn btn-primary" type="submit" disabled={!canSaveBuyer}>Guardar comprador</button>
+        </form>
+      ) : (
+        <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <div>
+            <strong>{buyer!.full_name}</strong> · {BUYER_DOCUMENT_LABELS[buyer!.document_type]} {buyer!.document_id}
+            {buyer!.phone && ` · ${buyer!.phone}`}
+            {buyer!.email && ` · ${buyer!.email}`}
+            <div class="text-xs text-green-700">✓ Autorización de datos registrada el {fmtDateTime(buyer!.data_consent_at)}</div>
+          </div>
+          <a href={selfUrl({ document_id: null })}>Cambiar comprador</a>
+        </div>
+      )
+    }
+  </section>
+
+  {
+    orderStep && (
+      <form method="post" class="space-y-4" id="order-form">
+        <input type="hidden" name="_action" value="create" />
+        <input type="hidden" name="buyer_id" value={buyer!.id} />
+        {!campaign && companyId && <input type="hidden" name="company_id" value={companyId} />}
+
+        <section class="card space-y-3">
+          <h2>2. Ítems</h2>
+          <p class="text-xs text-slate-500">Solo la especificación comercial del producto: no registre diagnósticos ni fórmulas médicas.</p>
+          <div id="items" class="space-y-4">
+            {initialRows.map((row, i) => (
+              <div class="border-b border-slate-100 pb-4" data-item-wrap>
+                <OrderItemFields prefix={`items[${i}]`} values={row}>
+                  <div class="col-span-2 flex justify-end sm:col-span-7">
+                    <button type="button" class="btn btn-sm btn-danger" data-remove-item>Quitar ítem</button>
+                  </div>
+                </OrderItemFields>
+              </div>
+            ))}
+          </div>
+          <template id="item-template">
+            <div class="border-b border-slate-100 pb-4" data-item-wrap>
+              <OrderItemFields prefix="items[__i__]">
+                <div class="col-span-2 flex justify-end sm:col-span-7">
+                  <button type="button" class="btn btn-sm btn-danger" data-remove-item>Quitar ítem</button>
+                </div>
+              </OrderItemFields>
+            </div>
+          </template>
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <button type="button" class="btn" id="add-item">+ Agregar ítem</button>
+            <div class="text-sm">Valor total: <strong id="order-total">—</strong></div>
+          </div>
+        </section>
+
+        <section class="card space-y-3">
+          <h2>3. Modalidad de pago</h2>
+          <div class="grid-form">
+            <div>
+              <label class="label" for="payment_modality">Modalidad *</label>
+              <select class="input" id="payment_modality" name="payment_modality">
+                <option value="contado" selected={modality === 'contado'}>{PAYMENT_MODALITY_LABELS.contado}</option>
+                <option value="nomina_empresa" selected={modality === 'nomina_empresa'} disabled={!payrollAgreements.length}>
+                  {PAYMENT_MODALITY_LABELS.nomina_empresa}{!payrollAgreements.length ? ' (sin convenio aprobado)' : ''}
+                </option>
+              </select>
+            </div>
+            {!campaign && branches.data && branches.data.length > 0 && (
+              <div>
+                <label class="label" for="branch_id">Sede</label>
+                <select class="input" id="branch_id" name="branch_id">
+                  <option value="">—</option>
+                  {branches.data.map((b) => <option value={b.id} selected={v.branch_id === b.id}>{b.name}</option>)}
+                </select>
+              </div>
+            )}
+          </div>
+
+          <p class="text-xs text-slate-500" data-cash>
+            Contado: para liberar a producción se exige el pago verificado según la política de anticipo vigente, salvo excepción autorizada por Dirección.
+          </p>
+
+          {payrollAgreements.length > 0 && (
+            <fieldset class="space-y-3 rounded-md border border-slate-200 p-3" data-payroll>
+              <legend class="px-1 text-xs font-medium text-slate-600">Descuento de nómina</legend>
+              {!campaign && payrollAgreements.length > 1 ? (
+                <div>
+                  <label class="label" for="agreement_id">Convenio</label>
+                  <select class="input" id="agreement_id" name="agreement_id">
+                    {payrollAgreements.map((a) => (
+                      <option value={a.id!} selected={a.id === selectedAgreement?.id}>
+                        {a.deal_name_branch ?? 'Convenio marco'} · {a.max_installments} cuotas {a.payroll_frequency}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <>
+                  {!campaign && <input type="hidden" name="agreement_id" value={selectedAgreement!.id!} />}
+                  <p class="text-sm">
+                    Convenio: <a href={`/convenios/${selectedAgreement!.id}`}>{selectedAgreement!.deal_name_branch ?? 'Convenio marco'}</a> · nómina{' '}
+                    {PAYROLL_LABELS[selectedAgreement!.payroll_frequency!].toLowerCase()} · hasta {maxInstallments} cuotas
+                    {selectedAgreement!.valid_until && ` · vigente hasta ${fmtDate(selectedAgreement!.valid_until)}`}
+                  </p>
+                </>
+              )}
+              <div class="grid-form">
+                <div>
+                  <label class="label" for="installments_count">Número de cuotas *</label>
+                  <input class="input" id="installments_count" name="installments_count" type="number" min="1" max={maxInstallments} value={v.installments_count ?? maxInstallments} />
+                </div>
+                <div>
+                  <label class="label" for="first_due_date">Fecha de la primera cuota *</label>
+                  <input class="input" id="first_due_date" name="first_due_date" type="date" value={v.first_due_date} />
+                </div>
+              </div>
+              <p class="text-xs text-slate-500" id="installment-preview"></p>
+              <label class="flex items-center gap-2 text-sm">
+                <input type="checkbox" name="employee_auth_received" checked={v.employee_auth_received === 'on'} />
+                Autorización de descuento firmada por el empleado recibida
+              </label>
+              {selectedAgreement!.hr_approval_required && (
+                <label class="flex items-center gap-2 text-sm">
+                  <input type="checkbox" name="hr_approval_received" checked={v.hr_approval_received === 'on'} />
+                  Aval de RRHH recibido
+                </label>
+              )}
+              <p class="text-xs text-slate-500">La carga de los archivos se habilitará con el almacenamiento documental (Cloudflare R2).</p>
+            </fieldset>
+          )}
+
+          <div>
+            <label class="label" for="notes">Notas</label>
+            <textarea class="input" id="notes" name="notes" rows="2">{v.notes}</textarea>
+          </div>
+        </section>
+
+        <div class="flex gap-2">
+          <button class="btn btn-primary" type="submit" disabled={!canCreate}>Registrar orden</button>
+          <a class="btn" href={backHref}>Cancelar</a>
+        </div>
+      </form>
+    )
+  }
+</AppLayout>
+
+<script>
+  const form = document.getElementById('order-form') as HTMLFormElement | null;
+  if (form) {
+    const items = document.getElementById('items')!;
+    const template = document.getElementById('item-template') as HTMLTemplateElement;
+    const totalEl = document.getElementById('order-total')!;
+    const modality = document.getElementById('payment_modality') as HTMLSelectElement;
+    const payroll = form.querySelector<HTMLElement>('[data-payroll]');
+    const cash = form.querySelector<HTMLElement>('[data-cash]');
+    const count = document.getElementById('installments_count') as HTMLInputElement | null;
+    const preview = document.getElementById('installment-preview');
+    const cop = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
+    let next = items.querySelectorAll('[data-item-wrap]').length;
+
+    const total = () =>
+      [...items.querySelectorAll<HTMLElement>('[data-item-row]')].reduce((sum, row) => {
+        const q = Number(row.querySelector<HTMLInputElement>('[data-qty]')?.value || 0);
+        const p = Number(row.querySelector<HTMLInputElement>('[data-price]')?.value || 0);
+        return sum + q * p;
+      }, 0);
+
+    const refresh = () => {
+      const t = total();
+      totalEl.textContent = cop.format(t);
+      const isPayroll = modality.value === 'nomina_empresa';
+      if (payroll) {
+        payroll.hidden = !isPayroll;
+        payroll.querySelectorAll<HTMLInputElement>('#installments_count, #first_due_date').forEach((el) => (el.required = isPayroll));
+      }
+      if (cash) cash.hidden = isPayroll;
+      if (preview && count) {
+        const n = Number(count.value || 0);
+        preview.textContent = isPayroll && n > 0 && t > 0 ? `${n} cuotas de aprox. ${cop.format(Math.floor(t / n))}` : '';
+      }
+      items.querySelectorAll<HTMLButtonElement>('[data-remove-item]').forEach((b) => (b.disabled = items.children.length <= 1));
+    };
+
+    document.getElementById('add-item')!.addEventListener('click', () => {
+      const html = template.innerHTML.replaceAll('__i__', String(next++));
+      items.insertAdjacentHTML('beforeend', html);
+      refresh();
+    });
+    items.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest('[data-remove-item]');
+      if (btn && items.children.length > 1) {
+        btn.closest('[data-item-wrap]')?.remove();
+        refresh();
+      }
+    });
+    form.addEventListener('input', refresh);
+    form.addEventListener('change', refresh);
+    refresh();
+  }
+</script>

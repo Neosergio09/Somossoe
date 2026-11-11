@@ -2,7 +2,14 @@ import type { AstroGlobal } from 'astro';
 import { z } from 'astro/zod';
 import type { PostgrestError } from '@supabase/supabase-js';
 import { setFlash } from './flash';
-import { AGREEMENT_STATUS_LABELS, CAMPAIGN_STATUS_LABELS, STAGE_LABELS } from './labels';
+import {
+  AGREEMENT_STATUS_LABELS,
+  CAMPAIGN_STATUS_LABELS,
+  DOC_STATUS_LABELS,
+  OPS_STATUS_LABELS,
+  PAYMENT_MODALITY_LABELS,
+  STAGE_LABELS,
+} from './labels';
 
 z.config(z.locales.es());
 
@@ -133,6 +140,19 @@ const FIELD_LABELS: Record<string, string> = {
   end_time: 'Hora de fin',
   cancel_reason: 'Motivo',
   value: 'Valor',
+  document_type: 'Tipo de documento',
+  phone: 'Teléfono',
+  installments_count: 'Número de cuotas',
+  first_due_date: 'Fecha de la primera cuota',
+  item_type: 'Tipo de ítem',
+  frame_description: 'Montura',
+  lens_type: 'Tipo de lente',
+  lens_filter: 'Filtro',
+  description: 'Descripción',
+  quantity: 'Cantidad',
+  unit_price: 'Valor unitario',
+  prepayment_exception_reason: 'Motivo de la excepción',
+  notes: 'Notas',
 };
 
 const UNIQUE_MESSAGES: Record<string, string> = {
@@ -145,6 +165,7 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   lab_providers_name_key: 'Ya existe un laboratorio con ese nombre.',
   deal_origins_pkey: 'Ya existe un origen con ese código.',
   users_profiles_email_key: 'Ya existe un usuario con ese correo.',
+  buyers_document_key: 'Ya existe un comprador con ese documento.',
 };
 
 const CHECK_MESSAGES: Record<string, string> = {
@@ -168,6 +189,16 @@ const CHECK_MESSAGES: Record<string, string> = {
   users_profiles_active_requires_role: 'Asigne un rol antes de activar al usuario.',
   users_profiles_provider_requires_lab: 'Un usuario de laboratorio necesita un laboratorio asignado.',
   users_profiles_lab_only_for_provider: 'Solo los usuarios de laboratorio tienen laboratorio asignado.',
+  buyers_document_id_check: 'El documento debe tener entre 4 y 15 letras o números.',
+  buyers_phone_check: 'El teléfono no es válido.',
+  buyers_email_check: 'El correo no es válido.',
+  orders_payroll_plan: 'El descuento de nómina requiere empresa con convenio, número de cuotas y fecha de la primera cuota.',
+  orders_installments_count_check: 'El número de cuotas no es válido.',
+  orders_prepayment_exception_cash: 'La excepción de anticipo solo aplica a órdenes de contado.',
+  orders_cancel_reason: 'Indique el motivo de la anulación.',
+  order_items_described: 'Describa cada ítem: montura, tipo de lente o descripción.',
+  order_items_quantity_check: 'La cantidad debe ser mayor que cero.',
+  order_items_unit_price_check: 'El valor unitario no puede ser negativo.',
 };
 
 /** Reemplaza códigos internos (etapas, estados) por su etiqueta. */
@@ -176,6 +207,9 @@ function humanizeCodes(message: string): string {
     ...Object.fromEntries(Object.entries(STAGE_LABELS).map(([k, v]) => [k, v.replace(/^\d\.\s*/, '')])),
     ...AGREEMENT_STATUS_LABELS,
     ...CAMPAIGN_STATUS_LABELS,
+    ...PAYMENT_MODALITY_LABELS,
+    ...DOC_STATUS_LABELS,
+    ...OPS_STATUS_LABELS,
     mensual: 'mensual',
     quincenal: 'quincenal',
   };
@@ -207,7 +241,7 @@ export function dbErrorMessage(error: Pick<PostgrestError, 'code' | 'message'>):
     case '22008':
       return 'Hay un dato con formato inválido.';
     case 'PGRST116':
-      return 'No se encontró el registro.';
+      return 'No se encontró el registro o no tiene permiso para modificarlo.';
     default:
       return 'No se pudo guardar. Revise los datos e intente de nuevo.';
   }

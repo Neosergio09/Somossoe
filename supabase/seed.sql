@@ -55,3 +55,34 @@ values ('aaaaaaaa-0000-0000-0000-000000000001', 'Planta Pereira',
 insert into public.contacts (company_id, full_name, role_title, area, is_coordinator, is_decision_maker, phone_whatsapp, email)
 values ('aaaaaaaa-0000-0000-0000-000000000001', 'Carolina Ríos', 'Jefe de Talento Humano', 'rrhh',
         true, true, '+57 300 000 0000', 'carolina@andina.test');
+
+-- Oportunidad con convenio aprobado y una jornada en ejecución (para probar órdenes)
+insert into public.deals_opportunities (id, company_id, branch_id, city_id, assigned_user_id, deal_name_branch,
+  origin_code, stage, target_employees_n, estimated_close_date, tentative_campaign_date)
+values ('dddddddd-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
+        (select id from public.company_branches where name = 'Planta Pereira'),
+        (select id from public.cities where name = 'Pereira'),
+        '22222222-2222-2222-2222-222222222222', 'Andina - Planta Pereira', 'referido', 'convenio_firmado', 200,
+        current_date, current_date);
+
+insert into public.agreements_convenios (id, company_id, payroll_frequency, max_installments, hr_approval_required,
+  valid_from, valid_until, status, documents_verified, approved_by, approved_at)
+values ('cccccccc-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'quincenal', 6, true,
+        current_date - 30, current_date + 335, 'aprobado', true, '11111111-1111-1111-1111-111111111111', now());
+
+insert into public.agreement_documents (agreement_id, document_name, document_type)
+values ('cccccccc-0000-0000-0000-000000000001', 'Convenio firmado Andina', 'convenio_firmado');
+
+insert into public.campaigns_jornadas (id, deal_id, agreement_id, responsible_user_id, logistics_confirmed, status, started_at)
+values ('eeeeeeee-0000-0000-0000-000000000001', 'dddddddd-0000-0000-0000-000000000001',
+        'cccccccc-0000-0000-0000-000000000001', '33333333-3333-3333-3333-333333333333', true, 'en_ejecucion', now());
+
+insert into public.campaign_sessions (id, campaign_id, session_date, start_time, end_time, location_detail, responsible_user_id)
+values ('ffffffff-0000-0000-0000-000000000001', 'eeeeeeee-0000-0000-0000-000000000001',
+        current_date, '08:00', '12:00', 'Sala de capacitación', '33333333-3333-3333-3333-333333333333');
+
+insert into public.campaign_attendance (campaign_id, session_id, full_name, document_id, area) values
+  ('eeeeeeee-0000-0000-0000-000000000001', 'ffffffff-0000-0000-0000-000000000001', 'Ana Pérez', '1088123456', 'Producción'),
+  ('eeeeeeee-0000-0000-0000-000000000001', 'ffffffff-0000-0000-0000-000000000001', 'Carlos Ruiz', '1088654321', 'Bodega');
+
+update public.deals_opportunities set stage = 'jornada_en_ejecucion' where id = 'dddddddd-0000-0000-0000-000000000001';
