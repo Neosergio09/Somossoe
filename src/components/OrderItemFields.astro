@@ -1,0 +1,47 @@
+---
+import { ITEM_TYPE_LABELS } from '../lib/labels';
+
+interface Props {
+  /** Prefijo de los nombres (p. ej. "items[0]"); vacío = nombres simples. */
+  prefix?: string;
+  values?: Record<string, string | number | null | undefined>;
+}
+
+const { prefix = '', values = {} } = Astro.props;
+const name = (field: string) => (prefix ? `${prefix}[${field}]` : field);
+const val = (field: string) => (values[field] == null ? '' : String(values[field]));
+---
+
+<div class="grid grid-cols-2 gap-2 sm:grid-cols-12 sm:items-end" data-item-row>
+  <div class="col-span-2 sm:col-span-2">
+    <label class="label">Tipo</label>
+    <select class="input" name={name('item_type')}>
+      {Object.entries(ITEM_TYPE_LABELS).map(([value, label]) => <option value={value} selected={val('item_type') === value}>{label}</option>)}
+    </select>
+  </div>
+  <div class="col-span-2 sm:col-span-3">
+    <label class="label">Montura</label>
+    <input class="input" name={name('frame_description')} value={val('frame_description')} placeholder="Marca, referencia, color" />
+  </div>
+  <div class="sm:col-span-2">
+    <label class="label">Tipo de lente</label>
+    <input class="input" name={name('lens_type')} value={val('lens_type')} placeholder="Monofocal, progresivo…" />
+  </div>
+  <div class="sm:col-span-2">
+    <label class="label">Filtro</label>
+    <input class="input" name={name('lens_filter')} value={val('lens_filter')} placeholder="Antirreflejo, blue…" />
+  </div>
+  <div class="col-span-2 sm:col-span-3">
+    <label class="label">Descripción (otros productos)</label>
+    <input class="input" name={name('description')} value={val('description')} />
+  </div>
+  <div class="sm:col-span-2">
+    <label class="label">Cantidad</label>
+    <input class="input" name={name('quantity')} type="number" min="1" step="1" required value={val('quantity') || '1'} data-qty />
+  </div>
+  <div class="sm:col-span-3">
+    <label class="label">Valor unitario (COP)</label>
+    <input class="input" name={name('unit_price')} type="number" min="0" step="1" required value={val('unit_price')} data-price />
+  </div>
+  <slot />
+</div>

@@ -1,0 +1,507 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import OrderItemFields from '../../components/OrderItemFields.astro';
+import { hasRole } from '../../lib/auth';
+import { cop, fmtDate, fmtDateTime } from '../../lib/format';
+import { checkbox, date, ensure, FormError, int, parseForm, runActions, text, uuid, z } from '../../lib/forms';
+import {
+  ACCOUNTING_STATUS_BADGE,
+  ACCOUNTING_STATUS_LABELS,
+  BUYER_DOCUMENT_LABELS,
+  CAMPAIGN_STATUS_LABELS,
+  COLLECTION_RESPONSIBLE_LABELS,
+  COLLECTION_STATUS_BADGE,
+  COLLECTION_STATUS_LABELS,
+  DOC_STATUS_BADGE,
+  DOC_STATUS_LABELS,
+  INSTALLMENT_STATUS_BADGE,
+  INSTALLMENT_STATUS_LABELS,
+  ITEM_TYPE_LABELS,
+  OPS_STATUS_BADGE,
+  OPS_STATUS_LABELS,
+  PAYMENT_MODALITY_LABELS,
+  PAYROLL_LABELS,
+} from '../../lib/labels';
+import { itemSchema, orderNumber, requirementChecklist } from '../../lib/orders';
+import type { Database } from '../../lib/database.types';
+
+type OrderUpdate = Database['public']['Tables']['orders']['Update'];
+
+const { supabase } = Astro.locals;
+const id = Astro.params.id!;
+
+async function updateOrder(patch: OrderUpdate) {
+  ensure(await supabase.from('orders').update(patch).eq('id', id).select('id').single());
+}
+
+const outcome = await runActions(Astro, {
+  add_item: async (form) => {
+    const item = parseForm(itemSchema, form);
+    ensure(await supabase.from('order_items').insert({ ...item, order_id: id }).select('id').single());
+    return { message: 'Ítem agregado.' };
+  },
+  update_item: async (form) => {
+    const itemId = String(form.get('item_id') ?? '');
+    const item = parseForm(itemSchema, form);
+    ensure(
+      await supabase
+        .from('order_items')
+        .update({
+          ...item,
+          frame_description: item.frame_description ?? null,
+          lens_type: item.lens_type ?? null,
+          lens_filter: item.lens_filter ?? null,
+          description: item.description ?? null,
+        })
+        .eq('id', itemId)
+        .eq('order_id', id)
+        .select('id')
+        .single(),
+    );
+    return { message: 'Ítem actualizado.' };
+  },
+  delete_item: async (form) => {
+    const itemId = String(form.get('item_id') ?? '');
+    ensure(await supabase.from('order_items').delete().eq('id', itemId).eq('order_id', id).select('id').single());
+    return { message: 'Ítem eliminado.' };
+  },
+  update_payment: async (form) => {
+    const input = parseForm(
+      z.object({
+        payment_modality: z.enum(['contado', 'nomina_empresa']),
+        agreement_id: uuid().optional(),
+        installments_count: int().min(1).optional(),
+        first_due_date: date().optional(),
+        notes: text(2000).optional(),
+      }),
+      form,
+    );
+    const payroll = input.payment_modality === 'nomina_empresa';
+    if (payroll && (!input.installments_count || !input.first_due_date)) {
+      throw new FormError('Con descuento de nómina indique el número de cuotas y la fecha de la primera cuota.');
+    }
+    const patch: OrderUpdate = {
+      payment_modality: input.payment_modality,
+      installments_count: payroll ? input.installments_count : null,
+      first_due_date: payroll ? input.first_due_date : null,
+      notes: input.notes ?? null,
+    };
+    if (form.has('agreement_id')) patch.agreement_id = input.agreement_id ?? null;
+    await updateOrder(patch);
+    return { message: 'Condiciones de pago actualizadas.' };
+  },
+  update_supports: async (form) => {
+    const input = parseForm(z.object({ employee_auth_received: checkbox(), hr_approval_received: checkbox() }), form);
+    await updateOrder(input);
+    return { message: 'Soportes actualizados.' };
+  },
+  verify: async () => {
+    await updateOrder({ requirements_verified: true });
+    return { message: 'Requisitos verificados. La orden queda lista para liberar a producción.' };
+  },
+  unverify: async () => {
+    await updateOrder({ requirements_verified: false });
+    return { message: 'Verificación revertida.' };
+  },
+  prepayment_exception: async (form) => {
+    const reason = String(form.get('prepayment_exception_reason') ?? '').trim();
+    await updateOrder({ prepayment_exception_reason: reason || null });
+    return { message: reason ? 'Excepción de anticipo autorizada.' : 'Excepción de anticipo retirada.' };
+  },
+  cancel: async (form) => {
+    const reason = String(form.get('cancel_reason') ?? '').trim();
+    if (!reason) throw new FormError('Indique el motivo de la anulación.');
+    await updateOrder({ is_cancelled: true, cancel_reason: reason });
+    return { message: 'Orden anulada.' };
+  },
+  update_buyer: async (form) => {
+    const input = parseForm(
+      z.object({
+        buyer_id: uuid(),
+        full_name: text(150),
+        phone: text(25).optional(),
+        email: z.email({ error: 'Correo inválido' }).optional(),
+      }),
+      form,
+    );
+    ensure(
+      await supabase
+        .from('buyers')
+        .update({ full_name: input.full_name, phone: input.phone ?? null, email: input.email ?? null })
+        .eq('id', input.buyer_id)
+        .select('id')
+        .single(),
+    );
+    return { message: 'Datos del comprador actualizados.' };
+  },
+});
+if (outcome?.kind === 'redirect') return outcome.response;
+const error = outcome?.kind === 'error' ? outcome.error : null;
+const v = outcome?.kind === 'error' ? outcome.values : {};
+const lastAction = outcome?.kind === 'error' ? outcome.action : '';
+
+const { data: o } = await supabase.from('v_orders').select('*').eq('id', id).maybeSingle();
+if (!o) return new Response('Orden no encontrada', { status: 404 });
+
+const [items, installments, buyer, agreements, settings, people] = await Promise.all([
+  supabase.from('order_items').select('*').eq('order_id', id).order('created_at'),
+  supabase.from('v_order_installments').select('*').eq('order_id', id).order('installment_number'),
+  supabase.from('buyers').select('*').eq('id', o.buyer_id!).single(),
+  o.company_id
+    ? supabase.from('v_agreements').select('id, deal_name_branch, status, effective_status, payroll_frequency, max_installments, hr_approval_required, valid_until').eq('company_id', o.company_id)
+    : Promise.resolve({ data: [] }),
+  supabase.from('system_settings').select('key, value').in('key', ['max_installments_monthly', 'max_installments_biweekly', 'cash_min_prepayment_pct']),
+  supabase
+    .from('users_profiles')
+    .select('id, full_name')
+    .in('id', [o.requirements_verified_by, o.prepayment_exception_by, o.cancelled_by].filter((x): x is string => !!x)),
+]);
+const personName = (uid: string | null) => people.data?.find((p) => p.id === uid)?.full_name ?? '—';
+const setting = (key: string) => Number(settings.data?.find((s) => s.key === key)?.value ?? 0);
+
+const isCancelled = !!o.is_cancelled;
+const verified = o.doc_status === 'requisitos_verificados';
+const released = o.ops_status !== 'pendiente_liberar';
+const isAdmin = hasRole(Astro.locals, 'administracion_cartera');
+const canEdit = !isCancelled && !released && (verified ? isAdmin : hasRole(Astro.locals, 'comercial', 'administracion_cartera'));
+const canCancel = !isCancelled && (isAdmin || (hasRole(Astro.locals, 'comercial') && !verified));
+const canException = !isCancelled && !released && o.payment_modality === 'contado' && hasRole(Astro.locals, 'direccion');
+const isPayroll = o.payment_modality === 'nomina_empresa';
+
+// Convenios utilizables para nómina: el de la jornada, o los aprobados y vigentes de la empresa
+const usableAgreements = (agreements.data ?? []).filter((a) =>
+  o.campaign_id ? a.id === o.agreement_id && a.status === 'aprobado' : a.effective_status === 'aprobado' || a.id === o.agreement_id,
+);
+const currentAgreement = (agreements.data ?? []).find((a) => a.id === o.agreement_id);
+const agreementMax = (a: { max_installments: number | null; payroll_frequency: string | null } | undefined) =>
+  a ? Math.min(a.max_installments ?? 1, setting(a.payroll_frequency === 'mensual' ? 'max_installments_monthly' : 'max_installments_biweekly')) : 1;
+const checklist = requirementChecklist({
+  payment_modality: o.payment_modality!,
+  hr_approval_required: o.hr_approval_required,
+  missing_requirements: o.missing_requirements,
+});
+const missingCount = checklist.filter((c) => !c.ok).length;
+const itemList = items.data ?? [];
+const plan = installments.data ?? [];
+const prepaymentPct = Math.round(setting('cash_min_prepayment_pct') * 100);
+---
+
+<AppLayout title={`Orden ${orderNumber(o.order_number)}`} error={error}>
+  <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <a href="/ordenes" class="text-sm">← Órdenes</a>
+      <h1>Orden {orderNumber(o.order_number)} · {o.buyer_name}</h1>
+      <p class="text-sm text-slate-600">
+        {
+          o.campaign_id ? (
+            <>
+              Jornada <a href={`/jornadas/${o.campaign_id}`}>{o.company_name}</a>
+              {o.deal_name_branch && ` · ${o.deal_name_branch}`}
+              {o.campaign_status && <span class="text-slate-400"> ({CAMPAIGN_STATUS_LABELS[o.campaign_status]})</span>}
+            </>
+          ) : (
+            <>
+              Venta directa
+              {o.company_id && (
+                <>
+                  {' · '}
+                  <a href={`/empresas/${o.company_id}`}>{o.company_name}</a>
+                </>
+              )}
+            </>
+          )
+        }
+        {o.city_name && ` · ${o.city_name}`}
+        {o.branch_name && ` · ${o.branch_name}`}
+      </p>
+      <p class="text-xs text-slate-500">Registrada por {o.created_by_name ?? '—'} el {fmtDateTime(o.created_at)}</p>
+    </div>
+    <div class="text-right">
+      <div class="text-2xl font-semibold">{cop(o.total_amount)}</div>
+      <div class="text-sm text-slate-600">
+        {PAYMENT_MODALITY_LABELS[o.payment_modality!]}
+        {isPayroll && ` · ${o.installments_count} cuotas ${o.installment_periodicity ? PAYROLL_LABELS[o.installment_periodicity].toLowerCase() + 'es' : ''}`}
+      </div>
+      <div class="text-xs text-slate-500">Saldo: {cop(o.balance_due)} · Cobro a: {COLLECTION_RESPONSIBLE_LABELS[o.collection_responsible!]}</div>
+    </div>
+  </div>
+
+  {
+    isCancelled && (
+      <div class="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+        Orden anulada el {fmtDateTime(o.cancelled_at)} por {personName(o.cancelled_by)}: {o.cancel_reason}
+      </div>
+    )
+  }
+
+  <section class="card mb-4">
+    <div class="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+      <div>
+        <div class="label">Documental</div>
+        <span class={DOC_STATUS_BADGE[o.doc_status!]}>{DOC_STATUS_LABELS[o.doc_status!]}</span>
+      </div>
+      <div>
+        <div class="label">Operativo</div>
+        <span class={OPS_STATUS_BADGE[o.ops_status!]}>{OPS_STATUS_LABELS[o.ops_status!]}</span>
+      </div>
+      <div>
+        <div class="label">Contable (Alegra)</div>
+        <span class={ACCOUNTING_STATUS_BADGE[o.accounting_status!]}>{ACCOUNTING_STATUS_LABELS[o.accounting_status!]}</span>
+      </div>
+      <div>
+        <div class="label">Cartera</div>
+        <span class={COLLECTION_STATUS_BADGE[o.collection_status!]}>{COLLECTION_STATUS_LABELS[o.collection_status!]}</span>
+      </div>
+    </div>
+  </section>
+
+  <div class="grid gap-4 lg:grid-cols-3">
+    <div class="space-y-4 lg:col-span-2">
+      <section class="card">
+        <h2 class="mb-1">Ítems</h2>
+        <p class="mb-3 text-xs text-slate-500">Especificación comercial y técnica del producto, sin historia clínica.</p>
+        <div class="overflow-x-auto">
+          <table class="table">
+            <thead>
+              <tr><th>Tipo</th><th>Montura</th><th>Lente / filtro</th><th>Descripción</th><th class="text-right">Cant.</th><th class="text-right">Unitario</th><th class="text-right">Total</th></tr>
+            </thead>
+            <tbody>
+              {itemList.map((i) => (
+                <tr>
+                  <td>{ITEM_TYPE_LABELS[i.item_type]}</td>
+                  <td>{i.frame_description ?? '—'}</td>
+                  <td>{[i.lens_type, i.lens_filter].filter(Boolean).join(' · ') || '—'}</td>
+                  <td>{i.description ?? '—'}</td>
+                  <td class="text-right">{i.quantity}</td>
+                  <td class="text-right whitespace-nowrap">{cop(i.unit_price)}</td>
+                  <td class="text-right whitespace-nowrap">{cop(i.line_total)}</td>
+                </tr>
+              ))}
+              {!itemList.length && <tr><td colspan="7" class="text-slate-500">Sin ítems.</td></tr>}
+            </tbody>
+            <tfoot>
+              <tr><td colspan="6" class="px-2 py-2 text-right font-medium">Valor total</td><td class="px-2 py-2 text-right font-semibold whitespace-nowrap">{cop(o.total_amount)}</td></tr>
+            </tfoot>
+          </table>
+        </div>
+
+        {
+          canEdit && (
+            <div class="mt-4 space-y-2">
+              {itemList.map((i) => (
+                <details class="rounded-md border border-slate-200 p-2" open={lastAction === 'update_item' && v.item_id === i.id}>
+                  <summary class="cursor-pointer text-sm">Editar: {ITEM_TYPE_LABELS[i.item_type]} {i.frame_description ?? i.lens_type ?? i.description}</summary>
+                  <form method="post" class="mt-2">
+                    <input type="hidden" name="item_id" value={i.id} />
+                    <OrderItemFields values={lastAction === 'update_item' && v.item_id === i.id ? v : i}>
+                      <div class="col-span-2 flex items-end justify-end gap-2 sm:col-span-7">
+                        <button class="btn btn-primary btn-sm" type="submit" name="_action" value="update_item">Guardar ítem</button>
+                        <button class="btn btn-danger btn-sm" type="submit" name="_action" value="delete_item" formnovalidate>Eliminar ítem</button>
+                      </div>
+                    </OrderItemFields>
+                  </form>
+                </details>
+              ))}
+              <details class="rounded-md border border-slate-200 p-2" open={lastAction === 'add_item'}>
+                <summary class="cursor-pointer text-sm font-medium text-brand-700">+ Agregar ítem</summary>
+                <form method="post" class="mt-2">
+                  <input type="hidden" name="_action" value="add_item" />
+                  <OrderItemFields values={lastAction === 'add_item' ? v : {}}>
+                    <div class="col-span-2 flex items-end justify-end sm:col-span-7">
+                      <button class="btn btn-primary btn-sm" type="submit">Agregar</button>
+                    </div>
+                  </OrderItemFields>
+                </form>
+              </details>
+            </div>
+          )
+        }
+      </section>
+
+      {
+        isPayroll && (
+          <section class="card">
+            <h2 class="mb-3">Plan de pagos por nómina</h2>
+            <table class="table">
+              <thead><tr><th>Cuota</th><th>Vence</th><th class="text-right">Valor</th><th class="text-right">Pagado</th><th>Estado</th></tr></thead>
+              <tbody>
+                {plan.map((c) => (
+                  <tr>
+                    <td>{c.installment_number}</td>
+                    <td>{fmtDate(c.due_date)}</td>
+                    <td class="text-right">{cop(c.expected_amount)}</td>
+                    <td class="text-right">{cop(c.paid_amount)}</td>
+                    <td><span class={INSTALLMENT_STATUS_BADGE[c.status ?? 'pendiente']}>{INSTALLMENT_STATUS_LABELS[c.status ?? 'pendiente']}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p class="mt-2 text-xs text-slate-500">
+              El descuento reportado por la empresa no acredita pago: las cuotas solo se abonan con pagos verificados en bancos (M06).
+            </p>
+          </section>
+        )
+      }
+
+      {
+        canEdit && (
+          <section class="card">
+            <h2 class="mb-3">Condiciones de pago</h2>
+            <form method="post" class="space-y-3">
+              <input type="hidden" name="_action" value="update_payment" />
+              <div class="grid-form">
+                <div>
+                  <label class="label" for="payment_modality">Modalidad</label>
+                  <select class="input" id="payment_modality" name="payment_modality">
+                    <option value="contado" selected={(v.payment_modality ?? o.payment_modality) === 'contado'}>{PAYMENT_MODALITY_LABELS.contado}</option>
+                    <option value="nomina_empresa" selected={(v.payment_modality ?? o.payment_modality) === 'nomina_empresa'} disabled={!usableAgreements.length}>
+                      {PAYMENT_MODALITY_LABELS.nomina_empresa}{!usableAgreements.length ? ' (sin convenio aprobado)' : ''}
+                    </option>
+                  </select>
+                </div>
+                {!o.campaign_id && usableAgreements.length > 0 && (
+                  <div>
+                    <label class="label" for="agreement_id">Convenio (nómina)</label>
+                    <select class="input" id="agreement_id" name="agreement_id">
+                      <option value="">—</option>
+                      {usableAgreements.map((a) => (
+                        <option value={a.id!} selected={(v.agreement_id ?? o.agreement_id) === a.id}>
+                          {a.deal_name_branch ?? 'Convenio marco'} · hasta {agreementMax(a)} cuotas {a.payroll_frequency}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div>
+                  <label class="label" for="installments_count">Cuotas (nómina)</label>
+                  <input class="input" id="installments_count" name="installments_count" type="number" min="1" max={agreementMax(currentAgreement ?? usableAgreements[0])} value={v.installments_count ?? o.installments_count ?? ''} />
+                </div>
+                <div>
+                  <label class="label" for="first_due_date">Primera cuota (nómina)</label>
+                  <input class="input" id="first_due_date" name="first_due_date" type="date" value={v.first_due_date ?? o.first_due_date ?? ''} />
+                </div>
+                <div class="sm:col-span-2">
+                  <label class="label" for="notes">Notas</label>
+                  <textarea class="input" id="notes" name="notes" rows="2">{v.notes ?? o.notes ?? ''}</textarea>
+                </div>
+              </div>
+              <button class="btn btn-primary" type="submit">Guardar condiciones</button>
+            </form>
+          </section>
+        )
+      }
+    </div>
+
+    <div class="space-y-4">
+      <section class="card space-y-3 text-sm">
+        <h2>Requisitos (Etapa 07 → 08)</h2>
+        <ul class="space-y-1">
+          {checklist.map((c) => <li class:list={[c.ok ? 'text-green-700' : 'text-amber-700']}>{c.ok ? '✓' : '○'} {c.label}</li>)}
+          {!isPayroll && <li class="text-slate-600">ⓘ Para liberar se exige pago verificado del {prepaymentPct}% del valor (M06), salvo excepción de Dirección.</li>}
+        </ul>
+
+        {
+          canEdit && isPayroll && (
+            <form method="post" class="space-y-2 border-t border-slate-100 pt-3">
+              <input type="hidden" name="_action" value="update_supports" />
+              <label class="flex items-center gap-2"><input type="checkbox" name="employee_auth_received" checked={!!o.employee_auth_received} /> Autorización firmada del empleado recibida</label>
+              {o.hr_approval_required !== false && (
+                <label class="flex items-center gap-2"><input type="checkbox" name="hr_approval_received" checked={!!o.hr_approval_received} /> Aval de RRHH recibido</label>
+              )}
+              <button class="btn w-full" type="submit">Guardar soportes</button>
+              <p class="text-xs text-slate-500">La carga de archivos se habilitará con Cloudflare R2.</p>
+            </form>
+          )
+        }
+
+        {verified && <p class="text-green-700">Verificada por {personName(o.requirements_verified_by)} el {fmtDateTime(o.requirements_verified_at)}</p>}
+
+        {
+          isAdmin && !isCancelled && !verified && (
+            <form method="post">
+              <input type="hidden" name="_action" value="verify" />
+              <button class="btn btn-primary w-full" disabled={missingCount > 0}>Verificar requisitos</button>
+            </form>
+          )
+        }
+        {
+          isAdmin && !isCancelled && verified && !released && (
+            <form method="post">
+              <input type="hidden" name="_action" value="unverify" />
+              <button class="btn w-full">Revertir verificación</button>
+            </form>
+          )
+        }
+        {!isAdmin && !verified && !isCancelled && <p class="text-xs text-slate-500">Administración / Cartera verifica los requisitos.</p>}
+      </section>
+
+      {
+        o.payment_modality === 'contado' && (o.prepayment_exception_reason || canException) && (
+          <section class="card space-y-2 text-sm">
+            <h2>Excepción de anticipo</h2>
+            {o.prepayment_exception_reason ? (
+              <p>
+                Autorizada por {personName(o.prepayment_exception_by)} el {fmtDateTime(o.prepayment_exception_at)}: <em>{o.prepayment_exception_reason}</em>
+              </p>
+            ) : (
+              <p class="text-slate-500">Sin excepción: se exige el {prepaymentPct}% pagado antes de liberar.</p>
+            )}
+            {canException && (
+              <form method="post" class="space-y-2">
+                <input type="hidden" name="_action" value="prepayment_exception" />
+                <textarea class="input" name="prepayment_exception_reason" rows="2" placeholder="Motivo de la excepción (vacío para retirarla)">{o.prepayment_exception_reason ?? ''}</textarea>
+                <button class="btn w-full" type="submit">{o.prepayment_exception_reason ? 'Actualizar o retirar' : 'Autorizar excepción'}</button>
+              </form>
+            )}
+          </section>
+        )
+      }
+
+      <section class="card space-y-2 text-sm">
+        <h2>Comprador</h2>
+        <p>
+          <strong>{buyer.data?.full_name}</strong><br />
+          {buyer.data && BUYER_DOCUMENT_LABELS[buyer.data.document_type]} {buyer.data?.document_id}<br />
+          {buyer.data?.phone ?? 'Sin teléfono'} · {buyer.data?.email ?? 'sin correo'}
+        </p>
+        <p class:list={[buyer.data?.data_consent_at ? 'text-green-700' : 'text-amber-700']}>
+          {buyer.data?.data_consent_at ? `✓ Autorización de datos: ${fmtDateTime(buyer.data.data_consent_at)}` : '○ Sin autorización de datos'}
+        </p>
+        {
+          hasRole(Astro.locals, 'comercial', 'administracion_cartera') && buyer.data && (
+            <details open={lastAction === 'update_buyer'}>
+              <summary class="cursor-pointer text-brand-700">Editar contacto</summary>
+              <form method="post" class="mt-2 space-y-2">
+                <input type="hidden" name="_action" value="update_buyer" />
+                <input type="hidden" name="buyer_id" value={buyer.data.id} />
+                <label class="label">Nombre completo</label>
+                <input class="input" name="full_name" required value={v.full_name ?? buyer.data.full_name} />
+                <label class="label">Teléfono</label>
+                <input class="input" name="phone" type="tel" value={v.phone ?? buyer.data.phone ?? ''} />
+                <label class="label">Correo</label>
+                <input class="input" name="email" type="email" value={v.email ?? buyer.data.email ?? ''} />
+                <button class="btn w-full" type="submit">Guardar</button>
+              </form>
+            </details>
+          )
+        }
+      </section>
+
+      {
+        canCancel && (
+          <section class="card text-sm">
+            <details open={lastAction === 'cancel'}>
+              <summary class="cursor-pointer text-red-700">Anular orden</summary>
+              <p class="mt-2 text-xs text-slate-500">La orden no se borra: queda anulada con motivo y usuario. No se puede anular si tiene pagos aplicados o factura vinculada.</p>
+              <form method="post" class="mt-2 space-y-2">
+                <input type="hidden" name="_action" value="cancel" />
+                <textarea class="input" name="cancel_reason" rows="2" required placeholder="Motivo"></textarea>
+                <button class="btn btn-danger w-full">Confirmar anulación</button>
+              </form>
+            </details>
+          </section>
+        )
+      }
+    </div>
+  </div>
+</AppLayout>

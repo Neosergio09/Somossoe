@@ -3,12 +3,14 @@ import AppLayout from '../layouts/AppLayout.astro';
 import { hasRole } from '../lib/auth';
 import { cop, fmtDate, fmtTime, fmtWeekday, todayCo } from '../lib/format';
 import { AGREEMENT_STATUS_LABELS, STAGE_LABELS } from '../lib/labels';
+import { orderNumber } from '../lib/orders';
 
 const { supabase, userId } = Astro.locals;
 const today = todayCo();
 const canSeeApprovals = hasRole(Astro.locals, 'administracion_cartera', 'direccion');
+const canSeeOrders = hasRole(Astro.locals, 'administracion_cartera', 'comercial');
 
-const [myActions, sessions, pendingAgreements, stale] = await Promise.all([
+const [myActions, sessions, pendingAgreements, stale, pendingOrders] = await Promise.all([
   supabase
     .from('v_deals_board')
     .select('id, deal_name_branch, company_name, stage, next_action, next_action_due_date, next_action_overdue')
@@ -37,6 +39,15 @@ const [myActions, sessions, pendingAgreements, stale] = await Promise.all([
     .eq('inactivity_alert', true)
     .order('days_inactive', { ascending: false })
     .limit(10),
+  canSeeOrders
+    ? supabase
+        .from('v_orders')
+        .select('id, order_number, buyer_name, company_name, total_amount, missing_requirements')
+        .eq('doc_status', 'pendiente_soportes')
+        .eq('is_cancelled', false)
+        .order('created_at')
+        .limit(15)
+    : Promise.resolve({ data: [] as { id: string; order_number: number; buyer_name: string; company_name: string | null; total_amount: number; missing_requirements: string[] | null }[] }),
 ]);
 ---
 
@@ -113,6 +124,33 @@ const [myActions, sessions, pendingAgreements, stale] = await Promise.all([
             </ul>
           ) : (
             <p class="text-sm text-slate-500">No hay convenios pendientes.</p>
+          )}
+        </section>
+      )
+    }
+
+    {
+      canSeeOrders && (
+        <section class="card">
+          <h2 class="mb-3">Órdenes pendientes de verificación</h2>
+          {pendingOrders.data?.length ? (
+            <ul class="divide-y divide-slate-100 text-sm">
+              {pendingOrders.data.map((o) => (
+                <li class="flex items-center justify-between gap-3 py-2">
+                  <div>
+                    <a href={`/ordenes/${o.id}`}>{orderNumber(o.order_number)} · {o.buyer_name}</a>
+                    <div class="text-xs text-slate-500">{o.company_name ?? 'Particular'} · {cop(o.total_amount)}</div>
+                  </div>
+                  {o.missing_requirements?.length ? (
+                    <span class="badge badge-amber shrink-0" title={o.missing_requirements.join('; ')}>Faltan {o.missing_requirements.length} soportes</span>
+                  ) : (
+                    <span class="badge badge-green shrink-0">Lista para verificar</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p class="text-sm text-slate-500">No hay órdenes pendientes.</p>
           )}
         </section>
       )

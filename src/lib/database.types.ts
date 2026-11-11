@@ -125,19 +125,57 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
-                },"campaign_attendance": {
+                },"buyers": {
                   Row: {
-                    "area": string | null,"campaign_id": string,"created_at": string,"document_id": string,"full_name": string,"id": string,"registered_by": string | null,"session_id": string,"updated_at": string
+                    "created_at": string,"created_by": string | null,"current_company_id": string | null,"data_consent_at": string | null,"data_consent_by": string | null,"data_consent_r2_key": string | null,"document_id": string,"document_type": Database["public"]['Enums']["buyer_document_type"],"email": string | null,"full_name": string,"id": string,"phone": string | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "area"?: string | null,"campaign_id": string,"created_at"?: string,"document_id": string,"full_name": string,"id"?: string,"registered_by"?: string | null,"session_id": string,"updated_at"?: string
+                    "created_at"?: string,"created_by"?: string | null,"current_company_id"?: string | null,"data_consent_at"?: string | null,"data_consent_by"?: string | null,"data_consent_r2_key"?: string | null,"document_id": string,"document_type": Database["public"]['Enums']["buyer_document_type"],"email"?: string | null,"full_name": string,"id"?: string,"phone"?: string | null,"updated_at"?: string
                   }
                   Update: {
-                    "area"?: string | null,"campaign_id"?: string,"created_at"?: string,"document_id"?: string,"full_name"?: string,"id"?: string,"registered_by"?: string | null,"session_id"?: string,"updated_at"?: string
+                    "created_at"?: string,"created_by"?: string | null,"current_company_id"?: string | null,"data_consent_at"?: string | null,"data_consent_by"?: string | null,"data_consent_r2_key"?: string | null,"document_id"?: string,"document_type"?: Database["public"]['Enums']["buyer_document_type"],"email"?: string | null,"full_name"?: string,"id"?: string,"phone"?: string | null,"updated_at"?: string
                   }
                   Relationships: [
                     {
+      foreignKeyName: "buyers_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "buyers_current_company_id_fkey"
+      columns: ["current_company_id"]
+isOneToOne: false
+      referencedRelation: "companies"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "buyers_data_consent_by_fkey"
+      columns: ["data_consent_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"campaign_attendance": {
+                  Row: {
+                    "area": string | null,"buyer_id": string | null,"campaign_id": string,"created_at": string,"document_id": string,"full_name": string,"id": string,"registered_by": string | null,"session_id": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "area"?: string | null,"buyer_id"?: string | null,"campaign_id": string,"created_at"?: string,"document_id": string,"full_name": string,"id"?: string,"registered_by"?: string | null,"session_id": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "area"?: string | null,"buyer_id"?: string | null,"campaign_id"?: string,"created_at"?: string,"document_id"?: string,"full_name"?: string,"id"?: string,"registered_by"?: string | null,"session_id"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "campaign_attendance_buyer_id_fkey"
+      columns: ["buyer_id"]
+isOneToOne: false
+      referencedRelation: "buyers"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "campaign_attendance_campaign_id_fkey"
       columns: ["campaign_id"]
 isOneToOne: false
@@ -495,6 +533,144 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"order_installments": {
+                  Row: {
+                    "created_at": string,"due_date": string,"expected_amount": number,"id": string,"installment_number": number,"order_id": string,"paid_amount": number,"superseded_by_reclassification_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"due_date": string,"expected_amount": number,"id"?: string,"installment_number": number,"order_id": string,"paid_amount"?: number,"superseded_by_reclassification_id"?: string | null
+                  }
+                  Update: {
+                    "created_at"?: string,"due_date"?: string,"expected_amount"?: number,"id"?: string,"installment_number"?: number,"order_id"?: string,"paid_amount"?: number,"superseded_by_reclassification_id"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "order_installments_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_installments_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"order_items": {
+                  Row: {
+                    "created_at": string,"description": string | null,"frame_description": string | null,"id": string,"item_type": Database["public"]['Enums']["order_item_type"],"lens_filter": string | null,"lens_type": string | null,"line_total": number | null,"order_id": string,"quantity": number,"unit_price": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"description"?: string | null,"frame_description"?: string | null,"id"?: string,"item_type": Database["public"]['Enums']["order_item_type"],"lens_filter"?: string | null,"lens_type"?: string | null,"line_total"?: never,"order_id": string,"quantity": number,"unit_price": number,"updated_at"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"description"?: string | null,"frame_description"?: string | null,"id"?: string,"item_type"?: Database["public"]['Enums']["order_item_type"],"lens_filter"?: string | null,"lens_type"?: string | null,"line_total"?: never,"order_id"?: string,"quantity"?: number,"unit_price"?: number,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "order_items_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_items_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"orders": {
+                  Row: {
+                    "accounting_status": Database["public"]['Enums']["order_accounting_status"],"agreement_id": string | null,"balance_due": number,"branch_id": string | null,"buyer_id": string,"campaign_id": string | null,"cancel_reason": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"city_id": string | null,"collection_responsible": Database["public"]['Enums']["collection_responsible"],"collection_status": Database["public"]['Enums']["order_collection_status"],"company_id": string | null,"created_at": string,"created_by": string | null,"doc_status": Database["public"]['Enums']["order_doc_status"],"employee_auth_file_r2_key": string | null,"employee_auth_received": boolean,"first_due_date": string | null,"hr_approval_r2_key": string | null,"hr_approval_received": boolean,"id": string,"installment_periodicity": Database["public"]['Enums']["payroll_frequency"] | null,"installments_count": number | null,"is_cancelled": boolean,"notes": string | null,"ops_status": Database["public"]['Enums']["order_ops_status"],"order_number": number,"payment_modality": Database["public"]['Enums']["payment_modality"],"prepayment_exception_at": string | null,"prepayment_exception_by": string | null,"prepayment_exception_reason": string | null,"requirements_verified": boolean,"requirements_verified_at": string | null,"requirements_verified_by": string | null,"total_amount": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "accounting_status"?: Database["public"]['Enums']["order_accounting_status"],"agreement_id"?: string | null,"balance_due"?: number,"branch_id"?: string | null,"buyer_id": string,"campaign_id"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"city_id"?: string | null,"collection_responsible"?: Database["public"]['Enums']["collection_responsible"],"collection_status"?: Database["public"]['Enums']["order_collection_status"],"company_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"doc_status"?: Database["public"]['Enums']["order_doc_status"],"employee_auth_file_r2_key"?: string | null,"employee_auth_received"?: boolean,"first_due_date"?: string | null,"hr_approval_r2_key"?: string | null,"hr_approval_received"?: boolean,"id"?: string,"installment_periodicity"?: Database["public"]['Enums']["payroll_frequency"] | null,"installments_count"?: number | null,"is_cancelled"?: boolean,"notes"?: string | null,"ops_status"?: Database["public"]['Enums']["order_ops_status"],"order_number"?: never,"payment_modality": Database["public"]['Enums']["payment_modality"],"prepayment_exception_at"?: string | null,"prepayment_exception_by"?: string | null,"prepayment_exception_reason"?: string | null,"requirements_verified"?: boolean,"requirements_verified_at"?: string | null,"requirements_verified_by"?: string | null,"total_amount"?: number,"updated_at"?: string
+                  }
+                  Update: {
+                    "accounting_status"?: Database["public"]['Enums']["order_accounting_status"],"agreement_id"?: string | null,"balance_due"?: number,"branch_id"?: string | null,"buyer_id"?: string,"campaign_id"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"city_id"?: string | null,"collection_responsible"?: Database["public"]['Enums']["collection_responsible"],"collection_status"?: Database["public"]['Enums']["order_collection_status"],"company_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"doc_status"?: Database["public"]['Enums']["order_doc_status"],"employee_auth_file_r2_key"?: string | null,"employee_auth_received"?: boolean,"first_due_date"?: string | null,"hr_approval_r2_key"?: string | null,"hr_approval_received"?: boolean,"id"?: string,"installment_periodicity"?: Database["public"]['Enums']["payroll_frequency"] | null,"installments_count"?: number | null,"is_cancelled"?: boolean,"notes"?: string | null,"ops_status"?: Database["public"]['Enums']["order_ops_status"],"order_number"?: never,"payment_modality"?: Database["public"]['Enums']["payment_modality"],"prepayment_exception_at"?: string | null,"prepayment_exception_by"?: string | null,"prepayment_exception_reason"?: string | null,"requirements_verified"?: boolean,"requirements_verified_at"?: string | null,"requirements_verified_by"?: string | null,"total_amount"?: number,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "orders_agreement_same_company"
+      columns: ["agreement_id","company_id"]
+isOneToOne: false
+      referencedRelation: "agreements_convenios"
+      referencedColumns: ["id","company_id"]
+    },{
+      foreignKeyName: "orders_agreement_same_company"
+      columns: ["agreement_id","company_id"]
+isOneToOne: false
+      referencedRelation: "v_agreements"
+      referencedColumns: ["id","company_id"]
+    },{
+      foreignKeyName: "orders_branch_same_company"
+      columns: ["branch_id","company_id"]
+isOneToOne: false
+      referencedRelation: "company_branches"
+      referencedColumns: ["id","company_id"]
+    },{
+      foreignKeyName: "orders_buyer_id_fkey"
+      columns: ["buyer_id"]
+isOneToOne: false
+      referencedRelation: "buyers"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_campaign_id_fkey"
+      columns: ["campaign_id"]
+isOneToOne: false
+      referencedRelation: "campaigns_jornadas"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_campaign_id_fkey"
+      columns: ["campaign_id"]
+isOneToOne: false
+      referencedRelation: "v_campaigns"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_cancelled_by_fkey"
+      columns: ["cancelled_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_city_id_fkey"
+      columns: ["city_id"]
+isOneToOne: false
+      referencedRelation: "cities"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_company_id_fkey"
+      columns: ["company_id"]
+isOneToOne: false
+      referencedRelation: "companies"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_prepayment_exception_by_fkey"
+      columns: ["prepayment_exception_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_requirements_verified_by_fkey"
+      columns: ["requirements_verified_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"system_settings": {
                   Row: {
                     "description": string,"key": string,"updated_at": string,"updated_by": string | null,"value": number
@@ -708,10 +884,119 @@ isOneToOne: false
       referencedColumns: ["code"]
     }
                   ]
+                },"v_order_installments": {
+                  Row: {
+                    "due_date": string,"expected_amount": number,"id": string,"installment_number": number,"order_id": string,"paid_amount": number,"pending_amount": number | null,"status": string | null,"superseded_by_reclassification_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                           "due_date"?: string | null,"expected_amount"?: number | null,"id"?: string | null,"installment_number"?: number | null,"order_id"?: string | null,"paid_amount"?: number | null,"pending_amount"?: never,"status"?: never,"superseded_by_reclassification_id"?: string | null
+                         }
+                        Update: {
+                           "due_date"?: string | null,"expected_amount"?: number | null,"id"?: string | null,"installment_number"?: number | null,"order_id"?: string | null,"paid_amount"?: number | null,"pending_amount"?: never,"status"?: never,"superseded_by_reclassification_id"?: string | null
+                         }
+                        Relationships: [
+                    {
+      foreignKeyName: "order_installments_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_installments_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"v_orders": {
+                  Row: {
+                    "accounting_status": Database["public"]['Enums']["order_accounting_status"],"agreement_id": string | null,"balance_due": number,"branch_id": string | null,"branch_name": string | null,"buyer_document_id": string,"buyer_document_type": Database["public"]['Enums']["buyer_document_type"],"buyer_id": string,"buyer_name": string,"campaign_id": string | null,"campaign_status": Database["public"]['Enums']["campaign_status"] | null,"cancel_reason": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"city_id": string | null,"city_name": string | null,"collection_responsible": Database["public"]['Enums']["collection_responsible"],"collection_status": Database["public"]['Enums']["order_collection_status"],"company_id": string | null,"company_name": string | null,"created_at": string,"created_by": string | null,"created_by_name": string | null,"deal_id": string | null,"deal_name_branch": string | null,"doc_status": Database["public"]['Enums']["order_doc_status"],"employee_auth_received": boolean,"first_due_date": string | null,"hr_approval_received": boolean,"hr_approval_required": boolean | null,"id": string,"installment_periodicity": Database["public"]['Enums']["payroll_frequency"] | null,"installments_count": number | null,"is_cancelled": boolean,"items_count": number | null,"missing_requirements": (string)[] | null,"notes": string | null,"ops_status": Database["public"]['Enums']["order_ops_status"],"order_number": number,"payment_modality": Database["public"]['Enums']["payment_modality"],"prepayment_exception_at": string | null,"prepayment_exception_by": string | null,"prepayment_exception_reason": string | null,"requirements_verified": boolean,"requirements_verified_at": string | null,"requirements_verified_by": string | null,"total_amount": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "orders_agreement_same_company"
+      columns: ["agreement_id","company_id"]
+isOneToOne: false
+      referencedRelation: "agreements_convenios"
+      referencedColumns: ["id","company_id"]
+    },{
+      foreignKeyName: "orders_agreement_same_company"
+      columns: ["agreement_id","company_id"]
+isOneToOne: false
+      referencedRelation: "v_agreements"
+      referencedColumns: ["id","company_id"]
+    },{
+      foreignKeyName: "orders_branch_same_company"
+      columns: ["branch_id","company_id"]
+isOneToOne: false
+      referencedRelation: "company_branches"
+      referencedColumns: ["id","company_id"]
+    },{
+      foreignKeyName: "orders_buyer_id_fkey"
+      columns: ["buyer_id"]
+isOneToOne: false
+      referencedRelation: "buyers"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_campaign_id_fkey"
+      columns: ["campaign_id"]
+isOneToOne: false
+      referencedRelation: "campaigns_jornadas"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_campaign_id_fkey"
+      columns: ["campaign_id"]
+isOneToOne: false
+      referencedRelation: "v_campaigns"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_cancelled_by_fkey"
+      columns: ["cancelled_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_city_id_fkey"
+      columns: ["city_id"]
+isOneToOne: false
+      referencedRelation: "cities"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_company_id_fkey"
+      columns: ["company_id"]
+isOneToOne: false
+      referencedRelation: "companies"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_prepayment_exception_by_fkey"
+      columns: ["prepayment_exception_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_requirements_verified_by_fkey"
+      columns: ["requirements_verified_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
                 }
           }
           Functions: {
-            "find_company_duplicates":
+            "create_order":
+{ Args: { "p_items": Json,"p_order": Json }; Returns: string
+                           },
+"find_company_duplicates":
 { Args: { "p_name": string,"p_nit"?: string }; Returns: {
               "id": string,"is_nit_provisional": boolean,"match_reason": string,"name": string,"nit": string,"similarity": number
             }[]
@@ -721,7 +1006,7 @@ isOneToOne: false
                            }
           }
           Enums: {
-            "agreement_document_type": "convenio_firmado"|"camara_comercio"|"rut"|"formato_rrhh"|"otro","agreement_status": "borrador"|"pendiente_aprobacion"|"aprobado"|"cancelado","app_role": "comercial"|"operacion"|"administracion_cartera"|"direccion"|"proveedor_lab","campaign_status": "programada"|"en_ejecucion"|"cerrada"|"cancelada","contact_area": "rrhh"|"sst"|"gerencia"|"compras"|"otra","deal_stage": "prospecto"|"reunion_exploratoria"|"propuesta_enviada"|"negociacion"|"convenio_firmado"|"jornada_en_ejecucion"|"facturacion_cerrada"|"cierre_perdido","interaction_type": "reunion"|"llamada"|"whatsapp"|"correo","lost_substatus": "nurturing"|"no_contactar","payroll_frequency": "mensual"|"quincenal"
+            "agreement_document_type": "convenio_firmado"|"camara_comercio"|"rut"|"formato_rrhh"|"otro","agreement_status": "borrador"|"pendiente_aprobacion"|"aprobado"|"cancelado","app_role": "comercial"|"operacion"|"administracion_cartera"|"direccion"|"proveedor_lab","buyer_document_type": "cc"|"ce"|"ti"|"pasaporte"|"otro","campaign_status": "programada"|"en_ejecucion"|"cerrada"|"cancelada","collection_responsible": "empresa"|"empleado","contact_area": "rrhh"|"sst"|"gerencia"|"compras"|"otra","deal_stage": "prospecto"|"reunion_exploratoria"|"propuesta_enviada"|"negociacion"|"convenio_firmado"|"jornada_en_ejecucion"|"facturacion_cerrada"|"cierre_perdido","interaction_type": "reunion"|"llamada"|"whatsapp"|"correo","lost_substatus": "nurturing"|"no_contactar","order_accounting_status": "pendiente_vincular"|"factura_vinculada"|"factura_con_diferencia","order_collection_status": "con_saldo"|"parcialmente_recaudado"|"recaudado_total","order_doc_status": "pendiente_soportes"|"requisitos_verificados","order_item_type": "gafas_completas"|"montura"|"lentes"|"otro","order_ops_status": "pendiente_liberar"|"en_produccion"|"listo_para_entregar"|"entrega_parcial"|"entrega_completa","payment_modality": "contado"|"nomina_empresa","payroll_frequency": "mensual"|"quincenal"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -841,7 +1126,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "agreement_document_type": ["convenio_firmado", "camara_comercio", "rut", "formato_rrhh", "otro"],"agreement_status": ["borrador", "pendiente_aprobacion", "aprobado", "cancelado"],"app_role": ["comercial", "operacion", "administracion_cartera", "direccion", "proveedor_lab"],"campaign_status": ["programada", "en_ejecucion", "cerrada", "cancelada"],"contact_area": ["rrhh", "sst", "gerencia", "compras", "otra"],"deal_stage": ["prospecto", "reunion_exploratoria", "propuesta_enviada", "negociacion", "convenio_firmado", "jornada_en_ejecucion", "facturacion_cerrada", "cierre_perdido"],"interaction_type": ["reunion", "llamada", "whatsapp", "correo"],"lost_substatus": ["nurturing", "no_contactar"],"payroll_frequency": ["mensual", "quincenal"]
+            "agreement_document_type": ["convenio_firmado", "camara_comercio", "rut", "formato_rrhh", "otro"],"agreement_status": ["borrador", "pendiente_aprobacion", "aprobado", "cancelado"],"app_role": ["comercial", "operacion", "administracion_cartera", "direccion", "proveedor_lab"],"buyer_document_type": ["cc", "ce", "ti", "pasaporte", "otro"],"campaign_status": ["programada", "en_ejecucion", "cerrada", "cancelada"],"collection_responsible": ["empresa", "empleado"],"contact_area": ["rrhh", "sst", "gerencia", "compras", "otra"],"deal_stage": ["prospecto", "reunion_exploratoria", "propuesta_enviada", "negociacion", "convenio_firmado", "jornada_en_ejecucion", "facturacion_cerrada", "cierre_perdido"],"interaction_type": ["reunion", "llamada", "whatsapp", "correo"],"lost_substatus": ["nurturing", "no_contactar"],"order_accounting_status": ["pendiente_vincular", "factura_vinculada", "factura_con_diferencia"],"order_collection_status": ["con_saldo", "parcialmente_recaudado", "recaudado_total"],"order_doc_status": ["pendiente_soportes", "requisitos_verificados"],"order_item_type": ["gafas_completas", "montura", "lentes", "otro"],"order_ops_status": ["pendiente_liberar", "en_produccion", "listo_para_entregar", "entrega_parcial", "entrega_completa"],"payment_modality": ["contado", "nomina_empresa"],"payroll_frequency": ["mensual", "quincenal"]
           }
         }
 } as const

@@ -44,8 +44,8 @@ Contraseña de todos: `Somossoe2026!`
 - Puertos locales: API 55421 · DB 55422 · Studio 55423 (para no chocar con otros proyectos locales).
 
 ```bash
-supabase db reset          # aplica todas las migraciones desde cero
-supabase test db           # corre las pruebas
+supabase db reset          # aplica todas las migraciones desde cero (con datos de prueba)
+supabase db reset --no-seed && supabase test db   # las pruebas corren sobre una BD sin seed
 pnpm db:types              # regenera src/lib/database.types.ts
 supabase db push --linked  # sube migraciones al proyecto remoto
 ```
@@ -66,7 +66,7 @@ Desde ahí, Dirección crea, asigna roles y activa al resto de usuarios en `/adm
 
 - `src/middleware.ts`: sesión de Supabase por petición, protección de rutas y usuarios sin activar.
 - `src/lib/forms.ts`: POST con `_action`, validación con Zod y traducción de errores de la BD.
-- `src/pages/`: empresas, oportunidades (Kanban y bitácora), convenios, jornadas (calendario, sesiones y asistencia) y administración.
+- `src/pages/`: empresas, oportunidades (Kanban y bitácora), convenios, jornadas (calendario, sesiones y asistencia), órdenes (comprador, ítems, plan de cuotas y verificación de requisitos) y administración.
 - Las reglas de negocio y permisos viven en la base de datos (triggers + RLS); la interfaz solo oculta lo que el rol no puede hacer.
 
 ```bash
