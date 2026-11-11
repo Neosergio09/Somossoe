@@ -2,7 +2,7 @@
 import AppLayout from '../../layouts/AppLayout.astro';
 import { hasRole } from '../../lib/auth';
 import { cop, fmtDate } from '../../lib/format';
-import { KANBAN_STAGES, LOST_LABELS, STAGE_LABELS } from '../../lib/labels';
+import { KANBAN_STAGES, LOST_LABELS, MANUAL_STAGES, STAGE_LABELS } from '../../lib/labels';
 import { activeUsers, operationalCities } from '../../lib/options';
 
 const { supabase, userId } = Astro.locals;
@@ -22,11 +22,17 @@ const [{ data: deals }, cities, users] = await Promise.all([
   activeUsers(supabase, ['comercial', 'direccion']),
 ]);
 
+const canMove = hasRole(Astro.locals, 'comercial', 'direccion');
+const AUTOMATIC = new Set(['jornada_en_ejecucion', 'facturacion_cerrada']);
+
 const columns = [...KANBAN_STAGES, ...(showLost ? (['cierre_perdido'] as const) : [])].map((stage) => {
   const items = (deals ?? []).filter((d) => d.stage === stage);
   const total = items.reduce((sum, d) => sum + (d.estimated_billing_amount ?? 0), 0);
-  return { stage, items, total };
+  return { stage, items, total, droppable: canMove && MANUAL_STAGES.includes(stage) };
 });
+const isDraggable = (d: { stage: string | null; lost_substatus: string | null }) =>
+  canMove && !AUTOMATIC.has(d.stage ?? '') && !(d.stage === 'cierre_perdido' && d.lost_substatus === 'no_contactar');
+
 const filterUrl = (patch: Record<string, string>) => {
   const p = new URLSearchParams(params);
   for (const [k, v] of Object.entries(patch)) v ? p.set(k, v) : p.delete(k);
@@ -37,7 +43,10 @@ const filterUrl = (patch: Record<string, string>) => {
 
 <AppLayout title="Oportunidades">
   <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-    <h1>Oportunidades</h1>
+    <div>
+      <h1>Oportunidades</h1>
+      {canMove && <p class="text-xs text-slate-500">Arrastre las tarjetas para cambiar de etapa. Jornada en Ejecución y Facturación Cerrada avanzan solas.</p>}
+    </div>
     {hasRole(Astro.locals, 'comercial') && <a class="btn btn-primary" href="/oportunidades/nueva">Nueva oportunidad</a>}
   </div>
 
@@ -64,19 +73,38 @@ const filterUrl = (patch: Record<string, string>) => {
     {(cityId || owner || showLost) && <a class="btn" href={filterUrl({ ciudad: '', ejecutivo: '', perdidas: '' })}>Limpiar</a>}
   </form>
 
-  <div class="flex gap-3 overflow-x-auto pb-4">
+  <div id="kanban-error" role="alert" hidden class="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"></div>
+
+  <div class="flex gap-3 overflow-x-auto pb-4" data-kanban>
     {
       columns.map((col) => (
-        <section class="flex w-72 shrink-0 flex-col rounded-lg bg-slate-100 p-2">
+        <section
+          class="flex w-72 shrink-0 flex-col rounded-lg bg-slate-100 p-2 transition"
+          data-column
+          data-stage={col.stage}
+          data-droppable={col.droppable ? 'true' : 'false'}
+        >
           <header class="mb-2 px-1">
-            <h2 class="text-sm">{STAGE_LABELS[col.stage]}</h2>
+            <h2 class="text-sm">
+              {STAGE_LABELS[col.stage]}
+              {!MANUAL_STAGES.includes(col.stage) && <span class="ml-1 text-xs font-normal text-slate-400">(automática)</span>}
+            </h2>
             <p class="text-xs text-slate-500">
               {col.items.length} · {cop(col.total)}
             </p>
           </header>
-          <div class="space-y-2">
+          <div class="min-h-24 flex-1 space-y-2" data-list>
             {col.items.map((d) => (
-              <a href={`/oportunidades/${d.id}`} class="card block p-3 text-sm text-slate-800 hover:border-brand-600 hover:no-underline">
+              <a
+                href={`/oportunidades/${d.id}`}
+                class:list={[
+                  'card block p-3 text-sm text-slate-800 hover:border-brand-600 hover:no-underline',
+                  isDraggable(d) && 'cursor-grab active:cursor-grabbing',
+                ]}
+                draggable={isDraggable(d) ? 'true' : 'false'}
+                data-deal-id={d.id}
+                data-stage={d.stage}
+              >
                 <div class="font-medium">{d.deal_name_branch}</div>
                 <div class="text-xs text-slate-500">
                   {d.company_name} · {d.city_name}
@@ -94,10 +122,152 @@ const filterUrl = (patch: Record<string, string>) => {
                 {d.next_action && <div class="mt-1 text-xs text-slate-600">→ {d.next_action} ({fmtDate(d.next_action_due_date)})</div>}
               </a>
             ))}
-            {!col.items.length && <p class="px-1 text-xs text-slate-400">Sin oportunidades</p>}
+            {!col.items.length && <p class="px-1 text-xs text-slate-400" data-empty>Sin oportunidades</p>}
           </div>
         </section>
       ))
     }
   </div>
+
+  {
+    canMove && !showLost && (
+      <div
+        hidden
+        data-column
+        data-stage="cierre_perdido"
+        data-droppable="true"
+        data-lost-zone
+        class="fixed inset-x-0 bottom-4 z-10 mx-auto flex w-80 items-center justify-center rounded-lg border-2 border-dashed border-red-300 bg-red-50 px-4 py-5 text-sm font-medium text-red-700 shadow-lg transition"
+      >
+        Soltar aquí para marcar como Cierre Perdido
+        <div data-list hidden></div>
+      </div>
+    )
+  }
+
+  <dialog id="lost-dialog" class="m-auto w-full max-w-sm rounded-lg p-0 shadow-xl backdrop:bg-slate-900/40">
+    <form method="dialog" class="space-y-4 p-5">
+      <h2>Cierre perdido</h2>
+      <p class="text-sm text-slate-600">¿Cómo queda esta oportunidad?</p>
+      <div class="space-y-2">
+        <button class="btn w-full justify-start" value="nurturing">{LOST_LABELS.nurturing}</button>
+        <button class="btn btn-danger w-full justify-start" value="no_contactar">{LOST_LABELS.no_contactar}</button>
+      </div>
+      <button class="btn btn-sm" value="">Cancelar</button>
+    </form>
+  </dialog>
 </AppLayout>
+
+<script>
+  const board = document.querySelector<HTMLElement>('[data-kanban]');
+  const lostZone = document.querySelector<HTMLElement>('[data-lost-zone]');
+  const lostDialog = document.querySelector<HTMLDialogElement>('#lost-dialog');
+  const errorBox = document.querySelector<HTMLElement>('#kanban-error');
+  const HIGHLIGHT = ['ring-2', 'ring-brand-600', 'bg-brand-50'];
+
+  let dragged: HTMLElement | null = null;
+  let origin: { list: HTMLElement; next: Element | null } | null = null;
+
+  const columns = () => [...document.querySelectorAll<HTMLElement>('[data-column]')];
+  const columnOf = (el: EventTarget | null) => (el instanceof Element ? el.closest<HTMLElement>('[data-column]') : null);
+  const canDropOn = (col: HTMLElement | null) =>
+    !!col && !!dragged && col.dataset.droppable === 'true' && col.dataset.stage !== dragged.dataset.stage;
+
+  function showError(message: string) {
+    if (!errorBox) return alert(message);
+    errorBox.textContent = message;
+    errorBox.hidden = false;
+    errorBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function askLostSubstatus(): Promise<string | null> {
+    if (!lostDialog) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      lostDialog.returnValue = '';
+      lostDialog.addEventListener('close', () => resolve(lostDialog.returnValue || null), { once: true });
+      lostDialog.showModal();
+    });
+  }
+
+  function revert(card: HTMLElement) {
+    if (origin) origin.list.insertBefore(card, origin.next);
+  }
+
+  async function move(card: HTMLElement, target: HTMLElement) {
+    const stage = target.dataset.stage!;
+    let lost: string | null = null;
+    if (stage === 'cierre_perdido') {
+      lost = await askLostSubstatus();
+      if (!lost) return revert(card);
+    }
+
+    // Movimiento optimista; si la BD lo rechaza, la tarjeta vuelve a su lugar
+    const list = target.querySelector<HTMLElement>('[data-list]');
+    if (list && !target.hasAttribute('data-lost-zone')) {
+      list.querySelector('[data-empty]')?.remove();
+      list.prepend(card);
+    }
+    card.classList.add('opacity-60', 'pointer-events-none');
+
+    try {
+      const res = await fetch(`/api/oportunidades/${card.dataset.dealId}/etapa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stage, lost_substatus: lost }),
+      });
+      if (res.redirected) return location.assign(res.url);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        revert(card);
+        card.classList.remove('opacity-60', 'pointer-events-none');
+        showError(data.error ?? 'No se pudo mover la oportunidad.');
+        return;
+      }
+      location.reload();
+    } catch {
+      revert(card);
+      card.classList.remove('opacity-60', 'pointer-events-none');
+      showError('Sin conexión. Intente de nuevo.');
+    }
+  }
+
+  board?.addEventListener('dragstart', (event) => {
+    const card = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-deal-id]') : null;
+    if (!card || card.getAttribute('draggable') !== 'true') return;
+    dragged = card;
+    origin = { list: card.parentElement as HTMLElement, next: card.nextElementSibling };
+    event.dataTransfer?.setData('text/plain', card.dataset.dealId ?? '');
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+    if (errorBox) errorBox.hidden = true;
+    requestAnimationFrame(() => card.classList.add('opacity-40'));
+    if (lostZone) lostZone.hidden = false;
+  });
+
+  document.addEventListener('dragend', () => {
+    dragged?.classList.remove('opacity-40');
+    columns().forEach((c) => c.classList.remove(...HIGHLIGHT));
+    if (lostZone) lostZone.hidden = true;
+    dragged = null;
+  });
+
+  document.addEventListener('dragover', (event) => {
+    const col = columnOf(event.target);
+    if (!canDropOn(col)) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    columns().forEach((c) => c.classList.toggle(HIGHLIGHT[0], c === col));
+    columns().forEach((c) => HIGHLIGHT.slice(1).forEach((cls) => c.classList.toggle(cls, c === col)));
+  });
+
+  document.addEventListener('drop', (event) => {
+    const col = columnOf(event.target);
+    if (!dragged || !canDropOn(col)) return;
+    event.preventDefault();
+    const card = dragged;
+    card.classList.remove('opacity-40');
+    columns().forEach((c) => c.classList.remove(...HIGHLIGHT));
+    if (lostZone) lostZone.hidden = true;
+    dragged = null;
+    move(card, col!);
+  });
+</script>

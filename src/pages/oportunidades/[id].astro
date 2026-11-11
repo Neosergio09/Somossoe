@@ -2,7 +2,8 @@
 import AppLayout from '../../layouts/AppLayout.astro';
 import { hasRole } from '../../lib/auth';
 import { cop, fmtDate, fmtDateTime } from '../../lib/format';
-import { date, ensure, FormError, int, nullify, parseForm, runActions, text, uuid, z } from '../../lib/forms';
+import { changeDealStage } from '../../lib/deals';
+import { date, ensure, int, nullify, parseForm, runActions, text, uuid, z } from '../../lib/forms';
 import {
   AGREEMENT_STATUS_BADGE,
   AGREEMENT_STATUS_LABELS,
@@ -51,18 +52,8 @@ const outcome = await runActions(Astro, {
       }),
       form,
     );
-    if (input.stage === 'cierre_perdido' && !input.lost_substatus) {
-      throw new FormError('Seleccione el sub-estado del cierre perdido.');
-    }
-    ensure(
-      await supabase
-        .from('deals_opportunities')
-        .update({ stage: input.stage, lost_substatus: input.stage === 'cierre_perdido' ? input.lost_substatus! : null })
-        .eq('id', id)
-        .select('id')
-        .single(),
-    );
-    return { message: `Etapa cambiada a ${STAGE_LABELS[input.stage]}.` };
+    const label = await changeDealStage(supabase, id, input.stage, input.lost_substatus);
+    return { message: `Etapa cambiada a ${label}.` };
   },
   add_log: async (form) => {
     const input = parseForm(
