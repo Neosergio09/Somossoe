@@ -159,6 +159,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "v_orders_to_invoice"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "alegra_invoice_orders_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_receivables"
+      referencedColumns: ["id"]
     }
                   ]
                 },"alegra_invoices": {
@@ -441,6 +447,44 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"collections_payments": {
+                  Row: {
+                    "bank_reference": string,"buyer_id": string | null,"company_id": string | null,"created_at": string,"id": string,"is_voided": boolean,"notes": string | null,"payment_date": string,"payment_number": number,"support_file_r2_key": string | null,"support_received": boolean,"total_received_bank": number,"updated_at": string,"verified_at": string,"verified_by": string | null,"void_reason": string | null,"voided_at": string | null,"voided_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "bank_reference": string,"buyer_id"?: string | null,"company_id"?: string | null,"created_at"?: string,"id"?: string,"is_voided"?: boolean,"notes"?: string | null,"payment_date": string,"payment_number"?: never,"support_file_r2_key"?: string | null,"support_received"?: boolean,"total_received_bank": number,"updated_at"?: string,"verified_at"?: string,"verified_by"?: string | null,"void_reason"?: string | null,"voided_at"?: string | null,"voided_by"?: string | null
+                  }
+                  Update: {
+                    "bank_reference"?: string,"buyer_id"?: string | null,"company_id"?: string | null,"created_at"?: string,"id"?: string,"is_voided"?: boolean,"notes"?: string | null,"payment_date"?: string,"payment_number"?: never,"support_file_r2_key"?: string | null,"support_received"?: boolean,"total_received_bank"?: number,"updated_at"?: string,"verified_at"?: string,"verified_by"?: string | null,"void_reason"?: string | null,"voided_at"?: string | null,"voided_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "collections_payments_buyer_id_fkey"
+      columns: ["buyer_id"]
+isOneToOne: false
+      referencedRelation: "buyers"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "collections_payments_company_id_fkey"
+      columns: ["company_id"]
+isOneToOne: false
+      referencedRelation: "companies"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "collections_payments_verified_by_fkey"
+      columns: ["verified_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "collections_payments_voided_by_fkey"
+      columns: ["voided_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"companies": {
                   Row: {
                     "assigned_user_id": string | null,"created_at": string,"created_by": string | null,"id": string,"is_nit_provisional": boolean,"name": string,"name_normalized": string | null,"nit": string | null,"nit_dv": number | null,"nit_verified_at": string | null,"nit_verified_by": string | null,"payroll_frequency": Database["public"]['Enums']["payroll_frequency"] | null,"sector": string,"total_employees": number | null,"updated_at": string,"website": string | null
@@ -690,6 +734,12 @@ isOneToOne: false
       referencedRelation: "v_orders_to_invoice"
       referencedColumns: ["id"]
     },{
+      foreignKeyName: "order_deliveries_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_receivables"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "order_deliveries_production_same_order"
       columns: ["production_id","order_id"]
 isOneToOne: false
@@ -777,6 +827,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "v_orders_to_invoice"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_installments_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_receivables"
+      referencedColumns: ["id"]
     }
                   ]
                 },"order_items": {
@@ -808,6 +864,12 @@ isOneToOne: false
       columns: ["order_id"]
 isOneToOne: false
       referencedRelation: "v_orders_to_invoice"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_items_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_receivables"
       referencedColumns: ["id"]
     }
                   ]
@@ -846,6 +908,12 @@ isOneToOne: false
       columns: ["order_id"]
 isOneToOne: false
       referencedRelation: "v_orders_to_invoice"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_productions_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_receivables"
       referencedColumns: ["id"]
     },{
       foreignKeyName: "order_productions_released_by_fkey"
@@ -953,6 +1021,80 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"payment_allocations": {
+                  Row: {
+                    "amount_applied": number,"created_at": string,"created_by": string | null,"id": string,"installment_id": string | null,"is_voided": boolean,"order_id": string,"payment_id": string,"void_reason": string | null,"voided_at": string | null,"voided_by": string | null,"withholding_applied": number,"withholding_certificate_r2_key": string | null,"withholding_certificate_received": boolean
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount_applied"?: number,"created_at"?: string,"created_by"?: string | null,"id"?: string,"installment_id"?: string | null,"is_voided"?: boolean,"order_id": string,"payment_id": string,"void_reason"?: string | null,"voided_at"?: string | null,"voided_by"?: string | null,"withholding_applied"?: number,"withholding_certificate_r2_key"?: string | null,"withholding_certificate_received"?: boolean
+                  }
+                  Update: {
+                    "amount_applied"?: number,"created_at"?: string,"created_by"?: string | null,"id"?: string,"installment_id"?: string | null,"is_voided"?: boolean,"order_id"?: string,"payment_id"?: string,"void_reason"?: string | null,"voided_at"?: string | null,"voided_by"?: string | null,"withholding_applied"?: number,"withholding_certificate_r2_key"?: string | null,"withholding_certificate_received"?: boolean
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "payment_allocations_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payment_allocations_installment_id_fkey"
+      columns: ["installment_id"]
+isOneToOne: false
+      referencedRelation: "order_installments"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payment_allocations_installment_id_fkey"
+      columns: ["installment_id"]
+isOneToOne: false
+      referencedRelation: "v_order_installments"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payment_allocations_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payment_allocations_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payment_allocations_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders_to_invoice"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payment_allocations_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_receivables"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payment_allocations_payment_id_fkey"
+      columns: ["payment_id"]
+isOneToOne: false
+      referencedRelation: "collections_payments"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payment_allocations_payment_id_fkey"
+      columns: ["payment_id"]
+isOneToOne: false
+      referencedRelation: "v_payments"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payment_allocations_voided_by_fkey"
+      columns: ["voided_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"post_sale_warranties": {
                   Row: {
                     "closed_at": string | null,"closed_by": string | null,"created_at": string,"description": string,"evidence_r2_key": string | null,"evidence_received": boolean,"id": string,"incident_type": Database["public"]['Enums']["warranty_incident_type"],"opened_by": string | null,"order_id": string,"resolution": string | null,"responsible_user_id": string,"status": Database["public"]['Enums']["warranty_status"],"updated_at": string
@@ -994,6 +1136,12 @@ isOneToOne: false
       columns: ["order_id"]
 isOneToOne: false
       referencedRelation: "v_orders_to_invoice"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "post_sale_warranties_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_receivables"
       referencedColumns: ["id"]
     },{
       foreignKeyName: "post_sale_warranties_responsible_user_id_fkey"
@@ -1252,6 +1400,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "v_orders_to_invoice"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "alegra_invoice_orders_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_receivables"
+      referencedColumns: ["id"]
     }
                   ]
                 },"v_invoices": {
@@ -1310,6 +1464,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "v_orders_to_invoice"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_installments_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_receivables"
+      referencedColumns: ["id"]
     }
                   ]
                 },"v_order_item_delivery": {
@@ -1335,6 +1495,12 @@ isOneToOne: false
       columns: ["order_id"]
 isOneToOne: false
       referencedRelation: "v_orders_to_invoice"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_items_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_receivables"
       referencedColumns: ["id"]
     }
                   ]
@@ -1438,6 +1604,94 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"v_payment_allocations": {
+                  Row: {
+                    "amount_applied": number,"bank_reference": string,"buyer_document_id": string,"buyer_name": string,"created_at": string,"created_by": string | null,"created_by_name": string | null,"id": string,"installment_due_date": string | null,"installment_id": string | null,"installment_number": number | null,"is_voided": boolean,"order_id": string,"order_number": number,"payment_date": string,"payment_id": string,"payment_number": number,"void_reason": string | null,"withholding_applied": number,"withholding_certificate_received": boolean
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "payment_allocations_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payment_allocations_installment_id_fkey"
+      columns: ["installment_id"]
+isOneToOne: false
+      referencedRelation: "order_installments"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payment_allocations_installment_id_fkey"
+      columns: ["installment_id"]
+isOneToOne: false
+      referencedRelation: "v_order_installments"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payment_allocations_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payment_allocations_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payment_allocations_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders_to_invoice"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payment_allocations_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_receivables"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payment_allocations_payment_id_fkey"
+      columns: ["payment_id"]
+isOneToOne: false
+      referencedRelation: "collections_payments"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payment_allocations_payment_id_fkey"
+      columns: ["payment_id"]
+isOneToOne: false
+      referencedRelation: "v_payments"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"v_payments": {
+                  Row: {
+                    "allocated_amount": number | null,"bank_reference": string,"buyer_document_id": string | null,"buyer_id": string | null,"company_id": string | null,"company_nit": string | null,"created_at": string,"id": string,"is_voided": boolean,"notes": string | null,"orders_count": number | null,"payer_name": string | null,"payment_date": string,"payment_number": number,"support_received": boolean,"total_received_bank": number,"unassigned_amount": number | null,"verified_at": string,"verified_by": string | null,"verified_by_name": string | null,"void_reason": string | null,"voided_at": string | null,"withholding_amount": number | null
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "collections_payments_buyer_id_fkey"
+      columns: ["buyer_id"]
+isOneToOne: false
+      referencedRelation: "buyers"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "collections_payments_company_id_fkey"
+      columns: ["company_id"]
+isOneToOne: false
+      referencedRelation: "companies"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "collections_payments_verified_by_fkey"
+      columns: ["verified_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"v_productions": {
                   Row: {
                     "buyer_document_id": string,"buyer_name": string,"cancel_reason": string | null,"city_name": string | null,"company_name": string | null,"id": string,"is_overdue": boolean | null,"lab_name": string,"lab_provider_id": string,"notes": string | null,"ops_status": Database["public"]['Enums']["order_ops_status"],"order_id": string,"order_number": number,"promised_date": string,"ready_at": string | null,"released_at": string,"released_by": string | null,"released_by_name": string | null,"sent_to_lab_at": string,"status": Database["public"]['Enums']["production_status"],"warranty_id": string | null
@@ -1469,6 +1723,12 @@ isOneToOne: false
       referencedRelation: "v_orders_to_invoice"
       referencedColumns: ["id"]
     },{
+      foreignKeyName: "order_productions_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_receivables"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "order_productions_released_by_fkey"
       columns: ["released_by"]
 isOneToOne: false
@@ -1486,6 +1746,26 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "v_warranties"
       referencedColumns: ["id","order_id"]
+    }
+                  ]
+                },"v_receivables": {
+                  Row: {
+                    "balance_due": number,"buyer_document_id": string,"buyer_id": string,"buyer_name": string,"collected_amount": number | null,"collection_responsible": Database["public"]['Enums']["collection_responsible"],"collection_status": Database["public"]['Enums']["order_collection_status"],"company_id": string | null,"company_name": string | null,"created_at": string,"id": string,"next_due_date": string | null,"order_number": number,"overdue_amount": number | null,"overdue_count": number | null,"payment_modality": Database["public"]['Enums']["payment_modality"],"total_amount": number
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "orders_buyer_id_fkey"
+      columns: ["buyer_id"]
+isOneToOne: false
+      referencedRelation: "buyers"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_company_id_fkey"
+      columns: ["company_id"]
+isOneToOne: false
+      referencedRelation: "companies"
+      referencedColumns: ["id"]
     }
                   ]
                 },"v_warranties": {
@@ -1525,6 +1805,12 @@ isOneToOne: false
       referencedRelation: "v_orders_to_invoice"
       referencedColumns: ["id"]
     },{
+      foreignKeyName: "post_sale_warranties_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_receivables"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "post_sale_warranties_responsible_user_id_fkey"
       columns: ["responsible_user_id"]
 isOneToOne: false
@@ -1535,7 +1821,13 @@ isOneToOne: false
                 }
           }
           Functions: {
-            "create_order":
+            "apply_payment":
+{ Args: { "p_amount": number,"p_certificate_received"?: boolean,"p_order_id": string,"p_payment_id": string,"p_withholding"?: number }; Returns: number
+                           },
+"apply_payment_batch":
+{ Args: { "p_items": Json,"p_payment_id": string }; Returns: number
+                           },
+"create_order":
 { Args: { "p_items": Json,"p_order": Json }; Returns: string
                            },
 "find_company_duplicates":

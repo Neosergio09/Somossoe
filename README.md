@@ -69,7 +69,7 @@ Desde ahí, Dirección crea, asigna roles y activa al resto de usuarios en `/adm
 
 - `src/middleware.ts`: sesión de Supabase por petición, protección de rutas y usuarios sin activar.
 - `src/lib/forms.ts`: POST con `_action`, validación con Zod y traducción de errores de la BD.
-- `src/pages/`: empresas, oportunidades (Kanban y bitácora), convenios, jornadas (calendario, sesiones y asistencia), órdenes (comprador, ítems, plan de cuotas y verificación de requisitos), producción y entregas (liberación con candado, laboratorio y entregas parciales), posventa (garantías y reposiciones), facturación (facturas de Alegra vinculadas a órdenes con Diferencia Visible) y administración.
+- `src/pages/`: empresas, oportunidades (Kanban y bitácora), convenios, jornadas (calendario, sesiones y asistencia), órdenes (comprador, ítems, plan de cuotas y verificación de requisitos), producción y entregas (liberación con candado, laboratorio y entregas parciales), posventa (garantías y reposiciones), facturación (facturas de Alegra vinculadas a órdenes con Diferencia Visible), recaudo (pagos verificados, retenciones, recibo corporativo y cartera por cobrar) y administración.
 - Las reglas de negocio y permisos viven en la base de datos (triggers + RLS); la interfaz solo oculta lo que el rol no puede hacer.
 
 ```bash

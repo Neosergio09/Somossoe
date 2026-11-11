@@ -1,0 +1,225 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import { hasRole } from '../../lib/auth';
+import { cop, fmtDate, fmtDateTime, todayCo } from '../../lib/format';
+import { date, ensure, FormError, parseForm, runActions, text, uuid, z } from '../../lib/forms';
+import { COLLECTION_RESPONSIBLE_LABELS, PAYMENT_MODALITY_LABELS } from '../../lib/labels';
+import { money, orderNumber } from '../../lib/orders';
+
+if (!hasRole(Astro.locals, 'administracion_cartera', 'direccion', 'comercial')) return Astro.redirect('/');
+const { supabase } = Astro.locals;
+const id = Astro.params.id!;
+const isAdmin = hasRole(Astro.locals, 'administracion_cartera');
+const focusOrder = Astro.url.searchParams.get('order_id');
+
+const outcome = await runActions(Astro, {
+  apply: async (form) => {
+    const rows = new Map<string, { order_id: string; amount: number; withholding: number; certificate_received: boolean }>();
+    for (const [key, raw] of form.entries()) {
+      const m = /^(amount|withholding|cert)\[([0-9a-f-]{36})\]$/.exec(key);
+      if (!m) continue;
+      const value = String(raw).trim().replace(/[.\s$]/g, '');
+      const row = rows.get(m[2]!) ?? { order_id: m[2]!, amount: 0, withholding: 0, certificate_received: false };
+      if (m[1] === 'cert') row.certificate_received = value === 'on';
+      else {
+        const n = value === '' ? 0 : Number(value);
+        if (!Number.isInteger(n) || n < 0) throw new FormError('Los valores deben ser números enteros positivos.');
+        row[m[1] as 'amount' | 'withholding'] = n;
+      }
+      rows.set(m[2]!, row);
+    }
+    const items = [...rows.values()].filter((r) => r.amount + r.withholding > 0);
+    if (!items.length) throw new FormError('Indique el valor a aplicar en al menos una orden.');
+    ensure(await supabase.rpc('apply_payment_batch', { p_payment_id: id, p_items: items }));
+    return { message: `Pago aplicado a ${items.length} orden(es).` };
+  },
+  void_allocation: async (form) => {
+    const input = parseForm(z.object({ allocation_id: uuid(), void_reason: text(300) }), form);
+    ensure(
+      await supabase
+        .from('payment_allocations')
+        .update({ is_voided: true, void_reason: input.void_reason })
+        .eq('id', input.allocation_id)
+        .eq('payment_id', id)
+        .select('id')
+        .single(),
+    );
+    return { message: 'Asignación anulada.' };
+  },
+  update: async (form) => {
+    const input = parseForm(
+      z.object({ payment_date: date(), total_received_bank: money(), bank_reference: text(80), notes: text(2000).optional() }),
+      form,
+    );
+    ensure(await supabase.from('collections_payments').update({ ...input, notes: input.notes ?? null }).eq('id', id).select('id').single());
+    return { message: 'Pago actualizado.' };
+  },
+  void: async (form) => {
+    const reason = String(form.get('void_reason') ?? '').trim();
+    if (!reason) throw new FormError('Indique el motivo de la anulación.');
+    ensure(await supabase.from('collections_payments').update({ is_voided: true, void_reason: reason }).eq('id', id).select('id').single());
+    return { message: 'Pago anulado. Sus asignaciones quedaron anuladas.' };
+  },
+});
+if (outcome?.kind === 'redirect') return outcome.response;
+const error = outcome?.kind === 'error' ? outcome.error : null;
+const v = outcome?.kind === 'error' ? outcome.values : {};
+const lastAction = outcome?.kind === 'error' ? outcome.action : '';
+
+const { data: p } = await supabase.from('v_payments').select('*').eq('id', id).maybeSingle();
+if (!p) return new Response('Pago no encontrado', { status: 404 });
+
+let receivablesQuery = supabase.from('v_receivables').select('*').order('next_due_date', { nullsFirst: false }).order('order_number');
+receivablesQuery = p.company_id ? receivablesQuery.eq('company_id', p.company_id) : receivablesQuery.eq('buyer_id', p.buyer_id!);
+const [allocations, receivables] = await Promise.all([
+  supabase.from('v_payment_allocations').select('*').eq('payment_id', id).order('created_at').order('installment_number'),
+  receivablesQuery,
+]);
+const editable = isAdmin && !p.is_voided;
+const unassigned = Number(p.unassigned_amount ?? 0);
+const candidates = (receivables.data ?? []).sort((a, b) => (a.id === focusOrder ? -1 : b.id === focusOrder ? 1 : 0));
+const receiptNo = `RC-${String(p.payment_number).padStart(5, '0')}`;
+---
+
+<AppLayout title={`Pago ${receiptNo}`} error={error}>
+  <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <a href="/recaudo" class="text-sm">← Recaudo</a>
+      <h1>Pago {receiptNo} · {p.payer_name}</h1>
+      <p class="text-sm text-slate-600">{fmtDate(p.payment_date)} · Ref. {p.bank_reference} · {p.company_id ? 'Giro corporativo' : 'Pago del comprador'}</p>
+      <p class="text-xs text-slate-500">Verificado por {p.verified_by_name ?? '—'} el {fmtDateTime(p.verified_at)}</p>
+    </div>
+    <div class="grid grid-cols-2 gap-x-6 gap-y-1 text-right text-sm">
+      <span class="text-slate-500">Recibido en bancos</span><strong>{cop(p.total_received_bank)}</strong>
+      <span class="text-slate-500">Asignado (dinero)</span><span>{cop(p.allocated_amount)}</span>
+      <span class="text-slate-500">Retenciones</span><span>{cop(p.withholding_amount)}</span>
+      <span class="text-slate-500">Sin asignar</span><strong class:list={[unassigned > 0 && !p.is_voided && 'text-amber-700']}>{cop(p.unassigned_amount)}</strong>
+    </div>
+  </div>
+
+  {p.is_voided && <div class="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">Pago anulado el {fmtDateTime(p.voided_at)}: {p.void_reason}</div>}
+
+  <div class="grid gap-4 lg:grid-cols-3">
+    <div class="space-y-4 lg:col-span-2">
+      {
+        editable && (
+          <section class="card space-y-3">
+            <h2>Aplicar a órdenes de {p.payer_name}</h2>
+            <p class="text-xs text-slate-500">
+              En órdenes con cuotas el valor se aplica a las cuotas pendientes en orden de vencimiento. La retención se registra aparte del dinero y requiere certificado.
+            </p>
+            {candidates.length ? (
+              <form method="post" class="space-y-3">
+                <input type="hidden" name="_action" value="apply" />
+                <div class="overflow-x-auto">
+                  <table class="table">
+                    <thead><tr><th>Orden</th><th>Comprador</th><th class="text-right">Saldo</th><th>Dinero</th><th>Retención</th><th>Certificado</th></tr></thead>
+                    <tbody>
+                      {candidates.map((r) => (
+                        <tr class:list={[r.id === focusOrder && 'bg-brand-50']}>
+                          <td>
+                            <a href={`/ordenes/${r.id}`}>{orderNumber(r.order_number)}</a>
+                            <div class="text-xs text-slate-500">{r.payment_modality && PAYMENT_MODALITY_LABELS[r.payment_modality]} · cobro a {r.collection_responsible && COLLECTION_RESPONSIBLE_LABELS[r.collection_responsible].toLowerCase()}</div>
+                          </td>
+                          <td>{r.buyer_name}<div class="text-xs text-slate-500">{r.buyer_document_id}</div></td>
+                          <td class="text-right whitespace-nowrap">
+                            {cop(r.balance_due)}
+                            {Number(r.overdue_count) > 0 && <div class="text-xs text-red-700">{cop(r.overdue_amount)} vencido</div>}
+                          </td>
+                          <td><input class="input w-28 text-right" type="number" min="0" max={r.balance_due ?? undefined} step="1" name={`amount[${r.id}]`} value={v[`amount[${r.id}]`] ?? ''} /></td>
+                          <td><input class="input w-24 text-right" type="number" min="0" step="1" name={`withholding[${r.id}]`} value={v[`withholding[${r.id}]`] ?? ''} /></td>
+                          <td class="text-center"><input type="checkbox" name={`cert[${r.id}]`} checked={v[`cert[${r.id}]`] === 'on'} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-sm text-slate-600">Disponible para asignar: <strong>{cop(unassigned)}</strong></span>
+                  <button class="btn btn-primary" type="submit">Aplicar pago</button>
+                </div>
+              </form>
+            ) : (
+              <p class="text-sm text-slate-500">Este pagador no tiene órdenes con saldo.</p>
+            )}
+          </section>
+        )
+      }
+
+      <section class="card">
+        <h2 class="mb-3">Asignaciones</h2>
+        <div class="overflow-x-auto">
+          <table class="table">
+            <thead><tr><th>Orden</th><th>Comprador</th><th>Cuota</th><th class="text-right">Dinero</th><th class="text-right">Retención</th><th>Registro</th><th></th></tr></thead>
+            <tbody>
+              {allocations.data?.map((a) => (
+                <tr class:list={[a.is_voided && 'opacity-60']}>
+                  <td><a href={`/ordenes/${a.order_id}`}>{orderNumber(a.order_number)}</a></td>
+                  <td>{a.buyer_name}</td>
+                  <td>{a.installment_number ? `${a.installment_number} · vence ${fmtDate(a.installment_due_date)}` : '—'}</td>
+                  <td class="text-right whitespace-nowrap">{cop(a.amount_applied)}</td>
+                  <td class="text-right whitespace-nowrap">{cop(a.withholding_applied)}{Number(a.withholding_applied) > 0 && a.withholding_certificate_received && <div class="text-xs text-green-700">con certificado</div>}</td>
+                  <td class="text-xs text-slate-500">{a.created_by_name} · {fmtDateTime(a.created_at)}{a.is_voided && <div class="text-red-700">Anulada: {a.void_reason}</div>}</td>
+                  <td>
+                    {editable && !a.is_voided && (
+                      <details>
+                        <summary class="cursor-pointer text-xs text-red-700">Anular</summary>
+                        <form method="post" class="mt-1 flex gap-1">
+                          <input type="hidden" name="_action" value="void_allocation" />
+                          <input type="hidden" name="allocation_id" value={a.id} />
+                          <input class="input w-40" name="void_reason" required placeholder="Motivo" />
+                          <button class="btn btn-sm btn-danger" type="submit">OK</button>
+                        </form>
+                      </details>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {!allocations.data?.length && <tr><td colspan="7" class="text-slate-500">Sin asignaciones.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <div class="space-y-4">
+      {p.notes && <section class="card text-sm"><h2 class="mb-1">Notas</h2><p class="whitespace-pre-line">{p.notes}</p></section>}
+      {
+        editable && (
+          <section class="card text-sm">
+            <details open={lastAction === 'update'}>
+              <summary class="cursor-pointer font-medium text-brand-700">Corregir datos del pago</summary>
+              <form method="post" class="mt-2 space-y-2">
+                <input type="hidden" name="_action" value="update" />
+                <label class="label">Fecha</label>
+                <input class="input" type="date" name="payment_date" required max={todayCo()} value={v.payment_date ?? p.payment_date} />
+                <label class="label">Valor recibido</label>
+                <input class="input" type="number" name="total_received_bank" min="1" step="1" required value={v.total_received_bank ?? p.total_received_bank} />
+                <label class="label">Referencia bancaria</label>
+                <input class="input" name="bank_reference" required value={v.bank_reference ?? p.bank_reference} />
+                <label class="label">Notas</label>
+                <textarea class="input" name="notes" rows="2">{v.notes ?? p.notes ?? ''}</textarea>
+                <button class="btn w-full" type="submit">Guardar</button>
+              </form>
+            </details>
+          </section>
+        )
+      }
+      {
+        editable && (
+          <section class="card text-sm">
+            <details open={lastAction === 'void'}>
+              <summary class="cursor-pointer text-red-700">Anular pago</summary>
+              <p class="mt-2 text-xs text-slate-500">Anula también todas sus asignaciones: los saldos de las órdenes vuelven a su valor anterior.</p>
+              <form method="post" class="mt-2 space-y-2">
+                <input type="hidden" name="_action" value="void" />
+                <textarea class="input" name="void_reason" rows="2" required placeholder="Motivo"></textarea>
+                <button class="btn btn-danger w-full" type="submit">Confirmar anulación</button>
+              </form>
+            </details>
+          </section>
+        )
+      }
+    </div>
+  </div>
+</AppLayout>

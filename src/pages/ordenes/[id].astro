@@ -164,7 +164,7 @@ const lastAction = outcome?.kind === 'error' ? outcome.action : '';
 const { data: o } = await supabase.from('v_orders').select('*').eq('id', id).maybeSingle();
 if (!o) return new Response('Orden no encontrada', { status: 404 });
 
-const [items, installments, buyer, agreements, settings, people, productions, deliveries, warranties, labs, responsibles, invoiceLinks] = await Promise.all([
+const [items, installments, buyer, agreements, settings, people, productions, deliveries, warranties, labs, responsibles, invoiceLinks, allocations] = await Promise.all([
   supabase.from('order_items').select('*').eq('order_id', id).order('created_at'),
   supabase.from('v_order_installments').select('*').eq('order_id', id).order('installment_number'),
   supabase.from('buyers').select('*').eq('id', o.buyer_id!).single(),
@@ -182,6 +182,7 @@ const [items, installments, buyer, agreements, settings, people, productions, de
   activeLabs(supabase),
   activeUsers(supabase, ['operacion', 'direccion']),
   supabase.from('v_invoice_orders').select('*').eq('order_id', id).order('invoice_date'),
+  supabase.from('v_payment_allocations').select('*').eq('order_id', id).order('created_at'),
 ]);
 const personName = (uid: string | null) => people.data?.find((p) => p.id === uid)?.full_name ?? '—';
 const setting = (key: string) => Number(settings.data?.find((s) => s.key === key)?.value ?? 0);
@@ -227,6 +228,11 @@ const hasDeliveries = deliveries.records.length > 0;
 const activeLinks = (invoiceLinks.data ?? []).filter((l) => !l.invoice_voided);
 const billedTotal = activeLinks.reduce((sum, l) => sum + Number(l.amount_assigned ?? 0), 0);
 const canInvoice = isAdmin && !isCancelled && verified && o.accounting_status !== 'factura_vinculada';
+// M06: recaudo (Operación no tiene acceso)
+const canSeeCollection = hasRole(Astro.locals, 'administracion_cartera', 'direccion', 'comercial');
+const activeAllocations = (allocations.data ?? []).filter((a) => !a.is_voided);
+const collectedMoney = activeAllocations.reduce((s2, a) => s2 + Number(a.amount_applied ?? 0), 0);
+const collectedWithholding = activeAllocations.reduce((s2, a) => s2 + Number(a.withholding_applied ?? 0), 0);
 ---
 
 <AppLayout title={`Orden ${orderNumber(o.order_number)}`} error={error}>
@@ -576,6 +582,34 @@ const canInvoice = isAdmin && !isCancelled && verified && o.accounting_status !=
                 <textarea class="input" name="prepayment_exception_reason" rows="2" placeholder="Motivo de la excepción (vacío para retirarla)">{o.prepayment_exception_reason ?? ''}</textarea>
                 <button class="btn w-full" type="submit">{o.prepayment_exception_reason ? 'Actualizar o retirar' : 'Autorizar excepción'}</button>
               </form>
+            )}
+          </section>
+        )
+      }
+
+      {
+        canSeeCollection && (
+          <section class="card space-y-2 text-sm">
+            <h2>Recaudo (Etapa 11)</h2>
+            <span class={COLLECTION_STATUS_BADGE[o.collection_status!]}>{COLLECTION_STATUS_LABELS[o.collection_status!]}</span>
+            <dl class="grid grid-cols-2 gap-1">
+              <dt class="text-slate-500">Dinero recibido</dt><dd class="text-right">{cop(collectedMoney)}</dd>
+              <dt class="text-slate-500">Retenciones</dt><dd class="text-right">{cop(collectedWithholding)}</dd>
+              <dt class="text-slate-500">Saldo</dt><dd class="text-right font-semibold">{cop(o.balance_due)}</dd>
+            </dl>
+            {activeAllocations.length > 0 && (
+              <ul class="space-y-1 border-t border-slate-100 pt-2 text-xs">
+                {activeAllocations.map((a) => (
+                  <li>
+                    <a href={`/recaudo/${a.payment_id}`}>RC-{String(a.payment_number).padStart(5, '0')}</a> · {fmtDate(a.payment_date)}
+                    {a.installment_number && ` · cuota ${a.installment_number}`} · {cop(a.amount_applied)}
+                    {Number(a.withholding_applied) > 0 && ` + ret. ${cop(a.withholding_applied)}`}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {isAdmin && !isCancelled && Number(o.balance_due) > 0 && (
+              <a class="btn w-full" href={`/recaudo/nuevo?order_id=${o.id}`}>Registrar pago</a>
             )}
           </section>
         )

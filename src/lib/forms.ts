@@ -166,6 +166,11 @@ const FIELD_LABELS: Record<string, string> = {
   invoiced_amount: 'Monto facturado',
   amount_assigned: 'Monto asignado',
   alegra_external_id: 'ID en Alegra',
+  payment_date: 'Fecha del pago',
+  total_received_bank: 'Valor recibido en bancos',
+  bank_reference: 'Referencia bancaria',
+  amount_applied: 'Dinero recibido',
+  withholding_applied: 'Retención',
 };
 
 const UNIQUE_MESSAGES: Record<string, string> = {
@@ -184,6 +189,7 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   order_delivery_items_unique_item: 'Un ítem aparece dos veces en la misma entrega.',
   alegra_invoices_number_key: 'Ya existe una factura con ese número.',
   alegra_invoice_orders_unique: 'Esa orden ya está vinculada a esta factura; corrija su monto.',
+  collections_payments_bank_movement_key: 'Ya está registrado un pago con esa referencia, fecha y valor.',
 };
 
 const CHECK_MESSAGES: Record<string, string> = {
@@ -228,6 +234,11 @@ const CHECK_MESSAGES: Record<string, string> = {
   alegra_invoices_invoiced_amount_check: 'El monto facturado debe ser mayor que cero.',
   alegra_invoices_alegra_external_id_check: 'El ID de Alegra solo admite letras, números y guiones.',
   alegra_invoice_orders_amount_assigned_check: 'El monto asignado debe ser mayor que cero.',
+  collections_payments_payer: 'El pago es de una empresa o de un comprador (uno de los dos).',
+  collections_payments_void_reason: 'Indique el motivo de la anulación.',
+  collections_payments_total_received_bank_check: 'El valor recibido debe ser mayor que cero.',
+  payment_allocations_positive: 'Indique dinero recibido o retención mayor que cero.',
+  payment_allocations_void_reason: 'Indique el motivo de la anulación.',
 };
 
 /** Reemplaza códigos internos (etapas, estados) por su etiqueta. */

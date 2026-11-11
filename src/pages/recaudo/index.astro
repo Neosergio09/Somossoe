@@ -1,0 +1,115 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import { hasRole } from '../../lib/auth';
+import { cop, fmtDate } from '../../lib/format';
+import { COLLECTION_RESPONSIBLE_LABELS, COLLECTION_STATUS_BADGE, COLLECTION_STATUS_LABELS, PAYMENT_MODALITY_LABELS } from '../../lib/labels';
+import { safeSearch } from '../../lib/options';
+import { orderNumber } from '../../lib/orders';
+
+if (!hasRole(Astro.locals, 'administracion_cartera', 'direccion', 'comercial')) return Astro.redirect('/');
+
+const { supabase } = Astro.locals;
+const view = Astro.url.searchParams.get('vista') ?? 'pagos';
+const q = safeSearch(Astro.url.searchParams.get('q'));
+const isAdmin = hasRole(Astro.locals, 'administracion_cartera');
+
+let paymentsQuery = supabase.from('v_payments').select('*').order('payment_date', { ascending: false }).order('payment_number', { ascending: false }).limit(300);
+paymentsQuery = view === 'anulados' ? paymentsQuery.eq('is_voided', true) : paymentsQuery.eq('is_voided', false);
+if (q) paymentsQuery = paymentsQuery.or(`payer_name.ilike.%${q}%,bank_reference.ilike.%${q}%`);
+
+let receivablesQuery = supabase.from('v_receivables').select('*').order('overdue_amount', { ascending: false }).order('next_due_date', { nullsFirst: false }).limit(500);
+if (q) receivablesQuery = receivablesQuery.or(`buyer_name.ilike.%${q}%,company_name.ilike.%${q}%,buyer_document_id.ilike.%${q}%`);
+
+const [payments, receivables] = await Promise.all([
+  view === 'cartera' ? Promise.resolve({ data: [] }) : paymentsQuery,
+  view === 'cartera' ? receivablesQuery : Promise.resolve({ data: [] }),
+]);
+const rows = receivables.data ?? [];
+const totals = {
+  balance: rows.reduce((s, r) => s + Number(r.balance_due ?? 0), 0),
+  overdue: rows.reduce((s, r) => s + Number(r.overdue_amount ?? 0), 0),
+};
+const tabs: [string, string][] = [['pagos', 'Pagos'], ['cartera', 'Cartera por cobrar'], ['anulados', 'Anulados']];
+---
+
+<AppLayout title="Recaudo">
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <h1>Recaudo y cartera</h1>
+    {isAdmin && <a class="btn btn-primary" href="/recaudo/nuevo">Registrar pago</a>}
+  </div>
+  <p class="mb-3 text-sm text-slate-500">Regla de Oro: el saldo solo baja con pagos recibidos y verificados en bancos. El descuento reportado por la empresa no acredita pago.</p>
+
+  <div class="mb-4 flex flex-wrap items-center gap-2">
+    <nav class="flex flex-wrap gap-1 text-sm">
+      {
+        tabs.map(([value, label]) => (
+          <a
+            href={`?vista=${value}`}
+            class:list={['rounded-md px-3 py-1.5 hover:no-underline', view === value ? 'bg-brand-700 text-white' : 'border border-slate-200 bg-white text-slate-700']}
+          >
+            {label}
+          </a>
+        ))
+      }
+    </nav>
+    <form method="get" class="ml-auto flex gap-2">
+      <input type="hidden" name="vista" value={view} />
+      <input class="input w-64" name="q" value={q} placeholder={view === 'cartera' ? 'Comprador, documento o empresa' : 'Pagador o referencia'} />
+      <button class="btn" type="submit">Buscar</button>
+    </form>
+  </div>
+
+  {
+    view === 'cartera' ? (
+      <>
+        <div class="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div class="card"><div class="label">Saldo por cobrar</div><div class="text-xl font-semibold">{cop(totals.balance)}</div></div>
+          <div class="card"><div class="label">Vencido</div><div class="text-xl font-semibold text-red-700">{cop(totals.overdue)}</div></div>
+          <div class="card"><div class="label">Órdenes con saldo</div><div class="text-xl font-semibold">{rows.length}</div></div>
+        </div>
+        <div class="card overflow-x-auto p-0">
+          <table class="table">
+            <thead><tr><th>Orden</th><th>Comprador</th><th>Cobro a</th><th class="text-right">Valor</th><th class="text-right">Recaudado</th><th class="text-right">Saldo</th><th>Vencido</th><th>Próxima cuota</th><th>Estado</th></tr></thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr>
+                  <td><a href={`/ordenes/${r.id}`} class="font-medium">{orderNumber(r.order_number)}</a><div class="text-xs text-slate-500">{r.payment_modality && PAYMENT_MODALITY_LABELS[r.payment_modality]}</div></td>
+                  <td>{r.buyer_name}<div class="text-xs text-slate-500">{r.company_name ?? 'Particular'}</div></td>
+                  <td class="text-xs">{r.collection_responsible && COLLECTION_RESPONSIBLE_LABELS[r.collection_responsible]}</td>
+                  <td class="text-right whitespace-nowrap">{cop(r.total_amount)}</td>
+                  <td class="text-right whitespace-nowrap">{cop(r.collected_amount)}</td>
+                  <td class="text-right whitespace-nowrap font-medium">{cop(r.balance_due)}</td>
+                  <td class="whitespace-nowrap">{Number(r.overdue_count) > 0 ? <span class="badge badge-red">{r.overdue_count} cuotas · {cop(r.overdue_amount)}</span> : '—'}</td>
+                  <td class="whitespace-nowrap">{fmtDate(r.next_due_date)}</td>
+                  <td><span class={COLLECTION_STATUS_BADGE[r.collection_status!]}>{COLLECTION_STATUS_LABELS[r.collection_status!]}</span></td>
+                </tr>
+              ))}
+              {!rows.length && <tr><td colspan="9" class="py-6 text-center text-slate-500">No hay órdenes con saldo.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </>
+    ) : (
+      <div class="card overflow-x-auto p-0">
+        <table class="table">
+          <thead><tr><th>Recibo</th><th>Fecha</th><th>Pagador</th><th>Referencia</th><th class="text-right">Recibido en bancos</th><th class="text-right">Asignado</th><th class="text-right">Retenciones</th><th class="text-right">Sin asignar</th></tr></thead>
+          <tbody>
+            {payments.data?.map((p) => (
+              <tr class:list={[p.is_voided && 'opacity-60']}>
+                <td><a href={`/recaudo/${p.id}`} class="font-medium">RC-{String(p.payment_number).padStart(5, '0')}</a></td>
+                <td class="whitespace-nowrap">{fmtDate(p.payment_date)}</td>
+                <td>{p.payer_name}<div class="text-xs text-slate-500">{p.company_id ? `NIT ${p.company_nit ?? '—'}` : `C.C. ${p.buyer_document_id}`}</div></td>
+                <td>{p.bank_reference}</td>
+                <td class="text-right whitespace-nowrap">{cop(p.total_received_bank)}</td>
+                <td class="text-right whitespace-nowrap">{cop(p.allocated_amount)}</td>
+                <td class="text-right whitespace-nowrap">{cop(p.withholding_amount)}</td>
+                <td class:list={['text-right whitespace-nowrap', Number(p.unassigned_amount) > 0 && !p.is_voided && 'font-medium text-amber-700']}>{cop(p.unassigned_amount)}</td>
+              </tr>
+            ))}
+            {!payments.data?.length && <tr><td colspan="8" class="py-6 text-center text-slate-500">No hay pagos.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+</AppLayout>
