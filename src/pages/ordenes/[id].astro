@@ -1,6 +1,11 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
 import OrderItemFields from '../../components/OrderItemFields.astro';
+import ProductionPanel from '../../components/ProductionPanel.astro';
+import DeliveriesPanel from '../../components/DeliveriesPanel.astro';
+import { activeLabs, fulfillmentActions } from '../../lib/fulfillment';
+import { itemLabel, loadDeliveries } from '../../lib/deliveries';
+import { activeUsers } from '../../lib/options';
 import { hasRole } from '../../lib/auth';
 import { cop, fmtDate, fmtDateTime } from '../../lib/format';
 import { checkbox, date, ensure, FormError, int, parseForm, runActions, text, uuid, z } from '../../lib/forms';
@@ -21,6 +26,9 @@ import {
   OPS_STATUS_LABELS,
   PAYMENT_MODALITY_LABELS,
   PAYROLL_LABELS,
+  WARRANTY_STATUS_BADGE,
+  WARRANTY_STATUS_LABELS,
+  WARRANTY_TYPE_LABELS,
 } from '../../lib/labels';
 import { itemSchema, orderNumber, requirementChecklist } from '../../lib/orders';
 import type { Database } from '../../lib/database.types';
@@ -35,6 +43,19 @@ async function updateOrder(patch: OrderUpdate) {
 }
 
 const outcome = await runActions(Astro, {
+  ...fulfillmentActions(supabase, { orderId: id }),
+  open_warranty: async (form) => {
+    const input = parseForm(
+      z.object({
+        incident_type: z.enum(['garantia', 'reclamo', 'ajuste', 'otro']),
+        description: text(2000),
+        responsible_user_id: uuid(),
+      }),
+      form,
+    );
+    const w = ensure(await supabase.from('post_sale_warranties').insert({ ...input, order_id: id }).select('id').single());
+    return { message: 'Caso de posventa registrado.', redirect: `/garantias/${w.id}` };
+  },
   add_item: async (form) => {
     const item = parseForm(itemSchema, form);
     ensure(await supabase.from('order_items').insert({ ...item, order_id: id }).select('id').single());
@@ -143,7 +164,7 @@ const lastAction = outcome?.kind === 'error' ? outcome.action : '';
 const { data: o } = await supabase.from('v_orders').select('*').eq('id', id).maybeSingle();
 if (!o) return new Response('Orden no encontrada', { status: 404 });
 
-const [items, installments, buyer, agreements, settings, people] = await Promise.all([
+const [items, installments, buyer, agreements, settings, people, productions, deliveries, warranties, labs, responsibles] = await Promise.all([
   supabase.from('order_items').select('*').eq('order_id', id).order('created_at'),
   supabase.from('v_order_installments').select('*').eq('order_id', id).order('installment_number'),
   supabase.from('buyers').select('*').eq('id', o.buyer_id!).single(),
@@ -155,6 +176,11 @@ const [items, installments, buyer, agreements, settings, people] = await Promise
     .from('users_profiles')
     .select('id, full_name')
     .in('id', [o.requirements_verified_by, o.prepayment_exception_by, o.cancelled_by].filter((x): x is string => !!x)),
+  supabase.from('v_productions').select('*').eq('order_id', id).is('warranty_id', null).order('released_at', { ascending: false }),
+  loadDeliveries(supabase, id, null),
+  supabase.from('v_warranties').select('*').eq('order_id', id).order('created_at', { ascending: false }),
+  activeLabs(supabase),
+  activeUsers(supabase, ['operacion', 'direccion']),
 ]);
 const personName = (uid: string | null) => people.data?.find((p) => p.id === uid)?.full_name ?? '—';
 const setting = (key: string) => Number(settings.data?.find((s) => s.key === key)?.value ?? 0);
@@ -186,6 +212,16 @@ const missingCount = checklist.filter((c) => !c.ok).length;
 const itemList = items.data ?? [];
 const plan = installments.data ?? [];
 const prepaymentPct = Math.round(setting('cash_min_prepayment_pct') * 100);
+
+// M05: producción, entregas y posventa
+const isOps = hasRole(Astro.locals, 'operacion');
+const production = productions.data?.find((p) => p.status !== 'cancelada') ?? null;
+const cancelledProductions = productions.data?.filter((p) => p.status === 'cancelada') ?? [];
+const deliveryRows = itemList.map((i) => {
+  const delivered = deliveries.byItem.get(i.id) ?? 0;
+  return { order_item_id: i.id, item_type: i.item_type, label: itemLabel(i), quantity: i.quantity, delivered, pending: i.quantity - delivered };
+});
+const hasDeliveries = deliveries.records.length > 0;
 ---
 
 <AppLayout title={`Orden ${orderNumber(o.order_number)}`} error={error}>
@@ -392,6 +428,87 @@ const prepaymentPct = Math.round(setting('cash_min_prepayment_pct') * 100);
           </section>
         )
       }
+
+      {
+        !isCancelled && (verified || production) && (
+          <ProductionPanel
+            title="Producción (Etapa 08)"
+            production={production}
+            cancelled={cancelledProductions}
+            labs={labs}
+            canOperate={isOps}
+            canRelease={!production}
+            blockers={o.release_blockers ?? []}
+            hasDeliveries={hasDeliveries}
+            values={v}
+            lastAction={lastAction}
+          />
+        )
+      }
+
+      {
+        (production || hasDeliveries) && (
+          <DeliveriesPanel
+            title="Entregas (Etapa 09)"
+            rows={deliveryRows}
+            deliveries={deliveries.records}
+            canDeliver={isOps && !isCancelled && !!production}
+            labReady={production?.status === 'listo_para_entregar'}
+            canDelete={isOps}
+            note="Entregado no significa cobrado: la entrega no cambia el estado contable ni de cartera."
+            values={v}
+          />
+        )
+      }
+
+      {
+        hasDeliveries && (
+          <section class="card space-y-3 text-sm">
+            <h2>Posventa y garantías (Etapa 12)</h2>
+            {(warranties.data ?? []).length > 0 ? (
+              <ul class="divide-y divide-slate-100">
+                {warranties.data!.map((w) => (
+                  <li class="flex items-center justify-between gap-2 py-2">
+                    <div>
+                      <a href={`/garantias/${w.id}`}>{WARRANTY_TYPE_LABELS[w.incident_type!]}: {w.description}</a>
+                      <div class="text-xs text-slate-500">Responsable: {w.responsible_name} · {fmtDateTime(w.created_at)}</div>
+                    </div>
+                    <span class={WARRANTY_STATUS_BADGE[w.status!]}>{WARRANTY_STATUS_LABELS[w.status!]}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p class="text-slate-500">Sin casos de posventa.</p>
+            )}
+            {isOps && !isCancelled && (
+              <details open={lastAction === 'open_warranty'}>
+                <summary class="cursor-pointer font-medium text-brand-700">+ Registrar caso de posventa</summary>
+                <form method="post" class="mt-2 grid-form">
+                  <input type="hidden" name="_action" value="open_warranty" />
+                  <div>
+                    <label class="label">Tipo</label>
+                    <select class="input" name="incident_type">
+                      {Object.entries(WARRANTY_TYPE_LABELS).map(([value, label]) => <option value={value} selected={v.incident_type === value}>{label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label class="label">Responsable</label>
+                    <select class="input" name="responsible_user_id">
+                      {responsibles.map((u) => <option value={u.id} selected={(v.responsible_user_id ?? Astro.locals.userId) === u.id}>{u.full_name}</option>)}
+                    </select>
+                  </div>
+                  <div class="sm:col-span-2">
+                    <label class="label">Descripción del caso *</label>
+                    <textarea class="input" name="description" rows="2" required>{v.description}</textarea>
+                  </div>
+                  <p class="text-xs text-slate-500 sm:col-span-2">Una reposición por garantía no crea ingreso ni cambia el valor ni la cartera de la orden.</p>
+                  <button class="btn btn-primary sm:col-span-2" type="submit">Registrar caso</button>
+                </form>
+              </details>
+            )}
+          </section>
+        )
+      }
     </div>
 
     <div class="space-y-4">
@@ -490,7 +607,7 @@ const prepaymentPct = Math.round(setting('cash_min_prepayment_pct') * 100);
       </section>
 
       {
-        canCancel && (
+        canCancel && !hasDeliveries && (
           <section class="card text-sm">
             <details open={lastAction === 'cancel'}>
               <summary class="cursor-pointer text-red-700">Anular orden</summary>

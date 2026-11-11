@@ -1,0 +1,174 @@
+---
+import { fmtDate, fmtDateTime, todayCo } from '../lib/format';
+import { PRODUCTION_STATUS_BADGE, PRODUCTION_STATUS_LABELS } from '../lib/labels';
+import type { Database } from '../lib/database.types';
+
+type Production = Database['public']['Views']['v_productions']['Row'];
+
+interface Props {
+  title: string;
+  /** Producción vigente (no cancelada) */
+  production: Production | null;
+  /** Producciones canceladas, para el historial */
+  cancelled?: Production[];
+  labs: { id: string; name: string }[];
+  /** Usuario de Operación */
+  canOperate: boolean;
+  /** Se puede liberar si no hay producción y no hay bloqueos */
+  canRelease: boolean;
+  blockers?: string[];
+  hasDeliveries: boolean;
+  releaseLabel?: string;
+  values?: Record<string, string>;
+  lastAction?: string;
+}
+
+const {
+  title,
+  production: p,
+  cancelled = [],
+  labs,
+  canOperate,
+  canRelease,
+  blockers = [],
+  hasDeliveries,
+  releaseLabel = 'Liberar a producción',
+  values: v = {},
+  lastAction = '',
+} = Astro.props;
+const today = todayCo();
+const isOpen = (action: string) => lastAction === action;
+---
+
+<section class="card space-y-3 text-sm">
+  <h2>{title}</h2>
+
+  {
+    p ? (
+      <>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class={p.status ? PRODUCTION_STATUS_BADGE[p.status] : 'badge'}>{p.status ? PRODUCTION_STATUS_LABELS[p.status] : ''}</span>
+          {p.is_overdue && <span class="badge badge-red">Atrasada: prometida para {fmtDate(p.promised_date)}</span>}
+        </div>
+        <dl class="grid grid-cols-2 gap-2">
+          <div><dt class="label">Laboratorio</dt><dd>{p.lab_name}</dd></div>
+          <div><dt class="label">Liberada por</dt><dd>{p.released_by_name ?? '—'}<div class="text-xs text-slate-500">{fmtDateTime(p.released_at)}</div></dd></div>
+          <div><dt class="label">Envío al laboratorio</dt><dd>{fmtDate(p.sent_to_lab_at)}</dd></div>
+          <div><dt class="label">Fecha prometida</dt><dd>{fmtDate(p.promised_date)}</dd></div>
+          <div><dt class="label">Lista (fecha real)</dt><dd>{fmtDate(p.ready_at)}</dd></div>
+          {p.notes && <div class="col-span-2"><dt class="label">Notas</dt><dd class="whitespace-pre-line">{p.notes}</dd></div>}
+        </dl>
+
+        {canOperate && p.status === 'en_produccion' && (
+          <form method="post" class="flex flex-wrap items-end gap-2 border-t border-slate-100 pt-3">
+            <input type="hidden" name="_action" value="production_ready" />
+            <input type="hidden" name="production_id" value={p.id} />
+            <div>
+              <label class="label">Fecha real de listo</label>
+              <input class="input" type="date" name="ready_at" required max={today} min={p.sent_to_lab_at ?? undefined} value={v.ready_at ?? today} />
+            </div>
+            <button class="btn btn-primary" type="submit">Marcar lista para entregar</button>
+          </form>
+        )}
+
+        {canOperate && p.status === 'listo_para_entregar' && !hasDeliveries && (
+          <form method="post">
+            <input type="hidden" name="_action" value="production_back" />
+            <input type="hidden" name="production_id" value={p.id} />
+            <button class="btn btn-sm" type="submit">Devolver a En producción</button>
+          </form>
+        )}
+
+        {canOperate && p.status === 'en_produccion' && (
+          <details open={isOpen('production_update')}>
+            <summary class="cursor-pointer text-brand-700">Editar laboratorio y fechas</summary>
+            <form method="post" class="mt-2 grid-form">
+              <input type="hidden" name="_action" value="production_update" />
+              <input type="hidden" name="production_id" value={p.id} />
+              <div>
+                <label class="label">Laboratorio</label>
+                <select class="input" name="lab_provider_id">
+                  {labs.map((l) => <option value={l.id} selected={l.id === p.lab_provider_id}>{l.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label class="label">Envío al laboratorio</label>
+                <input class="input" type="date" name="sent_to_lab_at" required value={p.sent_to_lab_at ?? ''} />
+              </div>
+              <div>
+                <label class="label">Fecha prometida</label>
+                <input class="input" type="date" name="promised_date" required value={p.promised_date ?? ''} />
+              </div>
+              <div class="sm:col-span-2">
+                <label class="label">Notas</label>
+                <textarea class="input" name="notes" rows="2">{p.notes ?? ''}</textarea>
+              </div>
+              <button class="btn" type="submit">Guardar</button>
+            </form>
+          </details>
+        )}
+
+        {canOperate && !hasDeliveries && (
+          <details open={isOpen('production_cancel')}>
+            <summary class="cursor-pointer text-red-700">Cancelar producción</summary>
+            <form method="post" class="mt-2 space-y-2">
+              <input type="hidden" name="_action" value="production_cancel" />
+              <input type="hidden" name="production_id" value={p.id} />
+              <textarea class="input" name="cancel_reason" rows="2" required placeholder="Motivo (p. ej., error del laboratorio)" />
+              <button class="btn btn-danger w-full" type="submit">Confirmar cancelación</button>
+            </form>
+          </details>
+        )}
+      </>
+    ) : (
+      <>
+        {blockers.length > 0 ? (
+          <ul class="space-y-1">
+            {blockers.map((b) => <li class="text-amber-700">○ {b}</li>)}
+          </ul>
+        ) : (
+          <p class="text-slate-500">{canRelease ? 'Lista para enviar al laboratorio.' : 'Sin producción.'}</p>
+        )}
+        {canOperate && canRelease && blockers.length === 0 && (
+          <form method="post" class="grid-form border-t border-slate-100 pt-3">
+            <input type="hidden" name="_action" value="release" />
+            <div class="sm:col-span-2">
+              <label class="label">Laboratorio *</label>
+              <select class="input" name="lab_provider_id" required>
+                <option value="">Seleccione…</option>
+                {labs.map((l) => <option value={l.id} selected={v.lab_provider_id === l.id}>{l.name}</option>)}
+              </select>
+              {!labs.length && <p class="mt-1 text-xs text-amber-700">No hay laboratorios activos: Dirección los crea en Parámetros.</p>}
+            </div>
+            <div>
+              <label class="label">Envío al laboratorio *</label>
+              <input class="input" type="date" name="sent_to_lab_at" required value={v.sent_to_lab_at ?? today} />
+            </div>
+            <div>
+              <label class="label">Fecha prometida *</label>
+              <input class="input" type="date" name="promised_date" required min={today} value={v.promised_date} />
+            </div>
+            <div class="sm:col-span-2">
+              <label class="label">Notas</label>
+              <textarea class="input" name="notes" rows="2">{v.notes}</textarea>
+            </div>
+            <button class="btn btn-primary sm:col-span-2" type="submit">{releaseLabel}</button>
+          </form>
+        )}
+      </>
+    )
+  }
+
+  {
+    cancelled.length > 0 && (
+      <details>
+        <summary class="cursor-pointer text-xs text-slate-500">Producciones canceladas ({cancelled.length})</summary>
+        <ul class="mt-2 space-y-1 text-xs text-slate-600">
+          {cancelled.map((c) => (
+            <li>{c.lab_name} · enviada {fmtDate(c.sent_to_lab_at)} · {c.cancel_reason}</li>
+          ))}
+        </ul>
+      </details>
+    )
+  }
+</section>

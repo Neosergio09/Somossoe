@@ -87,3 +87,7 @@ insert into public.campaign_attendance (campaign_id, session_id, full_name, docu
   ('eeeeeeee-0000-0000-0000-000000000001', 'ffffffff-0000-0000-0000-000000000001', 'Carlos Ruiz', '1088654321', 'Bodega');
 
 update public.deals_opportunities set stage = 'jornada_en_ejecucion' where id = 'dddddddd-0000-0000-0000-000000000001';
+
+-- Laboratorio proveedor (para probar producción)
+insert into public.lab_providers (id, name, contact_info)
+values ('77777777-0000-0000-0000-000000000001', 'Laboratorio Óptico Demo', 'pedidos@laboratorio.test · 300 000 0000');

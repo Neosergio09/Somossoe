@@ -200,3 +200,37 @@ export const INSTALLMENT_STATUS_BADGE: Record<string, string> = {
   pagada: 'badge badge-green',
   vencida: 'badge badge-red',
 };
+
+// ---------------------------------------------------------------------
+// M05 Cumplimiento
+// ---------------------------------------------------------------------
+export const PRODUCTION_STATUS_LABELS: Record<Enums['production_status'], string> = {
+  en_produccion: 'En producción',
+  listo_para_entregar: 'Lista para entregar',
+  cancelada: 'Cancelada',
+};
+
+export const PRODUCTION_STATUS_BADGE: Record<Enums['production_status'], string> = {
+  en_produccion: 'badge badge-blue',
+  listo_para_entregar: 'badge badge-green',
+  cancelada: 'badge badge-red',
+};
+
+export const WARRANTY_STATUS_LABELS: Record<Enums['warranty_status'], string> = {
+  abierta: 'Abierta',
+  en_reposicion: 'En reposición',
+  cerrada: 'Cerrada',
+};
+
+export const WARRANTY_STATUS_BADGE: Record<Enums['warranty_status'], string> = {
+  abierta: 'badge badge-amber',
+  en_reposicion: 'badge badge-blue',
+  cerrada: 'badge badge-green',
+};
+
+export const WARRANTY_TYPE_LABELS: Record<Enums['warranty_incident_type'], string> = {
+  garantia: 'Garantía',
+  reclamo: 'Reclamo',
+  ajuste: 'Ajuste',
+  otro: 'Otro',
+};

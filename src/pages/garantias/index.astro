@@ -1,0 +1,59 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import { fmtDateTime } from '../../lib/format';
+import { WARRANTY_STATUS_BADGE, WARRANTY_STATUS_LABELS, WARRANTY_TYPE_LABELS } from '../../lib/labels';
+import { orderNumber } from '../../lib/orders';
+
+const { supabase } = Astro.locals;
+const status = Astro.url.searchParams.get('estado') ?? 'abiertos';
+
+let query = supabase.from('v_warranties').select('*').order('created_at', { ascending: false }).limit(300);
+if (status === 'abiertos') query = query.neq('status', 'cerrada');
+else if (status === 'cerrada') query = query.eq('status', 'cerrada');
+const { data: warranties } = await query;
+const tabs: [string, string][] = [['abiertos', 'Abiertos'], ['cerrada', 'Cerrados'], ['todos', 'Todos']];
+---
+
+<AppLayout title="Posventa">
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <h1>Posventa y garantías</h1>
+    <p class="text-sm text-slate-500">Los casos se registran desde la ficha de la orden entregada.</p>
+  </div>
+
+  <nav class="mb-4 flex flex-wrap gap-1 text-sm">
+    {
+      tabs.map(([value, label]) => (
+        <a
+          href={`?estado=${value}`}
+          class:list={['rounded-md px-3 py-1.5 hover:no-underline', status === value ? 'bg-brand-700 text-white' : 'border border-slate-200 bg-white text-slate-700']}
+        >
+          {label}
+        </a>
+      ))
+    }
+  </nav>
+
+  <div class="card overflow-x-auto p-0">
+    <table class="table">
+      <thead><tr><th>Caso</th><th>Orden</th><th>Comprador</th><th>Responsable</th><th>Estado</th><th>Abierto</th></tr></thead>
+      <tbody>
+        {
+          warranties?.map((w) => (
+            <tr>
+              <td>
+                <a href={`/garantias/${w.id}`} class="font-medium">{WARRANTY_TYPE_LABELS[w.incident_type!]}</a>
+                <div class="max-w-xs truncate text-xs text-slate-500">{w.description}</div>
+              </td>
+              <td><a href={`/ordenes/${w.order_id}`}>{orderNumber(w.order_number)}</a></td>
+              <td>{w.buyer_name}{w.company_name && <div class="text-xs text-slate-500">{w.company_name}</div>}</td>
+              <td>{w.responsible_name}</td>
+              <td><span class={WARRANTY_STATUS_BADGE[w.status!]}>{WARRANTY_STATUS_LABELS[w.status!]}</span></td>
+              <td class="text-xs whitespace-nowrap">{fmtDateTime(w.created_at)}</td>
+            </tr>
+          ))
+        }
+        {!warranties?.length && <tr><td colspan="6" class="py-6 text-center text-slate-500">No hay casos.</td></tr>}
+      </tbody>
+    </table>
+  </div>
+</AppLayout>

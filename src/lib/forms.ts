@@ -153,6 +153,14 @@ const FIELD_LABELS: Record<string, string> = {
   unit_price: 'Valor unitario',
   prepayment_exception_reason: 'Motivo de la excepción',
   notes: 'Notas',
+  lab_provider_id: 'Laboratorio',
+  sent_to_lab_at: 'Fecha de envío',
+  promised_date: 'Fecha prometida',
+  ready_at: 'Fecha real de listo',
+  receiver_name: 'Quién recibe',
+  delivered_at: 'Fecha de entrega',
+  resolution: 'Solución aplicada',
+  responsible_user_id: 'Responsable',
 };
 
 const UNIQUE_MESSAGES: Record<string, string> = {
@@ -166,6 +174,9 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   deal_origins_pkey: 'Ya existe un origen con ese código.',
   users_profiles_email_key: 'Ya existe un usuario con ese correo.',
   buyers_document_key: 'Ya existe un comprador con ese documento.',
+  order_productions_one_active_key: 'La orden ya está liberada a producción.',
+  order_productions_one_active_warranty_key: 'La garantía ya tiene una reposición en curso.',
+  order_delivery_items_unique_item: 'Un ítem aparece dos veces en la misma entrega.',
 };
 
 const CHECK_MESSAGES: Record<string, string> = {
@@ -199,6 +210,12 @@ const CHECK_MESSAGES: Record<string, string> = {
   order_items_described: 'Describa cada ítem: montura, tipo de lente o descripción.',
   order_items_quantity_check: 'La cantidad debe ser mayor que cero.',
   order_items_unit_price_check: 'El valor unitario no puede ser negativo.',
+  order_productions_promised: 'La fecha prometida no puede ser anterior a la fecha de envío.',
+  order_productions_ready_after_sent: 'La fecha real de listo no puede ser anterior a la fecha de envío.',
+  order_productions_cancel_reason: 'Indique el motivo de la cancelación.',
+  post_sale_warranties_closed: 'Para cerrar la garantía registre la solución aplicada.',
+  post_sale_warranties_description_check: 'Describa el caso.',
+  order_delivery_items_quantity_check: 'La cantidad entregada debe ser mayor que cero.',
 };
 
 /** Reemplaza códigos internos (etapas, estados) por su etiqueta. */
