@@ -123,8 +123,12 @@ $$, 'P0001', null, 'un convenio aprobado no se modifica');
 select throws_ok($$
   delete from public.agreement_documents where agreement_id = pg_temp.marisol_agreement()
 $$, 'P0001', null, 'los documentos de un convenio aprobado no se eliminan');
+reset role;
+insert into storage.objects (bucket_id, name, owner_id)
+values ('soportes', 'convenios/00000000-0000-0000-0000-0000000000c1/marisol.pdf', '00000000-0000-0000-0000-0000000000c1');
+set local role authenticated;
 select lives_ok($$
-  update public.agreement_documents set file_r2_key = 'convenios/marisol.pdf'
+  update public.agreement_documents set file_path = 'convenios/00000000-0000-0000-0000-0000000000c1/marisol.pdf'
   where agreement_id = pg_temp.marisol_agreement()
 $$, 'se puede completar el archivo pendiente de un convenio aprobado');
 

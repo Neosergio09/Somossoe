@@ -1,0 +1,98 @@
+---
+/**
+ * Adjunto de un soporte. El archivo se sube directo del navegador a
+ * Supabase Storage con un enlace firmado y el formulario solo envía la
+ * ruta en el campo oculto `name`.
+ */
+import { supportHref, type SupportKind } from '../lib/supports';
+
+interface Props {
+  kind: SupportKind;
+  name: string;
+  label: string;
+  current?: string | null;
+  required?: boolean;
+  compact?: boolean;
+}
+
+const { kind, name, label, current = null, required = false, compact = false } = Astro.props;
+const id = `sf-${name.replace(/[^a-z0-9_-]/gi, '-')}-${Math.random().toString(36).slice(2, 7)}`;
+---
+
+<div class:list={['space-y-1', compact && 'text-xs']} data-support>
+  <label class="label" for={id}>{label}{required && !current && ' *'}</label>
+  {
+    current && (
+      <p class="text-xs text-green-700">
+        ✓ Archivo adjunto · <a href={supportHref(current)} target="_blank" rel="noopener">Ver</a>
+        <span class="text-slate-500"> (adjunte otro para reemplazarlo)</span>
+      </p>
+    )
+  }
+  <input
+    id={id}
+    class="input text-sm"
+    type="file"
+    accept="application/pdf,image/jpeg,image/png,image/webp"
+    data-support-kind={kind}
+    required={required && !current}
+  />
+  <input type="hidden" name={name} value="" data-support-path />
+  <p class="text-xs text-slate-500" data-support-status>PDF o imagen, máximo 10 MB. No adjunte fórmulas ni diagnósticos.</p>
+</div>
+
+<script>
+  const pending = new WeakMap<HTMLFormElement, number>();
+
+  async function upload(input: HTMLInputElement) {
+    const box = input.closest('[data-support]')!;
+    const hidden = box.querySelector<HTMLInputElement>('[data-support-path]')!;
+    const status = box.querySelector<HTMLElement>('[data-support-status]')!;
+    const form = input.form;
+    const file = input.files?.[0];
+    hidden.value = '';
+    if (!file) return;
+
+    const setStatus = (text: string, tone: 'ok' | 'error' | 'info') => {
+      status.textContent = text;
+      status.className = `text-xs ${tone === 'ok' ? 'text-green-700' : tone === 'error' ? 'text-red-700' : 'text-slate-500'}`;
+    };
+    if (form) pending.set(form, (pending.get(form) ?? 0) + 1);
+    setStatus(`Subiendo ${file.name}…`, 'info');
+    try {
+      const res = await fetch('/api/soportes/subir', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: input.dataset.supportKind, type: file.type, size: file.size }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'No se pudo preparar la subida.');
+
+      const body = new FormData();
+      body.append('cacheControl', '3600');
+      body.append('', file);
+      const put = await fetch(data.signedUrl, { method: 'PUT', body, headers: { 'x-upsert': 'false' } });
+      if (!put.ok) throw new Error('No se pudo subir el archivo. Intente de nuevo.');
+
+      hidden.value = data.path;
+      setStatus(`✓ ${file.name} listo. Guarde el formulario para vincularlo.`, 'ok');
+    } catch (err) {
+      input.value = '';
+      setStatus(err instanceof Error ? err.message : 'No se pudo subir el archivo.', 'error');
+    } finally {
+      if (form) pending.set(form, (pending.get(form) ?? 1) - 1);
+    }
+  }
+
+  document.addEventListener('change', (e) => {
+    const input = e.target as HTMLElement;
+    if (input instanceof HTMLInputElement && input.dataset.supportKind) void upload(input);
+  });
+  document.addEventListener('submit', (e) => {
+    const form = e.target as HTMLFormElement;
+    if ((pending.get(form) ?? 0) > 0) {
+      e.preventDefault();
+      alert('Espere a que termine de subir el archivo.');
+    }
+  }, true);
+</script>

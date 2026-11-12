@@ -24,6 +24,7 @@ import {
 } from '../../../lib/labels';
 import { orderNumber } from '../../../lib/orders';
 import { TABLE_LABELS } from '../../../lib/timeline';
+import { supportHref } from '../../../lib/supports';
 
 const { supabase } = Astro.locals;
 const id = Astro.params.id!;
@@ -96,11 +97,6 @@ const withoutCost = costRows.filter((m) => !m.is_cancelled && !m.costs_count).le
 
 const orderList = orders.data ?? [];
 const fin = finance.data;
-const filterHref = (patch: Record<string, string>) => {
-  const q = new URLSearchParams(params);
-  for (const [k, v] of Object.entries(patch)) v ? q.set(k, v) : q.delete(k);
-  return `?${q.toString()}#ordenes`;
-};
 const hasFilter = Object.values(filters).some(Boolean);
 ---
 
@@ -361,12 +357,13 @@ const hasFilter = Object.values(filters).some(Boolean);
             {documents.data?.map((d) => (
               <li>
                 {DOCUMENT_TYPE_LABELS[d.document_type]} · {d.document_name}
-                <span class="text-xs text-slate-500"> · {fmtDate(d.uploaded_at?.slice(0, 10))}{!d.file_r2_key && ' · sin archivo'}</span>
+                <span class="text-xs text-slate-500"> · {fmtDate(d.uploaded_at?.slice(0, 10))}{!d.file_path && ' · sin archivo'}</span>
+                {d.file_path && <a class="ml-1 text-xs" href={supportHref(d.file_path)} target="_blank" rel="noopener">ver</a>}
               </li>
             ))}
             {!documents.data?.length && <li class="text-slate-500">Sin documentos.</li>}
           </ul>
-          <p class="mt-2 text-xs text-slate-500">Los archivos se consultarán con enlaces temporales cuando se integre el almacenamiento documental (R2).</p>
+          <p class="mt-2 text-xs text-slate-500">Los archivos se abren con un enlace temporal y cada consulta queda registrada.</p>
         </div>
         <div>
           <h3 class="mb-1 text-sm font-semibold">Línea de tiempo</h3>

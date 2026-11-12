@@ -2,6 +2,8 @@
 import AppLayout from '../../layouts/AppLayout.astro';
 import ProductionPanel from '../../components/ProductionPanel.astro';
 import DeliveriesPanel from '../../components/DeliveriesPanel.astro';
+import SupportFile from '../../components/SupportFile.astro';
+import { filesRequired, supportHref, supportPathFrom } from '../../lib/supports';
 import { hasRole } from '../../lib/auth';
 import { fmtDateTime } from '../../lib/format';
 import { checkbox, ensure, FormError, parseForm, runActions, text, uuid, z } from '../../lib/forms';
@@ -17,6 +19,11 @@ const id = Astro.params.id!;
 const { data: w } = await supabase.from('v_warranties').select('*').eq('id', id).maybeSingle();
 if (!w) return new Response('Caso no encontrado', { status: 404 });
 const orderId = w.order_id!;
+const [{ data: wFile }, requireFiles] = await Promise.all([
+  supabase.from('post_sale_warranties').select('evidence_file_path').eq('id', id).maybeSingle(),
+  filesRequired(supabase),
+]);
+const evidencePath = wFile?.evidence_file_path ?? null;
 
 const outcome = await runActions(Astro, {
   ...fulfillmentActions(supabase, { orderId, warrantyId: id }),
@@ -34,7 +41,11 @@ const outcome = await runActions(Astro, {
     ensure(
       await supabase
         .from('post_sale_warranties')
-        .update({ ...input, resolution: input.resolution ?? null })
+        .update({
+          ...input,
+          resolution: input.resolution ?? null,
+          ...(supportPathFrom(form, 'evidence_file_path', 'garantias') ? { evidence_file_path: supportPathFrom(form, 'evidence_file_path', 'garantias') } : {}),
+        })
         .eq('id', id)
         .select('id')
         .single(),
@@ -47,7 +58,12 @@ const outcome = await runActions(Astro, {
     ensure(
       await supabase
         .from('post_sale_warranties')
-        .update({ status: 'cerrada', resolution: input.resolution, evidence_received: input.evidence_received })
+        .update({
+          status: 'cerrada',
+          resolution: input.resolution,
+          evidence_received: input.evidence_received,
+          ...(supportPathFrom(form, 'evidence_file_path', 'garantias') ? { evidence_file_path: supportPathFrom(form, 'evidence_file_path', 'garantias') } : {}),
+        })
         .eq('id', id)
         .select('id')
         .single(),
@@ -110,6 +126,7 @@ const pendingReplacement = !!production && !hasDeliveries;
         )}
         <p class:list={[w.evidence_received ? 'text-green-700' : 'text-amber-700']}>
           {w.evidence_received ? '✓ Evidencia de cierre recibida' : '○ Sin evidencia de cierre'}
+          {evidencePath && <> · <a href={supportHref(evidencePath)} target="_blank" rel="noopener">ver archivo</a></>}
         </p>
         {closed && <p class="text-green-700">Cerrado por {w.closed_by_name} el {fmtDateTime(w.closed_at)}</p>}
       </section>
@@ -133,7 +150,7 @@ const pendingReplacement = !!production && !hasDeliveries;
 
       {
         (production || hasDeliveries) && (
-          <DeliveriesPanel
+          <DeliveriesPanel requireFiles={requireFiles}
             title="Entrega de la reposición"
             rows={rows}
             deliveries={deliveries.records}
@@ -167,6 +184,7 @@ const pendingReplacement = !!production && !hasDeliveries;
               <label class="label">Solución aplicada</label>
               <textarea class="input" name="resolution" rows="3">{v.resolution ?? w.resolution ?? ''}</textarea>
               <label class="flex items-center gap-2"><input type="checkbox" name="evidence_received" checked={!!w.evidence_received} /> Evidencia de cierre recibida</label>
+              <SupportFile kind="garantias" name="evidence_file_path" label="Archivo de evidencia" current={evidencePath} compact />
               <button class="btn w-full" type="submit">Guardar</button>
             </form>
           </section>
@@ -182,8 +200,10 @@ const pendingReplacement = !!production && !hasDeliveries;
               <input type="hidden" name="_action" value="close" />
               <label class="label">Solución aplicada *</label>
               <textarea class="input" name="resolution" rows="3" required>{v.resolution ?? w.resolution ?? ''}</textarea>
-              <label class="flex items-center gap-2"><input type="checkbox" name="evidence_received" required checked={!!w.evidence_received} /> Evidencia de cierre recibida</label>
-              <p class="text-xs text-slate-500">La carga del archivo de evidencia se habilitará con Cloudflare R2.</p>
+              <SupportFile kind="garantias" name="evidence_file_path" label="Evidencia de cierre" current={evidencePath} required={requireFiles} compact />
+              {!requireFiles && (
+                <label class="flex items-center gap-2"><input type="checkbox" name="evidence_received" checked={!!w.evidence_received} /> Evidencia recibida en papel</label>
+              )}
               <button class="btn btn-primary w-full" type="submit" disabled={pendingReplacement}>Cerrar caso</button>
             </form>
           </section>

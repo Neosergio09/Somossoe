@@ -30,6 +30,7 @@ import {
   WARRANTY_TYPE_LABELS,
 } from '../../lib/labels';
 import { orderNumber } from '../../lib/orders';
+import { supportHref } from '../../lib/supports';
 
 const { supabase } = Astro.locals;
 const id = Astro.params.id!;
@@ -94,7 +95,13 @@ const origin = (o: (typeof orders)[number]) =>
     <h2 class="mb-3">1. Perfil y origen</h2>
     <dl class="grid grid-cols-2 gap-2 sm:grid-cols-4">
       <div><dt class="label">Tipo de cliente</dt><dd>{[...new Set(orders.map(origin))].join(', ') || '—'}</dd></div>
-      <div><dt class="label">Autorización de datos</dt><dd>{buyer.data_consent_at ? `✓ ${fmtDateTime(buyer.data_consent_at)}` : <span class="text-amber-700">Sin registrar</span>}</dd></div>
+      <div>
+        <dt class="label">Autorización de datos</dt>
+        <dd>
+          {buyer.data_consent_at ? `✓ ${fmtDateTime(buyer.data_consent_at)}` : <span class="text-amber-700">Sin registrar</span>}
+          {buyer.data_consent_file_path && <> · <a href={supportHref(buyer.data_consent_file_path)} target="_blank" rel="noopener">ver soporte</a></>}
+        </dd>
+      </div>
       <div><dt class="label">Registrado</dt><dd>{fmtDateTime(buyer.created_at)}</dd></div>
       <div><dt class="label">Órdenes</dt><dd>{orders.length}</dd></div>
     </dl>
@@ -182,8 +189,16 @@ const origin = (o: (typeof orders)[number]) =>
               <ul class="space-y-1">
                 {o.payment_modality === 'nomina_empresa' && (
                   <>
-                    <li>{o.employee_auth_received ? '✓' : '○'} Autorización de descuento firmada</li>
-                    {o.hr_approval_required && <li>{o.hr_approval_received ? '✓' : '○'} Aval de RRHH</li>}
+                    <li>
+                      {o.employee_auth_received ? '✓' : '○'} Autorización de descuento firmada
+                      {o.employee_auth_file_path && <> · <a href={supportHref(o.employee_auth_file_path)} target="_blank" rel="noopener">ver</a></>}
+                    </li>
+                    {o.hr_approval_required && (
+                      <li>
+                        {o.hr_approval_received ? '✓' : '○'} Aval de RRHH
+                        {o.hr_approval_file_path && <> · <a href={supportHref(o.hr_approval_file_path)} target="_blank" rel="noopener">ver</a></>}
+                      </li>
+                    )}
                   </>
                 )}
                 {wars.map((w) => (

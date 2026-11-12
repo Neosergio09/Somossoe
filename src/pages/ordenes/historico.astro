@@ -1,6 +1,8 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
 import OrderItemFields from '../../components/OrderItemFields.astro';
+import SupportFile from '../../components/SupportFile.astro';
+import { filesRequired, supportPathFrom } from '../../lib/supports';
 import { hasRole } from '../../lib/auth';
 import { fmtDateTime } from '../../lib/format';
 import { checkbox, date, ensure, FormError, int, parseForm, runActions, text, uuid, z } from '../../lib/forms';
@@ -58,6 +60,9 @@ const outcome = await runActions(Astro, {
       phone: input.phone ?? null,
       email: input.email ?? null,
       data_consent_at: new Date().toISOString(),
+      ...(supportPathFrom(form, 'data_consent_file_path', 'compradores')
+        ? { data_consent_file_path: supportPathFrom(form, 'data_consent_file_path', 'compradores') }
+        : {}),
     };
     if (input.buyer_id) {
       ensure(await supabase.from('buyers').update(row).eq('id', input.buyer_id).select('id').single());
@@ -115,6 +120,7 @@ const [buyerRes, companies, agreements] = await Promise.all([
     : Promise.resolve({ data: [] }),
 ]);
 const buyer = buyerRes.data;
+const requireFiles = await filesRequired(supabase);
 const company = companies.data?.find((c) => c.id === companyId) ?? null;
 const orderStep = !!docId && !!buyer?.data_consent_at;
 const modality = v.payment_modality ?? (companyId ? 'nomina_empresa' : 'contado');
@@ -195,6 +201,7 @@ const rows = lastAction === 'create' ? itemRows(v) : [];
               tratamiento de datos vigente.
             </span>
           </label>
+          <SupportFile kind="compradores" name="data_consent_file_path" label="Soporte firmado de la autorización" current={buyer?.data_consent_file_path} required={requireFiles} />
           <button class="btn btn-primary" type="submit">Guardar comprador</button>
         </form>
       ) : (
