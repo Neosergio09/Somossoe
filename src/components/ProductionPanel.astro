@@ -55,6 +55,7 @@ const isOpen = (action: string) => lastAction === action;
           <div><dt class="label">Liberada por</dt><dd>{p.released_by_name ?? '—'}<div class="text-xs text-slate-500">{fmtDateTime(p.released_at)}</div></dd></div>
           <div><dt class="label">Envío al laboratorio</dt><dd>{fmtDate(p.sent_to_lab_at)}</dd></div>
           <div><dt class="label">Fecha prometida</dt><dd>{fmtDate(p.promised_date)}</dd></div>
+          <div><dt class="label">Pedido en el laboratorio</dt><dd>{p.lab_order_reference ?? '—'}</dd></div>
           <div><dt class="label">Lista (fecha real)</dt><dd>{fmtDate(p.ready_at)}</dd></div>
           {p.notes && <div class="col-span-2"><dt class="label">Notas</dt><dd class="whitespace-pre-line">{p.notes}</dd></div>}
         </dl>
@@ -98,6 +99,10 @@ const isOpen = (action: string) => lastAction === action;
               <div>
                 <label class="label">Fecha prometida</label>
                 <input class="input" type="date" name="promised_date" required value={p.promised_date ?? ''} />
+              </div>
+              <div>
+                <label class="label">N.º de pedido del laboratorio</label>
+                <input class="input" name="lab_order_reference" maxlength="60" value={p.lab_order_reference ?? ''} />
               </div>
               <div class="sm:col-span-2">
                 <label class="label">Notas</label>
@@ -147,6 +152,10 @@ const isOpen = (action: string) => lastAction === action;
             <div>
               <label class="label">Fecha prometida *</label>
               <input class="input" type="date" name="promised_date" required min={today} value={v.promised_date} />
+            </div>
+            <div class="sm:col-span-2">
+              <label class="label">N.º de pedido del laboratorio</label>
+              <input class="input" name="lab_order_reference" maxlength="60" placeholder="Referencia que entrega el laboratorio (columna ORDEN del Excel)" value={v.lab_order_reference ?? ''} />
             </div>
             <div class="sm:col-span-2">
               <label class="label">Notas</label>

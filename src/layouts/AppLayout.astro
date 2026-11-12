@@ -17,11 +17,13 @@ const path = Astro.url.pathname;
 
 const nav = [
   { href: '/', label: 'Inicio' },
+  { href: '/tablero', label: 'Tablero' },
   { href: '/empresas', label: 'Empresas' },
   { href: '/oportunidades', label: 'Oportunidades' },
   { href: '/convenios', label: 'Convenios' },
   { href: '/jornadas', label: 'Jornadas' },
   { href: '/ordenes', label: 'Órdenes' },
+  { href: '/compradores', label: 'Compradores' },
   { href: '/produccion', label: 'Producción' },
   { href: '/garantias', label: 'Posventa' },
   { href: '/facturas', label: 'Facturación' },
@@ -66,6 +68,9 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
               ))}
             </nav>
             <div class="flex items-center gap-3 text-sm">
+              <form method="get" action="/compradores" role="search">
+                <input class="input w-44 py-1 text-sm" name="q" placeholder="Buscar comprador…" aria-label="Buscar comprador por nombre o documento" />
+              </form>
               <span class="text-slate-600">
                 {profile.full_name}
                 {profile.role && <span class="badge ml-1">{ROLE_LABELS[profile.role]}</span>}

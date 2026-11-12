@@ -91,7 +91,7 @@ const href = (p: { order_id: string | null; warranty_id: string | null }) => (p.
                   {p.warranty_id && <span class="badge ml-1">Reposición</span>}
                 </td>
                 <td>{p.buyer_name}{p.company_name && <div class="text-xs text-slate-500">{p.company_name}</div>}</td>
-                <td>{p.lab_name}</td>
+                <td>{p.lab_name}{p.lab_order_reference && <div class="text-xs text-slate-500">Pedido {p.lab_order_reference}</div>}</td>
                 <td class="whitespace-nowrap">{fmtDate(p.sent_to_lab_at)}</td>
                 <td class="whitespace-nowrap">{fmtDate(p.promised_date)} {p.is_overdue && <span class="badge badge-red">Atrasada</span>}</td>
                 <td class="whitespace-nowrap">{fmtDate(p.ready_at)}</td>

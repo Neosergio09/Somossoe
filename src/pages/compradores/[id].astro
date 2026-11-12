@@ -1,0 +1,271 @@
+---
+// RF-M07-03: expediente 360° del comprador (solo lectura, sin historia clínica)
+import AppLayout from '../../layouts/AppLayout.astro';
+import { hasRole } from '../../lib/auth';
+import { cop, fmtDate, fmtDateTime } from '../../lib/format';
+import {
+  ACCOUNTING_STATUS_BADGE,
+  ACCOUNTING_STATUS_LABELS,
+  BUYER_DOCUMENT_LABELS,
+  CAMPAIGN_STATUS_LABELS,
+  COLLECTION_RESPONSIBLE_LABELS,
+  COLLECTION_STATUS_BADGE,
+  COLLECTION_STATUS_LABELS,
+  DOC_STATUS_BADGE,
+  DOC_STATUS_LABELS,
+  HISTORICAL_STAGE_LABELS,
+  INSTALLMENT_STATUS_BADGE,
+  INSTALLMENT_STATUS_LABELS,
+  ITEM_TYPE_LABELS,
+  OPS_STATUS_BADGE,
+  OPS_STATUS_LABELS,
+  PAYMENT_MODALITY_LABELS,
+  PRODUCTION_STATUS_BADGE,
+  PRODUCTION_STATUS_LABELS,
+  RECLASSIFICATION_REASON_LABELS,
+  RECLASSIFICATION_STATUS_BADGE,
+  RECLASSIFICATION_STATUS_LABELS,
+  WARRANTY_STATUS_BADGE,
+  WARRANTY_STATUS_LABELS,
+  WARRANTY_TYPE_LABELS,
+} from '../../lib/labels';
+import { orderNumber } from '../../lib/orders';
+
+const { supabase } = Astro.locals;
+const id = Astro.params.id!;
+
+const { data: buyer } = await supabase.from('buyers').select('*, companies(id, name)').eq('id', id).maybeSingle();
+if (!buyer) return new Response('Comprador no encontrado', { status: 404 });
+
+const canSeeMoney = hasRole(Astro.locals, 'administracion_cartera', 'direccion', 'comercial', 'socio');
+const empty = { data: [] as never[] };
+
+const { data: orderData } = await supabase.from('v_orders').select('*').eq('buyer_id', id).order('created_at', { ascending: false });
+const orders = orderData ?? [];
+const orderIds = orders.map((o) => o.id!);
+const has = orderIds.length > 0;
+
+const [items, productions, deliveries, warranties, installments, invoices, allocations, reclass, finance, campaigns] = await Promise.all([
+  has ? supabase.from('order_items').select('*').in('order_id', orderIds).order('created_at') : Promise.resolve(empty),
+  has ? supabase.from('v_productions').select('*').in('order_id', orderIds).order('released_at') : Promise.resolve(empty),
+  has ? supabase.from('order_deliveries').select('*').in('order_id', orderIds).order('delivered_at') : Promise.resolve(empty),
+  has ? supabase.from('v_warranties').select('*').in('order_id', orderIds).order('created_at') : Promise.resolve(empty),
+  has && canSeeMoney ? supabase.from('v_order_installments').select('*').in('order_id', orderIds).order('installment_number') : Promise.resolve(empty),
+  has && canSeeMoney ? supabase.from('v_invoice_orders').select('*').in('order_id', orderIds).order('invoice_date') : Promise.resolve(empty),
+  has && canSeeMoney ? supabase.from('v_payment_allocations').select('*').in('order_id', orderIds).order('payment_date') : Promise.resolve(empty),
+  canSeeMoney ? supabase.from('v_portfolio_reclassifications').select('*').eq('buyer_id', id).order('requested_at') : Promise.resolve(empty),
+  canSeeMoney ? supabase.from('v_buyer_finance').select('*').eq('buyer_id', id).maybeSingle() : Promise.resolve({ data: null }),
+  has
+    ? supabase.from('v_campaigns').select('id, status, first_session_date, city_name, branch_name').in('id', orders.map((o) => o.campaign_id).filter((x): x is string => !!x))
+    : Promise.resolve(empty),
+]);
+
+const byOrder = <T extends { order_id: string | null }>(rows: T[] | null | undefined, orderId: string) => (rows ?? []).filter((r) => r.order_id === orderId);
+const campaignById = new Map((campaigns.data ?? []).map((c) => [c.id, c]));
+const fin = finance.data;
+const company = buyer.companies as { id: string; name: string } | null;
+const origin = (o: (typeof orders)[number]) =>
+  o.is_historical_migration ? `Histórico · ${HISTORICAL_STAGE_LABELS[o.historical_stage!]}` : o.campaign_id ? 'Jornada' : 'Venta directa';
+---
+
+<AppLayout title={`360° · ${buyer.full_name}`}>
+  <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <a href="/compradores" class="text-sm">← Compradores</a>
+      <h1>{buyer.full_name} <span class="text-base font-normal text-slate-500">· Expediente 360°</span></h1>
+      <p class="text-sm text-slate-600">
+        {BUYER_DOCUMENT_LABELS[buyer.document_type]} {buyer.document_id}
+        {buyer.phone && ` · ${buyer.phone}`}{buyer.email && ` · ${buyer.email}`}
+        · Empresa actual: {company ? <a href={`/empresas/${company.id}/360`}>{company.name}</a> : 'Particular'}
+      </p>
+    </div>
+    {
+      fin && (
+        <div class="text-right text-sm">
+          <div>{fin.active_orders} órdenes · comprado <strong>{cop(fin.total_sold)}</strong></div>
+          <div>Saldo pendiente <strong>{cop(fin.balance_due)}</strong>{Number(fin.overdue_amount) > 0 && <span class="badge badge-red ml-1">vencido {cop(fin.overdue_amount)}</span>}</div>
+        </div>
+      )
+    }
+  </div>
+
+  <!-- 1. Perfil y origen -->
+  <section class="card mb-4 text-sm">
+    <h2 class="mb-3">1. Perfil y origen</h2>
+    <dl class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div><dt class="label">Tipo de cliente</dt><dd>{[...new Set(orders.map(origin))].join(', ') || '—'}</dd></div>
+      <div><dt class="label">Autorización de datos</dt><dd>{buyer.data_consent_at ? `✓ ${fmtDateTime(buyer.data_consent_at)}` : <span class="text-amber-700">Sin registrar</span>}</dd></div>
+      <div><dt class="label">Registrado</dt><dd>{fmtDateTime(buyer.created_at)}</dd></div>
+      <div><dt class="label">Órdenes</dt><dd>{orders.length}</dd></div>
+    </dl>
+    <p class="mt-2 text-xs text-slate-500">El CRM no guarda historia clínica: diagnósticos, fórmulas y graduaciones se custodian fuera de este sistema.</p>
+  </section>
+
+  <!-- 2 a 5 por orden -->
+  <div class="space-y-4">
+    {orders.map((o) => {
+      const camp = o.campaign_id ? campaignById.get(o.campaign_id) : null;
+      const its = byOrder(items.data, o.id!);
+      const prods = byOrder(productions.data, o.id!).filter((p) => !p.warranty_id);
+      const dels = byOrder(deliveries.data, o.id!);
+      const wars = byOrder(warranties.data, o.id!);
+      const plan = byOrder(installments.data, o.id!);
+      const invs = byOrder(invoices.data, o.id!);
+      const allocs = byOrder(allocations.data, o.id!).filter((a) => !a.is_voided);
+      const recs = byOrder(reclass.data, o.id!);
+      return (
+        <section class:list={['card text-sm', o.is_cancelled && 'opacity-70']}>
+          <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h2><a href={`/ordenes/${o.id}`}>{orderNumber(o.order_number)}</a> <span class="text-sm font-normal text-slate-500">· {origin(o)} · {fmtDate(o.created_at?.slice(0, 10))}</span></h2>
+              <p class="text-xs text-slate-600">
+                {o.company_name ? <a href={`/empresas/${o.company_id}/360`}>{o.company_name}</a> : 'Particular'}
+                {o.city_name && ` · ${o.city_name}`}{o.branch_name && ` · ${o.branch_name}`}
+                {camp && <> · <a href={`/jornadas/${camp.id}`}>jornada {fmtDate(camp.first_session_date)}</a> ({CAMPAIGN_STATUS_LABELS[camp.status!]})</>}
+                {o.deal_name_branch && ` · ${o.deal_name_branch}`}
+                {o.is_cancelled && <span class="badge badge-red ml-1">Anulada: {o.cancel_reason}</span>}
+              </p>
+            </div>
+            <div class="flex flex-wrap gap-1">
+              <span class={DOC_STATUS_BADGE[o.doc_status!]}>{DOC_STATUS_LABELS[o.doc_status!]}</span>
+              <span class={OPS_STATUS_BADGE[o.ops_status!]}>{OPS_STATUS_LABELS[o.ops_status!]}</span>
+              <span class={ACCOUNTING_STATUS_BADGE[o.accounting_status!]}>{ACCOUNTING_STATUS_LABELS[o.accounting_status!]}</span>
+              <span class={COLLECTION_STATUS_BADGE[o.collection_status!]}>{COLLECTION_STATUS_LABELS[o.collection_status!]}</span>
+            </div>
+          </div>
+
+          <div class="grid gap-4 lg:grid-cols-3">
+            <!-- 2. Órdenes e ítems -->
+            <div>
+              <h3 class="label mb-1">Productos y valor</h3>
+              <ul class="space-y-1">
+                {its.map((i) => (
+                  <li>{i.quantity} × {ITEM_TYPE_LABELS[i.item_type]}: {[i.frame_description, i.lens_type, i.lens_filter, i.description].filter(Boolean).join(' · ')} <span class="text-slate-500">({cop(i.unit_price)})</span></li>
+                ))}
+                {!its.length && <li class="text-slate-500">Sin ítems registrados.</li>}
+              </ul>
+              <p class="mt-1">
+                <strong>{cop(o.total_amount)}</strong> · {PAYMENT_MODALITY_LABELS[o.payment_modality!]} · cobro a {COLLECTION_RESPONSIBLE_LABELS[o.collection_responsible!]}
+              </p>
+            </div>
+
+            <!-- 3. Producción y entrega -->
+            <div>
+              <h3 class="label mb-1">Producción y entrega</h3>
+              {o.release_blockers?.length && o.ops_status === 'pendiente_liberar' && !o.is_cancelled ? (
+                <p class="text-amber-700">Candado de liberación: {o.release_blockers.join('; ')}</p>
+              ) : null}
+              <ul class="space-y-1">
+                {prods.map((p) => (
+                  <li>
+                    <span class={PRODUCTION_STATUS_BADGE[p.status!]}>{PRODUCTION_STATUS_LABELS[p.status!]}</span> {p.lab_name}
+                    {p.lab_order_reference && ` · pedido ${p.lab_order_reference}`}
+                    <div class="text-xs text-slate-500">
+                      Envío {fmtDate(p.sent_to_lab_at)} · prometida {fmtDate(p.promised_date)} · real {fmtDate(p.ready_at)}
+                      {p.is_overdue && <span class="text-red-700"> · atrasada</span>}
+                    </div>
+                  </li>
+                ))}
+                {dels.map((d) => (
+                  <li class="text-xs">
+                    {d.warranty_id ? 'Entrega de reposición' : 'Entrega'} {fmtDate(d.delivered_at)} · recibió {d.receiver_name} · evidencia {d.evidence_received ? '✓' : 'pendiente'}
+                  </li>
+                ))}
+                {o.historical_delivered_at && <li class="text-xs">Entrega (histórico) {fmtDate(o.historical_delivered_at)} · recibió {o.historical_delivery_receiver}</li>}
+                {!prods.length && !dels.length && !o.historical_delivered_at && <li class="text-slate-500">Sin producción ni entregas.</li>}
+              </ul>
+            </div>
+
+            <!-- 5. Soportes y posventa -->
+            <div>
+              <h3 class="label mb-1">Soportes y posventa</h3>
+              <ul class="space-y-1">
+                {o.payment_modality === 'nomina_empresa' && (
+                  <>
+                    <li>{o.employee_auth_received ? '✓' : '○'} Autorización de descuento firmada</li>
+                    {o.hr_approval_required && <li>{o.hr_approval_received ? '✓' : '○'} Aval de RRHH</li>}
+                  </>
+                )}
+                {wars.map((w) => (
+                  <li>
+                    <a href={`/garantias/${w.id}`}>{WARRANTY_TYPE_LABELS[w.incident_type!]}</a> <span class={WARRANTY_STATUS_BADGE[w.status!]}>{WARRANTY_STATUS_LABELS[w.status!]}</span>
+                    <div class="text-xs text-slate-500">{w.description}{w.resolution && ` → ${w.resolution}`}</div>
+                  </li>
+                ))}
+                {!wars.length && <li class="text-slate-500">Sin casos de posventa.</li>}
+              </ul>
+            </div>
+          </div>
+
+          <!-- 4. Plan de pagos, factura y estado de cuenta -->
+          {canSeeMoney && (
+            <div class="mt-4 border-t border-slate-100 pt-3">
+              <h3 class="label mb-1">Plan de pagos, factura y estado de cuenta</h3>
+              <div class="grid gap-4 lg:grid-cols-3">
+                <div>
+                  {plan.length ? (
+                    <table class="table text-xs">
+                      <thead><tr><th>Cuota</th><th>Vence</th><th class="text-right">Valor</th><th class="text-right">Pagado</th><th></th></tr></thead>
+                      <tbody>
+                        {plan.map((c) => (
+                          <tr class:list={[c.superseded_by_reclassification_id && 'text-slate-400 line-through']}>
+                            <td>{c.installment_number}</td>
+                            <td>{fmtDate(c.due_date)}</td>
+                            <td class="text-right">{cop(c.expected_amount)}</td>
+                            <td class="text-right">{cop(c.paid_amount)}</td>
+                            <td>{c.superseded_by_reclassification_id ? 'Reemplazada' : <span class={INSTALLMENT_STATUS_BADGE[c.status ?? 'pendiente']}>{INSTALLMENT_STATUS_LABELS[c.status ?? 'pendiente']}</span>}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p class="text-slate-500">Sin plan de cuotas.</p>
+                  )}
+                </div>
+                <div>
+                  <div class="mb-1">Facturas</div>
+                  <ul class="space-y-1 text-xs">
+                    {invs.map((f) => (
+                      <li class:list={[f.invoice_voided && 'line-through opacity-60']}>
+                        <a href={`/facturas/${f.invoice_id}`}>{f.alegra_invoice_number}</a> · {fmtDate(f.invoice_date)} · {cop(f.amount_assigned)}
+                      </li>
+                    ))}
+                    {!invs.length && <li class="text-slate-500">Sin factura vinculada.</li>}
+                  </ul>
+                  {recs.length > 0 && (
+                    <>
+                      <div class="mb-1 mt-2">Reclasificaciones</div>
+                      <ul class="space-y-1 text-xs">
+                        {recs.map((r) => (
+                          <li>
+                            <span class={RECLASSIFICATION_STATUS_BADGE[r.status!]}>{RECLASSIFICATION_STATUS_LABELS[r.status!]}</span> {RECLASSIFICATION_REASON_LABELS[r.reason!]} ·{' '}
+                            {cop(r.balance_transferred ?? r.balance_at_request)} · {fmtDate(r.requested_at?.slice(0, 10))}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </div>
+                <div>
+                  <div class="mb-1">Pagos aplicados</div>
+                  <ul class="space-y-1 text-xs">
+                    {Number(o.historical_collected_before_migration) > 0 && <li>Antes de la migración · {cop(o.historical_collected_before_migration)}</li>}
+                    {allocs.map((a) => (
+                      <li>
+                        <a href={`/recaudo/${a.payment_id}`}>RC-{String(a.payment_number).padStart(5, '0')}</a> · {fmtDate(a.payment_date)} · {cop(a.amount_applied)}
+                        {Number(a.withholding_applied) > 0 && ` + ret. ${cop(a.withholding_applied)}`}
+                      </li>
+                    ))}
+                    {!allocs.length && !Number(o.historical_collected_before_migration) && <li class="text-slate-500">Sin pagos verificados.</li>}
+                  </ul>
+                  <p class="mt-2 font-semibold">Saldo pendiente: {cop(o.balance_due)}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+      );
+    })}
+    {!orders.length && <section class="card text-sm text-slate-500">El comprador no tiene órdenes.</section>}
+  </div>
+</AppLayout>

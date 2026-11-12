@@ -373,7 +373,7 @@ const collectedWithholding = activeAllocations.reduce((s2, a) => s2 + Number(a.w
   <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
     <div>
       <a href="/ordenes" class="text-sm">← Órdenes</a>
-      <h1>Orden {orderNumber(o.order_number)} · {o.buyer_name}</h1>
+      <h1>Orden {orderNumber(o.order_number)} · <a href={`/compradores/${o.buyer_id}`}>{o.buyer_name}</a></h1>
       <p class="text-sm text-slate-600">
         {
           o.campaign_id ? (

@@ -1,0 +1,51 @@
+---
+// RF-M07-03: buscador global de compradores por nombre o documento
+import AppLayout from '../../layouts/AppLayout.astro';
+import { BUYER_DOCUMENT_LABELS } from '../../lib/labels';
+import { safeSearch } from '../../lib/options';
+
+const { supabase } = Astro.locals;
+const q = safeSearch(Astro.url.searchParams.get('q'));
+const digits = q.toUpperCase().replace(/[\s.-]/g, '');
+
+let query = supabase
+  .from('buyers')
+  .select('id, full_name, document_type, document_id, phone, email, companies(name)')
+  .order('full_name')
+  .limit(100);
+if (q) query = query.or(`full_name.ilike.%${q}%,document_id.ilike.%${digits || q}%`);
+else query = query.order('updated_at', { ascending: false });
+
+const { data: buyers } = await query;
+// Un único resultado exacto por documento: directo a su expediente
+if (q && buyers?.length === 1 && buyers[0]!.document_id === digits) return Astro.redirect(`/compradores/${buyers[0]!.id}`);
+---
+
+<AppLayout title="Compradores">
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <h1>Compradores</h1>
+    <form method="get" class="flex gap-2">
+      <input class="input w-72" name="q" value={q} placeholder="Nombre o documento" autofocus aria-label="Buscar comprador" />
+      <button class="btn btn-primary" type="submit">Buscar</button>
+    </form>
+  </div>
+  <p class="mb-3 text-sm text-slate-500">Expediente 360° de cada comprador: órdenes, producción, entregas, plan de pagos y posventa. Sin historia clínica.</p>
+
+  <div class="card overflow-x-auto p-0">
+    <table class="table">
+      <thead><tr><th>Comprador</th><th>Documento</th><th>Empresa actual</th><th>Contacto</th></tr></thead>
+      <tbody>
+        {buyers?.map((b) => (
+          <tr>
+            <td><a href={`/compradores/${b.id}`} class="font-medium">{b.full_name}</a></td>
+            <td class="whitespace-nowrap">{BUYER_DOCUMENT_LABELS[b.document_type]} {b.document_id}</td>
+            <td>{(b.companies as { name: string } | null)?.name ?? 'Particular'}</td>
+            <td class="text-xs text-slate-500">{[b.phone, b.email].filter(Boolean).join(' · ') || '—'}</td>
+          </tr>
+        ))}
+        {!buyers?.length && <tr><td colspan="4" class="py-6 text-center text-slate-500">{q ? 'Ningún comprador coincide con la búsqueda.' : 'Aún no hay compradores.'}</td></tr>}
+      </tbody>
+    </table>
+  </div>
+  {!q && (buyers?.length ?? 0) >= 100 && <p class="mt-2 text-xs text-slate-500">Se muestran los 100 más recientes; use el buscador.</p>}
+</AppLayout>
