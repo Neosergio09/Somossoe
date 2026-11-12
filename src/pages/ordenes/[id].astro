@@ -22,6 +22,8 @@ import {
   COST_COMPONENT_LABELS,
   DOC_STATUS_BADGE,
   DOC_STATUS_LABELS,
+  HISTORICAL_STAGE_HINTS,
+  HISTORICAL_STAGE_LABELS,
   INSTALLMENT_STATUS_BADGE,
   INSTALLMENT_STATUS_LABELS,
   ITEM_TYPE_LABELS,
@@ -250,6 +252,18 @@ const outcome = await runActions(Astro, {
     };
     return { message: messages[input.decision] };
   },
+  // Entrega de un histórico cargado en producción sin registro de laboratorio (Operación)
+  historical_delivery: async (form) => {
+    const input = parseForm(z.object({ delivered_at: date(), receiver_name: text(150).min(1, { error: 'indique quién recibió' }) }), form);
+    ensure(
+      await supabase.rpc('register_historical_delivery', {
+        p_order_id: id,
+        p_delivered_at: input.delivered_at,
+        p_receiver: input.receiver_name,
+      }),
+    );
+    return { message: 'Entrega registrada.' };
+  },
 });
 if (outcome?.kind === 'redirect') return outcome.response;
 const error = outcome?.kind === 'error' ? outcome.error : null;
@@ -389,7 +403,7 @@ const collectedWithholding = activeAllocations.reduce((s2, a) => s2 + Number(a.w
       <div class="text-2xl font-semibold">{cop(o.total_amount)}</div>
       <div class="text-sm text-slate-600">
         {PAYMENT_MODALITY_LABELS[o.payment_modality!]}
-        {isPayroll && ` · ${o.installments_count} cuotas ${o.installment_periodicity ? PAYROLL_LABELS[o.installment_periodicity].toLowerCase() + 'es' : ''}`}
+        {isPayroll && o.installments_count && ` · ${o.installments_count} cuotas ${o.installment_periodicity ? PAYROLL_LABELS[o.installment_periodicity].toLowerCase() + 'es' : ''}`}
       </div>
       <div class="text-xs text-slate-500">Saldo: {cop(o.balance_due)} · Cobro a: {COLLECTION_RESPONSIBLE_LABELS[o.collection_responsible!]}</div>
     </div>
@@ -399,6 +413,41 @@ const collectedWithholding = activeAllocations.reduce((s2, a) => s2 + Number(a.w
     isCancelled && (
       <div class="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
         Orden anulada el {fmtDateTime(o.cancelled_at)} por {personName(o.cancelled_by)}: {o.cancel_reason}
+      </div>
+    )
+  }
+
+  {
+    o.is_historical_migration && (
+      <div class="mb-4 rounded-md border border-slate-300 bg-slate-50 px-4 py-3 text-sm">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="badge badge-blue">Orden histórica</span>
+          <span>
+            Entró en <strong>{HISTORICAL_STAGE_LABELS[o.historical_stage!]}</strong> ({HISTORICAL_STAGE_HINTS[o.historical_stage!]}) · origen: {o.historical_reference}
+          </span>
+        </div>
+        <p class="mt-1 text-xs text-slate-600">
+          Recaudado antes de la migración: {cop(o.historical_collected_before_migration)}. Venta anterior al CRM: no tiene prospección, convenio ni
+          jornada registrados.
+          {o.historical_delivered_at && ` Entregada el ${fmtDate(o.historical_delivered_at)} a ${o.historical_delivery_receiver}.`}
+        </p>
+        {
+          isOps && !isCancelled && o.historical_stage === 'produccion' && !production &&
+            (o.ops_status === 'en_produccion' || o.ops_status === 'listo_para_entregar') && (
+            <form method="post" class="mt-2 flex flex-wrap items-end gap-2">
+              <input type="hidden" name="_action" value="historical_delivery" />
+              <div>
+                <label class="label" for="delivered_at">Fecha de entrega</label>
+                <input class="input" id="delivered_at" name="delivered_at" type="date" required max={todayCo()} value={v.delivered_at ?? todayCo()} />
+              </div>
+              <div class="min-w-48 flex-1">
+                <label class="label" for="receiver_name">Quién recibió</label>
+                <input class="input" id="receiver_name" name="receiver_name" required maxlength="150" value={v.receiver_name ?? ''} />
+              </div>
+              <button class="btn btn-primary" type="submit">Registrar entrega</button>
+            </form>
+          )
+        }
       </div>
     )
   }
@@ -861,6 +910,7 @@ const collectedWithholding = activeAllocations.reduce((s2, a) => s2 + Number(a.w
             <h2>Recaudo (Etapa 11)</h2>
             <span class={COLLECTION_STATUS_BADGE[o.collection_status!]}>{COLLECTION_STATUS_LABELS[o.collection_status!]}</span>
             <dl class="grid grid-cols-2 gap-1">
+              {o.is_historical_migration && <><dt class="text-slate-500">Antes de migrar</dt><dd class="text-right">{cop(o.historical_collected_before_migration)}</dd></>}
               <dt class="text-slate-500">Dinero recibido</dt><dd class="text-right">{cop(collectedMoney)}</dd>
               <dt class="text-slate-500">Retenciones</dt><dd class="text-right">{cop(collectedWithholding)}</dd>
               <dt class="text-slate-500">Saldo</dt><dd class="text-right font-semibold">{cop(o.balance_due)}</dd>

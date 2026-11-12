@@ -1,0 +1,372 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import OrderItemFields from '../../components/OrderItemFields.astro';
+import { hasRole } from '../../lib/auth';
+import { fmtDateTime } from '../../lib/format';
+import { checkbox, date, ensure, FormError, int, parseForm, runActions, text, uuid, z } from '../../lib/forms';
+import {
+  BUYER_DOCUMENT_LABELS,
+  COLLECTION_RESPONSIBLE_LABELS,
+  HISTORICAL_STAGE_HINTS,
+  HISTORICAL_STAGE_LABELS,
+  PAYMENT_MODALITY_LABELS,
+  PAYROLL_LABELS,
+  type HistoricalStage,
+} from '../../lib/labels';
+import { itemRows, money, parseItems } from '../../lib/orders';
+
+// RF-M06-05: carga uno a uno de órdenes reales anteriores al CRM (Administración / Cartera)
+if (!hasRole(Astro.locals, 'administracion_cartera')) return Astro.redirect('/ordenes');
+
+const { supabase } = Astro.locals;
+const params = Astro.url.searchParams;
+const docType = (params.get('document_type') ?? 'cc') as keyof typeof BUYER_DOCUMENT_LABELS;
+const docId = (params.get('document_id') ?? '').toUpperCase().replace(/[\s.-]/g, '');
+const companyId = params.get('company_id') || null;
+const STAGES = Object.keys(HISTORICAL_STAGE_LABELS) as [HistoricalStage, ...HistoricalStage[]];
+
+function selfUrl(extra: Record<string, string | null | undefined> = {}) {
+  const q = new URLSearchParams();
+  const all = { company_id: companyId, document_type: docType, document_id: docId, ...extra };
+  for (const [k, v] of Object.entries(all)) if (v) q.set(k, v);
+  return `/ordenes/historico?${q}`;
+}
+
+const outcome = await runActions(Astro, {
+  save_buyer: async (form) => {
+    const input = parseForm(
+      z.object({
+        buyer_id: uuid().optional(),
+        document_type: z.enum(['cc', 'ce', 'ti', 'pasaporte', 'otro']),
+        document_id: z.string().transform((s) => s.toUpperCase().replace(/[\s.-]/g, '')).pipe(
+          z.string().regex(/^[0-9A-Z]{4,15}$/, { error: 'entre 4 y 15 letras o números' }),
+        ),
+        full_name: text(150),
+        phone: text(25).optional(),
+        email: z.email({ error: 'Correo inválido' }).optional(),
+        data_consent: checkbox(),
+      }),
+      form,
+    );
+    if (!input.data_consent) {
+      throw new FormError('Registre la autorización de tratamiento de datos del comprador para cargar la orden.');
+    }
+    const row = {
+      document_type: input.document_type,
+      document_id: input.document_id,
+      full_name: input.full_name,
+      phone: input.phone ?? null,
+      email: input.email ?? null,
+      data_consent_at: new Date().toISOString(),
+    };
+    if (input.buyer_id) {
+      ensure(await supabase.from('buyers').update(row).eq('id', input.buyer_id).select('id').single());
+    } else {
+      ensure(await supabase.from('buyers').insert(row).select('id').single());
+    }
+    return { message: 'Comprador registrado con su autorización de datos.', redirect: selfUrl({ document_type: input.document_type, document_id: input.document_id }) };
+  },
+  create: async (form) => {
+    const input = parseForm(
+      z.object({
+        buyer_id: uuid(),
+        company_id: uuid().optional(),
+        agreement_id: uuid().optional(),
+        payment_modality: z.enum(['contado', 'nomina_empresa']),
+        collection_responsible: z.enum(['empresa', 'empleado']),
+        total_amount: money(),
+        balance_due: money(),
+        historical_stage: z.enum(STAGES),
+        historical_reference: text(200).min(3, { error: 'mínimo 3 caracteres' }),
+        installments_count: int().min(1).max(24).optional(),
+        installment_periodicity: z.enum(['mensual', 'quincenal']).optional(),
+        first_due_date: date().optional(),
+        notes: text(2000).optional(),
+      }),
+      form,
+    );
+    const values = Object.fromEntries([...form.entries()].map(([k, v]) => [k, String(v).trim()]));
+    const items = itemRows(values).length ? parseItems(values) : [];
+    const withPlan = input.payment_modality === 'nomina_empresa' && input.balance_due > 0;
+    const order = {
+      ...input,
+      company_id: input.company_id ?? null,
+      agreement_id: input.payment_modality === 'nomina_empresa' ? (input.agreement_id ?? null) : null,
+      collection_responsible: input.payment_modality === 'contado' ? 'empleado' : input.collection_responsible,
+      installments_count: withPlan ? (input.installments_count ?? null) : null,
+      installment_periodicity: withPlan ? (input.installment_periodicity ?? null) : null,
+      first_due_date: withPlan ? (input.first_due_date ?? null) : null,
+      notes: input.notes ?? null,
+    };
+    const id = ensure(await supabase.rpc('create_historical_order', { p_order: order, p_items: items }));
+    return { message: 'Orden histórica cargada.', redirect: `/ordenes/${id}` };
+  },
+});
+if (outcome?.kind === 'redirect') return outcome.response;
+const error = outcome?.kind === 'error' ? outcome.error : null;
+const v = outcome?.kind === 'error' ? outcome.values : {};
+const lastAction = outcome?.kind === 'error' ? outcome.action : '';
+
+const [buyerRes, companies, agreements] = await Promise.all([
+  docId ? supabase.from('buyers').select('*').eq('document_type', docType).eq('document_id', docId).maybeSingle() : Promise.resolve({ data: null }),
+  supabase.from('companies').select('id, name').order('name'),
+  companyId
+    ? supabase.from('v_agreements').select('id, deal_name_branch, effective_status, payroll_frequency, max_installments').eq('company_id', companyId).order('created_at', { ascending: false })
+    : Promise.resolve({ data: [] }),
+]);
+const buyer = buyerRes.data;
+const company = companies.data?.find((c) => c.id === companyId) ?? null;
+const orderStep = !!docId && !!buyer?.data_consent_at;
+const modality = v.payment_modality ?? (companyId ? 'nomina_empresa' : 'contado');
+const rows = lastAction === 'create' ? itemRows(v) : [];
+---
+
+<AppLayout title="Cargar orden histórica" error={error}>
+  <a href="/ordenes" class="text-sm">← Órdenes</a>
+  <h1 class="mb-1">Cargar orden histórica</h1>
+  <p class="mb-4 max-w-3xl text-sm text-slate-600">
+    Para ventas reales anteriores al CRM que siguen activas (por producir, por entregar o con saldo). Se registra el contexto mínimo, sin inventar
+    prospección, convenio ni jornada. Revise cada caso contra su soporte: no copie datos clínicos (RX, ADD, fórmula) del Excel.
+  </p>
+
+  <section class="card mb-4 text-sm">
+    <form method="get" class="flex flex-wrap items-end gap-2">
+      {docId && <input type="hidden" name="document_type" value={docType} />}
+      {docId && <input type="hidden" name="document_id" value={docId} />}
+      <div class="min-w-64 flex-1">
+        <label class="label" for="company_id">Empresa</label>
+        <select class="input" id="company_id" name="company_id">
+          <option value="">Particular (sin empresa)</option>
+          {companies.data?.map((c) => <option value={c.id} selected={c.id === companyId}>{c.name}</option>)}
+        </select>
+      </div>
+      <button class="btn" type="submit">Aplicar</button>
+      <p class="w-full text-xs text-slate-500">Un histórico por nómina necesita la empresa; el convenio es opcional si no está registrado en el CRM.</p>
+    </form>
+  </section>
+
+  <section class="card mb-4">
+    <h2 class="mb-3">1. Comprador</h2>
+    {
+      !docId ? (
+        <form method="get" class="grid grid-cols-1 gap-2 sm:grid-cols-4 sm:items-end">
+          {companyId && <input type="hidden" name="company_id" value={companyId} />}
+          <div>
+            <label class="label" for="document_type">Tipo de documento</label>
+            <select class="input" id="document_type" name="document_type">
+              {Object.entries(BUYER_DOCUMENT_LABELS).map(([value, label]) => <option value={value} selected={docType === value}>{label}</option>)}
+            </select>
+          </div>
+          <div class="sm:col-span-2">
+            <label class="label" for="document_id">Número de documento</label>
+            <input class="input" id="document_id" name="document_id" required autofocus inputmode="numeric" />
+          </div>
+          <button class="btn btn-primary" type="submit">Buscar</button>
+        </form>
+      ) : !orderStep ? (
+        <form method="post" class="space-y-3">
+          <input type="hidden" name="_action" value="save_buyer" />
+          {buyer && <input type="hidden" name="buyer_id" value={buyer.id} />}
+          <input type="hidden" name="document_type" value={docType} />
+          <input type="hidden" name="document_id" value={docId} />
+          <p class="text-sm">
+            {BUYER_DOCUMENT_LABELS[docType]} <strong>{docId}</strong>
+            {buyer ? ' · comprador registrado sin autorización de datos.' : ' · comprador nuevo.'}
+            <a class="ml-2" href={selfUrl({ document_id: null })}>Cambiar documento</a>
+          </p>
+          <div class="grid-form">
+            <div class="sm:col-span-2">
+              <label class="label" for="full_name">Nombre completo *</label>
+              <input class="input" id="full_name" name="full_name" required value={v.full_name ?? buyer?.full_name ?? ''} />
+            </div>
+            <div>
+              <label class="label" for="phone">Teléfono</label>
+              <input class="input" id="phone" name="phone" type="tel" value={v.phone ?? buyer?.phone ?? ''} />
+            </div>
+            <div>
+              <label class="label" for="email">Correo</label>
+              <input class="input" id="email" name="email" type="email" value={v.email ?? buyer?.email ?? ''} />
+            </div>
+          </div>
+          <label class="flex items-start gap-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
+            <input type="checkbox" name="data_consent" required class="mt-1" />
+            <span>
+              Consta la autorización del comprador para el tratamiento de sus datos personales conforme a la Ley 1581 de 2012 y a la política de
+              tratamiento de datos vigente.
+            </span>
+          </label>
+          <button class="btn btn-primary" type="submit">Guardar comprador</button>
+        </form>
+      ) : (
+        <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <div>
+            <strong>{buyer!.full_name}</strong> · {BUYER_DOCUMENT_LABELS[buyer!.document_type]} {buyer!.document_id}
+            <div class="text-xs text-green-700">✓ Autorización de datos registrada el {fmtDateTime(buyer!.data_consent_at)}</div>
+          </div>
+          <a href={selfUrl({ document_id: null })}>Cambiar comprador</a>
+        </div>
+      )
+    }
+  </section>
+
+  {
+    orderStep && (
+      <form method="post" class="space-y-4" id="hist-form">
+        <input type="hidden" name="_action" value="create" />
+        <input type="hidden" name="buyer_id" value={buyer!.id} />
+        {companyId && <input type="hidden" name="company_id" value={companyId} />}
+
+        <section class="card space-y-3">
+          <h2>2. Origen y etapa</h2>
+          <div class="grid-form">
+            <div class="sm:col-span-2">
+              <label class="label" for="historical_reference">Referencia de origen *</label>
+              <input class="input" id="historical_reference" name="historical_reference" required minlength="3" maxlength="200"
+                placeholder="Archivo, hoja y fila u orden (p. ej., INFORME JORNADAS · ENERGIA DE PEREIRA · fila 12)" value={v.historical_reference ?? ''} />
+              <p class="mt-1 text-xs text-slate-500">Evita cargar dos veces el mismo caso.</p>
+            </div>
+            <div class="sm:col-span-2">
+              <label class="label" for="historical_stage">Etapa en la que entra *</label>
+              <select class="input" id="historical_stage" name="historical_stage">
+                {STAGES.map((st) => <option value={st} selected={(v.historical_stage ?? 'entregada') === st}>{HISTORICAL_STAGE_LABELS[st]} — {HISTORICAL_STAGE_HINTS[st]}</option>)}
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <section class="card space-y-3">
+          <h2>3. Valor y cobro</h2>
+          <div class="grid-form">
+            <div>
+              <label class="label" for="total_amount">Valor total (COP) *</label>
+              <input class="input" id="total_amount" name="total_amount" inputmode="numeric" required value={v.total_amount ?? ''} />
+            </div>
+            <div>
+              <label class="label" for="balance_due">Saldo vivo hoy (COP) *</label>
+              <input class="input" id="balance_due" name="balance_due" inputmode="numeric" required value={v.balance_due ?? ''} />
+              <p class="mt-1 text-xs text-slate-500" id="collected-preview"></p>
+            </div>
+            <div>
+              <label class="label" for="payment_modality">Modalidad original *</label>
+              <select class="input" id="payment_modality" name="payment_modality">
+                <option value="contado" selected={modality === 'contado'}>{PAYMENT_MODALITY_LABELS.contado}</option>
+                <option value="nomina_empresa" selected={modality === 'nomina_empresa'} disabled={!companyId}>
+                  {PAYMENT_MODALITY_LABELS.nomina_empresa}{!companyId ? ' (elija la empresa)' : ''}
+                </option>
+              </select>
+            </div>
+            <div data-payroll>
+              <label class="label" for="collection_responsible">Responsable de cobro hoy *</label>
+              <select class="input" id="collection_responsible" name="collection_responsible">
+                {(['empresa', 'empleado'] as const).map((r) => <option value={r} selected={(v.collection_responsible ?? 'empresa') === r}>{COLLECTION_RESPONSIBLE_LABELS[r]}</option>)}
+              </select>
+            </div>
+          </div>
+          {companyId && (
+            <fieldset class="space-y-3 rounded-md border border-slate-200 p-3" data-payroll>
+              <legend class="px-1 text-xs font-medium text-slate-600">Nómina · {company?.name}</legend>
+              <div>
+                <label class="label" for="agreement_id">Convenio</label>
+                <select class="input" id="agreement_id" name="agreement_id">
+                  <option value="">Sin convenio registrado en el CRM</option>
+                  {agreements.data?.map((a) => (
+                    <option value={a.id!} selected={v.agreement_id === a.id}>
+                      {a.deal_name_branch ?? 'Convenio marco'} · {a.max_installments} cuotas {a.payroll_frequency} · {a.effective_status}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p class="text-xs text-slate-500" data-plan-hint>Plan de las cuotas que faltan (solo si queda saldo):</p>
+              <div class="grid-form" data-plan>
+                <div>
+                  <label class="label" for="installments_count">Cuotas restantes</label>
+                  <input class="input" id="installments_count" name="installments_count" type="number" min="1" max="24" value={v.installments_count ?? ''} />
+                </div>
+                <div>
+                  <label class="label" for="installment_periodicity">Periodicidad</label>
+                  <select class="input" id="installment_periodicity" name="installment_periodicity">
+                    {(['mensual', 'quincenal'] as const).map((f) => <option value={f} selected={(v.installment_periodicity ?? 'mensual') === f}>{PAYROLL_LABELS[f]}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label class="label" for="first_due_date">Próxima cuota</label>
+                  <input class="input" id="first_due_date" name="first_due_date" type="date" value={v.first_due_date ?? ''} />
+                </div>
+              </div>
+            </fieldset>
+          )}
+          <div>
+            <label class="label" for="notes">Notas</label>
+            <textarea class="input" id="notes" name="notes" rows="2" maxlength="2000">{v.notes}</textarea>
+          </div>
+        </section>
+
+        <section class="card space-y-3">
+          <h2>4. Ítems <span class="text-sm font-normal text-slate-500">(obligatorios si la venta está por producir)</span></h2>
+          <p class="text-xs text-slate-500">Solo la especificación comercial. Si los registra, deben sumar el valor total.</p>
+          <div id="items" class="space-y-4">
+            {(rows.length ? rows : []).map((row, i) => (
+              <div class="border-b border-slate-100 pb-4" data-item-wrap>
+                <OrderItemFields prefix={`items[${i}]`} values={row}>
+                  <div class="col-span-2 flex justify-end sm:col-span-7">
+                    <button type="button" class="btn btn-sm btn-danger" data-remove-item>Quitar ítem</button>
+                  </div>
+                </OrderItemFields>
+              </div>
+            ))}
+          </div>
+          <template id="item-template">
+            <div class="border-b border-slate-100 pb-4" data-item-wrap>
+              <OrderItemFields prefix="items[__i__]">
+                <div class="col-span-2 flex justify-end sm:col-span-7">
+                  <button type="button" class="btn btn-sm btn-danger" data-remove-item>Quitar ítem</button>
+                </div>
+              </OrderItemFields>
+            </div>
+          </template>
+          <button type="button" class="btn" id="add-item">+ Agregar ítem</button>
+        </section>
+
+        <div class="flex gap-2">
+          <button class="btn btn-primary" type="submit">Cargar histórico</button>
+          <a class="btn" href="/ordenes">Cancelar</a>
+        </div>
+      </form>
+    )
+  }
+</AppLayout>
+
+<script>
+  const form = document.getElementById('hist-form') as HTMLFormElement | null;
+  if (form) {
+    const items = document.getElementById('items')!;
+    const template = document.getElementById('item-template') as HTMLTemplateElement;
+    const modality = document.getElementById('payment_modality') as HTMLSelectElement;
+    const total = document.getElementById('total_amount') as HTMLInputElement;
+    const balance = document.getElementById('balance_due') as HTMLInputElement;
+    const collected = document.getElementById('collected-preview')!;
+    const cop = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
+    const num = (s: string) => Number(s.replace(/[.\s$]/g, '') || 0);
+    let next = items.querySelectorAll('[data-item-wrap]').length;
+
+    const refresh = () => {
+      const isPayroll = modality.value === 'nomina_empresa';
+      form.querySelectorAll<HTMLElement>('[data-payroll]').forEach((el) => (el.hidden = !isPayroll));
+      const t = num(total.value);
+      const b = num(balance.value);
+      collected.textContent = t > 0 && b >= 0 && b <= t ? `Recaudado antes de migrar: ${cop.format(t - b)}` : '';
+      const withPlan = isPayroll && b > 0;
+      form.querySelectorAll<HTMLInputElement>('#installments_count, #first_due_date').forEach((el) => (el.required = withPlan));
+    };
+
+    document.getElementById('add-item')!.addEventListener('click', () => {
+      items.insertAdjacentHTML('beforeend', template.innerHTML.replaceAll('__i__', String(next++)));
+    });
+    items.addEventListener('click', (e) => {
+      (e.target as HTMLElement).closest('[data-remove-item]')?.closest('[data-item-wrap]')?.remove();
+    });
+    form.addEventListener('input', refresh);
+    form.addEventListener('change', refresh);
+    refresh();
+  }
+</script>

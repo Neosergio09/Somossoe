@@ -47,7 +47,10 @@ const link = (params: Record<string, string>) => {
 <AppLayout title="Órdenes">
   <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
     <h1>Órdenes</h1>
-    {hasRole(Astro.locals, 'comercial') && <a class="btn btn-primary" href="/ordenes/nueva">Nueva venta directa</a>}
+    <div class="flex gap-2">
+      {hasRole(Astro.locals, 'administracion_cartera') && <a class="btn" href="/ordenes/historico">Cargar histórico</a>}
+      {hasRole(Astro.locals, 'comercial') && <a class="btn btn-primary" href="/ordenes/nueva">Nueva venta directa</a>}
+    </div>
   </div>
   <p class="mb-3 text-sm text-slate-500">Las órdenes de jornada se registran desde la ficha de la jornada.</p>
 
@@ -95,7 +98,7 @@ const link = (params: Record<string, string>) => {
           orders?.map((o) => (
             <tr class:list={[o.is_cancelled && 'opacity-60']}>
               <td class="whitespace-nowrap">
-                <a href={`/ordenes/${o.id}`} class="font-medium">{orderNumber(o.order_number)}</a>
+                <a href={`/ordenes/${o.id}`} class="font-medium">{orderNumber(o.order_number)}</a>{o.is_historical_migration && <span class="badge ml-1">Histórico</span>}
                 <div class="text-xs text-slate-500">{fmtDateTime(o.created_at)}</div>
               </td>
               <td>
