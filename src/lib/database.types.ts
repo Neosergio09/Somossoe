@@ -2527,6 +2527,9 @@ isOneToOne: false
 "apply_payment_batch":
 { Args: { "p_items": Json,"p_payment_id": string }; Returns: number
                            },
+"circuit_summary":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
 "company_timeline":
 { Args: { "p_company_id": string,"p_limit"?: number }; Returns: {
               "action": string,"changed_at": string,"changed_by": string,"changed_by_name": string,"changed_fields": (string)[],"record_id": string,"table_name": string

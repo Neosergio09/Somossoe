@@ -1,0 +1,189 @@
+---
+// Buscador global (Ctrl/⌘ + K): registros (vía /api/buscar, con la RLS
+// del usuario), atajos a módulos y acciones según el rol.
+import Icon from './Icon.astro';
+import { hasRole } from '../lib/auth';
+import { MONEY_ROLES } from '../lib/circuit';
+
+const L = Astro.locals;
+type Item = { type: string; label: string; sub: string; href: string };
+const actions: Item[] = [
+  ...(hasRole(L, 'comercial')
+    ? [
+        { type: 'Acciones', label: 'Nueva empresa', sub: 'Vender', href: '/empresas/nueva' },
+        { type: 'Acciones', label: 'Nueva oportunidad', sub: 'Vender', href: '/oportunidades/nueva' },
+        { type: 'Acciones', label: 'Nueva venta directa', sub: 'Órdenes', href: '/ordenes/nueva' },
+      ]
+    : []),
+  ...(hasRole(L, 'administracion_cartera')
+    ? [
+        { type: 'Acciones', label: 'Registrar pago', sub: 'Recaudo', href: '/recaudo/nuevo' },
+        { type: 'Acciones', label: 'Registrar factura de Alegra', sub: 'Facturación', href: '/facturas/nueva' },
+        { type: 'Acciones', label: 'Cargar orden histórica', sub: 'Órdenes', href: '/ordenes/historico' },
+      ]
+    : []),
+];
+const pages: Item[] = [
+  { type: 'Ir a', label: 'Circuito', sub: 'Inicio', href: '/' },
+  { type: 'Ir a', label: 'Tablero', sub: 'Qué atender primero', href: '/tablero' },
+  { type: 'Ir a', label: 'Empresas', sub: 'Vender', href: '/empresas' },
+  { type: 'Ir a', label: 'Oportunidades', sub: 'Vender', href: '/oportunidades' },
+  { type: 'Ir a', label: 'Convenios', sub: 'Vender', href: '/convenios' },
+  { type: 'Ir a', label: 'Jornadas', sub: 'Operar', href: '/jornadas' },
+  { type: 'Ir a', label: 'Órdenes', sub: 'Operar', href: '/ordenes' },
+  { type: 'Ir a', label: 'Producción y entregas', sub: 'Operar', href: '/produccion' },
+  { type: 'Ir a', label: 'Posventa', sub: 'Operar', href: '/garantias' },
+  { type: 'Ir a', label: 'Facturación', sub: 'Cobrar', href: '/facturas' },
+  ...(hasRole(L, ...MONEY_ROLES)
+    ? [
+        { type: 'Ir a', label: 'Recaudo y cartera', sub: 'Cobrar', href: '/recaudo' },
+        { type: 'Ir a', label: 'Cuotas vencidas y por cobrar', sub: 'Cobrar', href: '/recaudo?vista=cartera' },
+      ]
+    : []),
+  { type: 'Ir a', label: 'Compradores', sub: 'Control', href: '/compradores' },
+];
+---
+
+<dialog
+  id="palette"
+  aria-label="Buscar o ir a"
+  class="m-0 mx-auto mt-[10vh] w-[calc(100%-2rem)] max-w-xl overflow-hidden rounded-2xl border-0 p-0 shadow-2xl backdrop:bg-slate-900/55"
+  data-items={JSON.stringify([...actions, ...pages])}
+>
+  <form method="dialog">
+    <label class="flex h-14 items-center gap-3 border-b border-slate-200 px-4">
+      <Icon name="search" size={18} strokeWidth={2} class="shrink-0 text-slate-500" />
+      <span class="sr-only">Buscar</span>
+      <input
+        id="palette-input"
+        type="text"
+        autocomplete="off"
+        placeholder="Nombre, documento, ORD-123, empresa o acción…"
+        class="h-full flex-1 border-0 bg-transparent text-base text-slate-900 outline-none placeholder:text-slate-400"
+        role="combobox"
+        aria-expanded="true"
+        aria-controls="palette-results"
+      />
+      <kbd class="rounded-md border border-slate-300 px-1.5 py-0.5 font-sans text-xs text-slate-500">Esc</kbd>
+    </label>
+  </form>
+  <div id="palette-results" role="listbox" class="max-h-[60vh] overflow-y-auto p-2"></div>
+  <p class="border-t border-slate-100 px-4 py-2 text-xs text-slate-500">↑ ↓ para moverse · Enter para abrir · Ctrl K para abrir desde cualquier pantalla</p>
+</dialog>
+
+<script>
+  type Item = { type: string; label: string; sub: string; href: string };
+  const dialog = document.getElementById('palette') as HTMLDialogElement | null;
+  const input = document.getElementById('palette-input') as HTMLInputElement | null;
+  const results = document.getElementById('palette-results');
+
+  if (dialog && input && results) {
+    const staticItems: Item[] = JSON.parse(dialog.dataset.items ?? '[]');
+    let items: Item[] = [];
+    let active = 0;
+    let timer: number | undefined;
+    let seq = 0;
+
+    const norm = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+    const render = () => {
+      results.replaceChildren();
+      if (!items.length) {
+        const p = document.createElement('p');
+        p.className = 'px-3 py-6 text-center text-sm text-slate-500';
+        p.textContent = input.value.trim().length >= 2 ? 'Sin resultados.' : 'Escriba al menos 2 letras para buscar registros.';
+        results.append(p);
+        return;
+      }
+      let group = '';
+      items.forEach((it, i) => {
+        if (it.type !== group) {
+          group = it.type;
+          const h = document.createElement('div');
+          h.className = 'px-3 pt-3 pb-1 text-[11px] font-semibold tracking-[0.08em] text-slate-500 uppercase';
+          h.textContent = group;
+          results.append(h);
+        }
+        const a = document.createElement('a');
+        a.href = it.href;
+        a.setAttribute('role', 'option');
+        a.setAttribute('aria-selected', String(i === active));
+        a.className =
+          'flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm text-slate-900 hover:no-underline ' +
+          (i === active ? 'bg-slate-100' : 'hover:bg-slate-50');
+        const label = document.createElement('span');
+        label.className = 'flex-1 truncate font-medium';
+        label.textContent = it.label;
+        const sub = document.createElement('span');
+        sub.className = 'truncate text-xs text-slate-500';
+        sub.textContent = it.sub;
+        a.append(label, sub);
+        a.addEventListener('mouseenter', () => {
+          active = i;
+          [...results.querySelectorAll('[role=option]')].forEach((el, j) => {
+            el.setAttribute('aria-selected', String(j === i));
+            el.classList.toggle('bg-slate-100', j === i);
+          });
+        });
+        results.append(a);
+      });
+    };
+
+    const update = () => {
+      const q = input.value.trim();
+      const nq = norm(q);
+      const local = q ? staticItems.filter((it) => norm(`${it.label} ${it.sub}`).includes(nq)) : staticItems;
+      items = local;
+      active = 0;
+      render();
+      window.clearTimeout(timer);
+      if (q.length < 2) return;
+      const mine = ++seq;
+      timer = window.setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/buscar?q=${encodeURIComponent(q)}`);
+          if (!res.ok || mine !== seq) return;
+          const { hits } = (await res.json()) as { hits: Item[] };
+          items = [...hits, ...local];
+          active = 0;
+          render();
+        } catch {
+          /* sin conexión: quedan los atajos */
+        }
+      }, 200);
+    };
+
+    const open = () => {
+      if (dialog.open) return;
+      input.value = '';
+      update();
+      dialog.showModal();
+      input.focus();
+    };
+
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        open();
+      }
+    });
+    document.querySelectorAll('[data-open-palette]').forEach((b) => b.addEventListener('click', open));
+    input.addEventListener('input', update);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (!items.length) return;
+        active = (active + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length;
+        render();
+        results.querySelector('[aria-selected=true]')?.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const it = items[active];
+        if (it) window.location.href = it.href;
+      }
+    });
+    dialog.addEventListener('click', (e) => {
+      if (e.target === dialog) dialog.close();
+    });
+  }
+</script>
