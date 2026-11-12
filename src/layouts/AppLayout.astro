@@ -25,7 +25,7 @@ const nav = [
   { href: '/produccion', label: 'Producción' },
   { href: '/garantias', label: 'Posventa' },
   { href: '/facturas', label: 'Facturación' },
-  ...(hasRole(Astro.locals, 'administracion_cartera', 'direccion', 'comercial') ? [{ href: '/recaudo', label: 'Recaudo' }] : []),
+  ...(hasRole(Astro.locals, 'administracion_cartera', 'direccion', 'comercial', 'socio') ? [{ href: '/recaudo', label: 'Recaudo' }] : []),
   ...(hasRole(Astro.locals, 'direccion')
     ? [
         { href: '/admin/usuarios', label: 'Usuarios' },

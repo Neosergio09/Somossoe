@@ -47,3 +47,8 @@ export function fmtTime(value: string | null | undefined): string {
 export function todayCo(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
 }
+
+/** Razón (0.3667) como porcentaje con un decimal; null → "—". */
+export function pct(value: number | null | undefined): string {
+  return value == null ? '—' : `${(Number(value) * 100).toLocaleString('es-CO', { maximumFractionDigits: 1 })} %`;
+}

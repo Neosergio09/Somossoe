@@ -46,10 +46,10 @@ const outcome = await runActions(Astro, {
         responsible_user_id: input.responsible_user_id,
       });
       if (error) {
-        return { message: 'Jornada programada, pero la sesión no se pudo guardar. Agréguela desde el detalle.', redirect: `/jornadas/${created.id}` };
+        return { message: 'Jornada creada en borrador, pero la sesión no se pudo guardar. Agréguela desde el detalle.', redirect: `/jornadas/${created.id}` };
       }
     }
-    return { message: 'Jornada programada.', redirect: `/jornadas/${created.id}` };
+    return { message: 'Jornada creada en borrador. Revise las sesiones y prográmela.', redirect: `/jornadas/${created.id}` };
   },
 });
 if (outcome?.kind === 'redirect') return outcome.response;
@@ -81,8 +81,8 @@ const [agreements, branches, users, cities] = await Promise.all([
 ]);
 ---
 
-<AppLayout title="Programar jornada" error={error}>
-  <h1 class="mb-4">Programar jornada</h1>
+<AppLayout title="Nueva jornada" error={error}>
+  <h1 class="mb-4">Nueva jornada</h1>
 
   {
     !deal ? (
@@ -165,7 +165,7 @@ const [agreements, branches, users, cities] = await Promise.all([
         </fieldset>
 
         <div class="flex gap-2">
-          <button class="btn btn-primary" type="submit" disabled={!agreements.data?.length}>Programar jornada</button>
+          <button class="btn btn-primary" type="submit" disabled={!agreements.data?.length}>Crear borrador</button>
           <a class="btn" href={`/oportunidades/${deal.id}`}>Cancelar</a>
         </div>
       </form>

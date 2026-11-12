@@ -1,7 +1,7 @@
 -- Pruebas de facturas de Alegra, estado contable y etapa 7 (Etapa 10).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(24);
+select plan(26);
 
 -- ---------------- Preparación (como postgres) ----------------
 insert into auth.users (id, email) values
@@ -136,7 +136,15 @@ $$, 'P0001', null, 'una orden con factura vinculada no se anula');
 -- ---------------- Etapa 7 automática ----------------
 select is(pg_temp.stage(), 'jornada_en_ejecucion', 'con la jornada abierta la oportunidad no se cierra');
 select pg_temp.login('00000000-0000-0000-0000-0000000000b1');
-update public.campaigns_jornadas set status = 'cerrada' where id = 'eeeeeeee-0000-0000-0000-000000000001';
+update public.campaigns_jornadas set status = 'captura_cerrada' where id = 'eeeeeeee-0000-0000-0000-000000000001';
+select is(pg_temp.stage(), 'jornada_en_ejecucion', 'cerrar la captura no cierra la facturación');
+select throws_ok($$
+  update public.campaigns_jornadas set status = 'operacion_cerrada' where id = 'eeeeeeee-0000-0000-0000-000000000001'
+$$, 'P0001', null, 'la operación no se cierra con órdenes sin entregar');
+-- Las entregas se prueban en 007; aquí se cierra la operación sin pasar por ellas
+reset role;
+update public.campaigns_jornadas set status = 'operacion_cerrada' where id = 'eeeeeeee-0000-0000-0000-000000000001';
+set local role authenticated;
 select is(pg_temp.stage(), 'facturacion_cerrada', 'jornadas cerradas y órdenes facturadas: Facturación Cerrada');
 
 -- ---------------- Anulación de la factura ----------------

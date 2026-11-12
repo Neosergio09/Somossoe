@@ -1,7 +1,7 @@
 -- Pruebas de convenios (Etapa 05) y jornadas (Etapa 06).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(32);
+select plan(33);
 
 -- ---------------- Preparación (como postgres) ----------------
 insert into auth.users (id, email) values
@@ -177,14 +177,16 @@ select throws_ok($$
           current_date + 400, '08:00', '12:00', '00000000-0000-0000-0000-0000000000b1')
 $$, 'P0001', null, 'la sesión no puede quedar fuera de la vigencia del convenio');
 
+select is((select status::text from public.campaigns_jornadas where notes = 'Jornada 1'), 'borrador',
+  'la jornada nace en borrador');
 select throws_ok($$
-  update public.campaigns_jornadas set logistics_confirmed = true, status = 'en_ejecucion'
-  where notes = 'Jornada 1'
-$$, 'P0001', null, 'no se inicia una jornada sin sesiones');
+  update public.campaigns_jornadas set status = 'programada' where notes = 'Jornada 1'
+$$, 'P0001', null, 'no se programa una jornada sin sesiones');
 
 insert into public.campaign_sessions (campaign_id, session_date, start_time, end_time, location_detail, responsible_user_id)
 values ((select id from public.campaigns_jornadas where notes = 'Jornada 1'),
         current_date + 7, '08:00', '12:00', 'Auditorio piso 2', '00000000-0000-0000-0000-0000000000b1');
+update public.campaigns_jornadas set status = 'programada' where notes = 'Jornada 1';
 
 select throws_ok($$
   update public.campaigns_jornadas set status = 'en_ejecucion' where notes = 'Jornada 1'
@@ -201,8 +203,8 @@ select is(
 
 -- ---------------- Asistencia ----------------
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
-insert into public.campaign_attendance (campaign_id, session_id, full_name, document_id, area)
-select j.id, s.id, x.full_name, x.document_id, 'Planta'
+insert into public.campaign_attendance (campaign_id, session_id, full_name, document_id, area, status)
+select j.id, s.id, x.full_name, x.document_id, 'Planta', 'atendido'
 from public.campaigns_jornadas j
 join public.campaign_sessions s on s.campaign_id = j.id
 cross join (values ('Ana Pérez', '1088123456'), ('Carlos Ruiz', '1088654321')) as x (full_name, document_id)
@@ -234,16 +236,16 @@ select is(
 );
 
 -- ---------------- Cierre ----------------
-update public.campaigns_jornadas set status = 'cerrada' where notes = 'Jornada 1';
+update public.campaigns_jornadas set status = 'captura_cerrada' where notes = 'Jornada 1';
 select throws_ok($$
   insert into public.campaign_attendance (campaign_id, session_id, full_name, document_id)
   select j.id, s.id, 'Luis Gómez', '1088000000'
   from public.campaigns_jornadas j join public.campaign_sessions s on s.campaign_id = j.id
   where j.notes = 'Jornada 1'
-$$, 'P0001', null, 'no se registra asistencia en una jornada cerrada');
+$$, 'P0001', null, 'no se registra asistencia con la captura cerrada');
 select throws_ok($$
   update public.campaigns_jornadas set status = 'en_ejecucion' where notes = 'Jornada 1'
-$$, 'P0001', null, 'una jornada cerrada no se reabre');
+$$, 'P0001', null, 'la captura no se reabre sin motivo');
 
 -- ---------------- Archivo obligatorio cuando R2 esté activo ----------------
 select pg_temp.login('00000000-0000-0000-0000-0000000000d1');
