@@ -7,7 +7,7 @@ import { activeLabs, fulfillmentActions } from '../../lib/fulfillment';
 import { itemLabel, loadDeliveries } from '../../lib/deliveries';
 import { activeUsers } from '../../lib/options';
 import { hasRole } from '../../lib/auth';
-import { cop, fmtDate, fmtDateTime, pct } from '../../lib/format';
+import { cop, fmtDate, fmtDateTime, pct, todayCo } from '../../lib/format';
 import { checkbox, date, ensure, FormError, int, parseForm, runActions, text, uuid, z } from '../../lib/forms';
 import {
   ACCOUNTING_STATUS_BADGE,
@@ -31,11 +31,15 @@ import {
   OPS_STATUS_LABELS,
   PAYMENT_MODALITY_LABELS,
   PAYROLL_LABELS,
+  RECLASSIFICATION_REASON_LABELS,
+  RECLASSIFICATION_STATUS_BADGE,
+  RECLASSIFICATION_STATUS_LABELS,
   WARRANTY_STATUS_BADGE,
   WARRANTY_STATUS_LABELS,
   WARRANTY_TYPE_LABELS,
   type CostBasis,
   type CostComponent,
+  type ReclassificationReason,
 } from '../../lib/labels';
 import { itemSchema, money, orderNumber, requirementChecklist } from '../../lib/orders';
 import type { Database } from '../../lib/database.types';
@@ -47,6 +51,7 @@ const id = Astro.params.id!;
 
 const COST_COMPONENTS = Object.keys(COST_COMPONENT_LABELS) as [CostComponent, ...CostComponent[]];
 const COST_BASES = Object.keys(COST_BASIS_LABELS) as [CostBasis, ...CostBasis[]];
+const RECLASS_REASONS = Object.keys(RECLASSIFICATION_REASON_LABELS) as [ReclassificationReason, ...ReclassificationReason[]];
 
 async function updateOrder(patch: OrderUpdate) {
   ensure(await supabase.from('orders').update(patch).eq('id', id).select('id').single());
@@ -205,6 +210,46 @@ const outcome = await runActions(Astro, {
     );
     return { message: 'Costo anulado.' };
   },
+  // Reclasificación de cartera (RF-M06-04): Administración solicita, Dirección decide
+  request_reclass: async (form) => {
+    const input = parseForm(
+      z.object({
+        reason: z.enum(RECLASS_REASONS),
+        notes: text(1000).optional(),
+        new_installments_count: int().min(1).max(24),
+        new_periodicity: z.enum(['mensual', 'quincenal']),
+        new_first_due_date: date(),
+      }),
+      form,
+    );
+    ensure(await supabase.from('portfolio_reclassifications').insert({ ...input, notes: input.notes ?? null, order_id: id }));
+    return { message: 'Reclasificación solicitada. Queda pendiente de autorización de Dirección.' };
+  },
+  decide_reclass: async (form) => {
+    const input = parseForm(
+      z.object({
+        reclass_id: uuid(),
+        decision: z.enum(['autorizada', 'rechazada', 'anulada']),
+        decision_notes: text(1000).optional(),
+      }),
+      form,
+    );
+    ensure(
+      await supabase
+        .from('portfolio_reclassifications')
+        .update({ status: input.decision, decision_notes: input.decision_notes ?? null })
+        .eq('id', input.reclass_id)
+        .eq('order_id', id)
+        .select('id')
+        .single(),
+    );
+    const messages = {
+      autorizada: 'Reclasificación autorizada: el cobro pasa al comprador con el plan nuevo.',
+      rechazada: 'Reclasificación rechazada.',
+      anulada: 'Solicitud anulada.',
+    };
+    return { message: messages[input.decision] };
+  },
 });
 if (outcome?.kind === 'redirect') return outcome.response;
 const error = outcome?.kind === 'error' ? outcome.error : null;
@@ -291,6 +336,15 @@ const [costRows, margin] = canViewCosts
     ])
   : [{ data: [] }, { data: null }];
 const currentCosts = (costRows.data ?? []).filter((c) => c.is_current);
+
+// Reclasificación de cartera
+const reclassRows = canSeeCollection
+  ? ((await supabase.from('v_portfolio_reclassifications').select('*').eq('order_id', id).order('requested_at', { ascending: false })).data ?? [])
+  : [];
+const pendingReclass = reclassRows.find((r) => r.status === 'pendiente') ?? null;
+const canRequestReclass =
+  isAdmin && !isCancelled && isPayroll && o.collection_responsible === 'empresa' && Number(o.balance_due) > 0 && !pendingReclass;
+const isDirector = hasRole(Astro.locals, 'direccion');
 const pastCosts = (costRows.data ?? []).filter((c) => !c.is_current);
 const costItemLabel = (itemId: string) => {
   const item = itemList.find((i) => i.id === itemId);
@@ -436,17 +490,27 @@ const collectedWithholding = activeAllocations.reduce((s2, a) => s2 + Number(a.w
       {
         isPayroll && (
           <section class="card">
-            <h2 class="mb-3">Plan de pagos por nómina</h2>
+            <h2 class="mb-1">Plan de pagos</h2>
+            <p class="mb-3 text-sm text-slate-600">
+              Cobro a: <strong>{COLLECTION_RESPONSIBLE_LABELS[o.collection_responsible!]}</strong>
+              {o.collection_responsible === 'empleado' && <span class="text-slate-500"> (reclasificada; la modalidad original sigue siendo descuento de nómina)</span>}
+            </p>
             <table class="table">
               <thead><tr><th>Cuota</th><th>Vence</th><th class="text-right">Valor</th><th class="text-right">Pagado</th><th>Estado</th></tr></thead>
               <tbody>
                 {plan.map((c) => (
-                  <tr>
+                  <tr class:list={[c.superseded_by_reclassification_id && 'text-slate-400']}>
                     <td>{c.installment_number}</td>
-                    <td>{fmtDate(c.due_date)}</td>
-                    <td class="text-right">{cop(c.expected_amount)}</td>
+                    <td class:list={[c.superseded_by_reclassification_id && 'line-through']}>{fmtDate(c.due_date)}</td>
+                    <td class:list={['text-right', c.superseded_by_reclassification_id && 'line-through']}>{cop(c.expected_amount)}</td>
                     <td class="text-right">{cop(c.paid_amount)}</td>
-                    <td><span class={INSTALLMENT_STATUS_BADGE[c.status ?? 'pendiente']}>{INSTALLMENT_STATUS_LABELS[c.status ?? 'pendiente']}</span></td>
+                    <td>
+                      {c.superseded_by_reclassification_id ? (
+                        <span class="badge">Reemplazada</span>
+                      ) : (
+                        <span class={INSTALLMENT_STATUS_BADGE[c.status ?? 'pendiente']}>{INSTALLMENT_STATUS_LABELS[c.status ?? 'pendiente']}</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -815,6 +879,91 @@ const collectedWithholding = activeAllocations.reduce((s2, a) => s2 + Number(a.w
             {isAdmin && !isCancelled && Number(o.balance_due) > 0 && (
               <a class="btn w-full" href={`/recaudo/nuevo?order_id=${o.id}`}>Registrar pago</a>
             )}
+          </section>
+        )
+      }
+
+      {
+        canSeeCollection && isPayroll && (reclassRows.length > 0 || canRequestReclass) && (
+          <section class="card space-y-3 text-sm">
+            <h2>Reclasificación de cartera</h2>
+            <p class="text-xs text-slate-500">
+              Si el empleado se retira o se incapacita y la empresa no descuenta el saldo, el cobro pasa al comprador con un plan nuevo. Administración solicita; Dirección autoriza.
+            </p>
+            {reclassRows.map((r) => (
+              <div class="space-y-1 rounded-md border border-slate-200 p-2">
+                <div class="flex items-center justify-between gap-2">
+                  <span class={RECLASSIFICATION_STATUS_BADGE[r.status!]}>{RECLASSIFICATION_STATUS_LABELS[r.status!]}</span>
+                  <span class="text-xs text-slate-500">{fmtDateTime(r.requested_at)}</span>
+                </div>
+                <p>
+                  {RECLASSIFICATION_REASON_LABELS[r.reason!]}{r.notes && `: ${r.notes}`}
+                </p>
+                <p class="text-xs text-slate-600">
+                  Plan nuevo: {r.new_installments_count} cuota(s) {PAYROLL_LABELS[r.new_periodicity!].toLowerCase()}(es) desde {fmtDate(r.new_first_due_date)} ·
+                  saldo {cop(r.balance_transferred ?? r.balance_at_request)}{r.status === 'pendiente' && r.current_balance !== r.balance_at_request && ` (hoy ${cop(r.current_balance)})`}
+                </p>
+                <p class="text-xs text-slate-500">
+                  Solicitó {r.requested_by_name}{r.decided_by_name && ` · decidió ${r.decided_by_name} el ${fmtDateTime(r.decided_at)}`}{r.decision_notes && ` · ${r.decision_notes}`}
+                </p>
+                {r.status === 'pendiente' && isDirector && (
+                  <form method="post" class="space-y-1 pt-1">
+                    <input type="hidden" name="_action" value="decide_reclass" />
+                    <input type="hidden" name="reclass_id" value={r.id} />
+                    <input class="input" name="decision_notes" maxlength="1000" placeholder="Observación (obligatoria para rechazar)" aria-label="Observación" />
+                    <div class="grid grid-cols-2 gap-2">
+                      <button class="btn btn-primary btn-sm" name="decision" value="autorizada" type="submit">Autorizar</button>
+                      <button class="btn btn-danger btn-sm" name="decision" value="rechazada" type="submit">Rechazar</button>
+                    </div>
+                  </form>
+                )}
+                {r.status === 'pendiente' && isAdmin && (
+                  <details>
+                    <summary class="cursor-pointer text-xs text-slate-600">Anular solicitud</summary>
+                    <form method="post" class="mt-1 space-y-1">
+                      <input type="hidden" name="_action" value="decide_reclass" />
+                      <input type="hidden" name="reclass_id" value={r.id} />
+                      <input type="hidden" name="decision" value="anulada" />
+                      <input class="input" name="decision_notes" required maxlength="1000" placeholder="Motivo" aria-label="Motivo de la anulación" />
+                      <button class="btn btn-sm w-full" type="submit">Anular</button>
+                    </form>
+                  </details>
+                )}
+              </div>
+            ))}
+            {
+              canRequestReclass && (
+                <details open={lastAction === 'request_reclass'}>
+                  <summary class="cursor-pointer font-medium text-brand-800">Solicitar reclasificación</summary>
+                  <form method="post" class="mt-2 space-y-2">
+                    <input type="hidden" name="_action" value="request_reclass" />
+                    <label class="label">Motivo *</label>
+                    <select class="input" name="reason">
+                      {RECLASS_REASONS.map((k) => <option value={k} selected={v.reason === k}>{RECLASSIFICATION_REASON_LABELS[k]}</option>)}
+                    </select>
+                    <label class="label">Notas</label>
+                    <textarea class="input" name="notes" rows="2" maxlength="1000">{v.notes}</textarea>
+                    <p class="text-xs text-slate-600">Saldo a trasladar: <strong>{cop(o.balance_due)}</strong></p>
+                    <div class="grid grid-cols-2 gap-2">
+                      <div>
+                        <label class="label">Cuotas *</label>
+                        <input class="input" name="new_installments_count" type="number" min="1" max="24" required value={v.new_installments_count ?? '1'} />
+                      </div>
+                      <div>
+                        <label class="label">Periodicidad *</label>
+                        <select class="input" name="new_periodicity">
+                          <option value="mensual" selected={v.new_periodicity !== 'quincenal'}>Mensual</option>
+                          <option value="quincenal" selected={v.new_periodicity === 'quincenal'}>Quincenal</option>
+                        </select>
+                      </div>
+                    </div>
+                    <label class="label">Primera cuota *</label>
+                    <input class="input" name="new_first_due_date" type="date" required min={todayCo()} value={v.new_first_due_date ?? ''} />
+                    <button class="btn btn-primary w-full" type="submit">Solicitar</button>
+                  </form>
+                </details>
+              )
+            }
           </section>
         )
       }

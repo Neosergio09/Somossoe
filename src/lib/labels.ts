@@ -313,3 +313,29 @@ export const MARGIN_BASIS_BADGE: Record<string, string> = {
   estimado: 'badge badge-amber',
   verificado: 'badge badge-green',
 };
+
+// ---------------------------------------------------------------------
+// M06 Reclasificación de cartera
+// ---------------------------------------------------------------------
+export type ReclassificationStatus = Enums['reclassification_status'];
+export type ReclassificationReason = Enums['reclassification_reason'];
+
+export const RECLASSIFICATION_STATUS_LABELS: Record<ReclassificationStatus, string> = {
+  pendiente: 'Pendiente de autorización',
+  autorizada: 'Autorizada',
+  rechazada: 'Rechazada',
+  anulada: 'Anulada',
+};
+
+export const RECLASSIFICATION_STATUS_BADGE: Record<ReclassificationStatus, string> = {
+  pendiente: 'badge badge-amber',
+  autorizada: 'badge badge-green',
+  rechazada: 'badge badge-red',
+  anulada: 'badge',
+};
+
+export const RECLASSIFICATION_REASON_LABELS: Record<ReclassificationReason, string> = {
+  retiro: 'Retiro del empleado',
+  incapacidad: 'Incapacidad',
+  otro: 'Otro',
+};

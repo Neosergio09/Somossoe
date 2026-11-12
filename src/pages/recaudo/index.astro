@@ -1,12 +1,20 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
 import { hasRole } from '../../lib/auth';
-import { cop, fmtDate } from '../../lib/format';
-import { COLLECTION_RESPONSIBLE_LABELS, COLLECTION_STATUS_BADGE, COLLECTION_STATUS_LABELS, PAYMENT_MODALITY_LABELS } from '../../lib/labels';
+import { cop, fmtDate, fmtDateTime } from '../../lib/format';
+import {
+  COLLECTION_RESPONSIBLE_LABELS,
+  COLLECTION_STATUS_BADGE,
+  COLLECTION_STATUS_LABELS,
+  PAYMENT_MODALITY_LABELS,
+  RECLASSIFICATION_REASON_LABELS,
+  RECLASSIFICATION_STATUS_BADGE,
+  RECLASSIFICATION_STATUS_LABELS,
+} from '../../lib/labels';
 import { safeSearch } from '../../lib/options';
 import { orderNumber } from '../../lib/orders';
 
-if (!hasRole(Astro.locals, 'administracion_cartera', 'direccion', 'comercial')) return Astro.redirect('/');
+if (!hasRole(Astro.locals, 'administracion_cartera', 'direccion', 'comercial', 'socio')) return Astro.redirect('/');
 
 const { supabase } = Astro.locals;
 const view = Astro.url.searchParams.get('vista') ?? 'pagos';
@@ -20,16 +28,32 @@ if (q) paymentsQuery = paymentsQuery.or(`payer_name.ilike.%${q}%,bank_reference.
 let receivablesQuery = supabase.from('v_receivables').select('*').order('overdue_amount', { ascending: false }).order('next_due_date', { nullsFirst: false }).limit(500);
 if (q) receivablesQuery = receivablesQuery.or(`buyer_name.ilike.%${q}%,company_name.ilike.%${q}%,buyer_document_id.ilike.%${q}%`);
 
-const [payments, receivables] = await Promise.all([
-  view === 'cartera' ? Promise.resolve({ data: [] }) : paymentsQuery,
+let reclassQuery = supabase
+  .from('v_portfolio_reclassifications')
+  .select('*')
+  .order('status')
+  .order('requested_at', { ascending: false })
+  .limit(300);
+if (q) reclassQuery = reclassQuery.or(`buyer_name.ilike.%${q}%,company_name.ilike.%${q}%,buyer_document_id.ilike.%${q}%`);
+
+const [payments, receivables, reclassifications] = await Promise.all([
+  view === 'pagos' || view === 'anulados' ? paymentsQuery : Promise.resolve({ data: [] }),
   view === 'cartera' ? receivablesQuery : Promise.resolve({ data: [] }),
+  view === 'reclasificaciones' ? reclassQuery : Promise.resolve({ data: [] }),
 ]);
+const pendingReclassCount =
+  (await supabase.from('portfolio_reclassifications').select('id', { count: 'exact', head: true }).eq('status', 'pendiente')).count ?? 0;
 const rows = receivables.data ?? [];
 const totals = {
   balance: rows.reduce((s, r) => s + Number(r.balance_due ?? 0), 0),
   overdue: rows.reduce((s, r) => s + Number(r.overdue_amount ?? 0), 0),
 };
-const tabs: [string, string][] = [['pagos', 'Pagos'], ['cartera', 'Cartera por cobrar'], ['anulados', 'Anulados']];
+const tabs: [string, string][] = [
+  ['pagos', 'Pagos'],
+  ['cartera', 'Cartera por cobrar'],
+  ['reclasificaciones', pendingReclassCount ? `Reclasificaciones (${pendingReclassCount} pendientes)` : 'Reclasificaciones'],
+  ['anulados', 'Anulados'],
+];
 ---
 
 <AppLayout title="Recaudo">
@@ -54,7 +78,7 @@ const tabs: [string, string][] = [['pagos', 'Pagos'], ['cartera', 'Cartera por c
     </nav>
     <form method="get" class="ml-auto flex gap-2">
       <input type="hidden" name="vista" value={view} />
-      <input class="input w-64" name="q" value={q} placeholder={view === 'cartera' ? 'Comprador, documento o empresa' : 'Pagador o referencia'} />
+      <input class="input w-64" name="q" value={q} placeholder={view === 'cartera' || view === 'reclasificaciones' ? 'Comprador, documento o empresa' : 'Pagador o referencia'} />
       <button class="btn" type="submit">Buscar</button>
     </form>
   </div>
@@ -89,6 +113,29 @@ const tabs: [string, string][] = [['pagos', 'Pagos'], ['cartera', 'Cartera por c
           </table>
         </div>
       </>
+    ) : view === 'reclasificaciones' ? (
+      <div class="card overflow-x-auto p-0">
+        <table class="table">
+          <thead><tr><th>Orden</th><th>Comprador</th><th>Motivo</th><th class="text-right">Saldo</th><th>Plan nuevo</th><th>Solicitud</th><th>Estado</th></tr></thead>
+          <tbody>
+            {reclassifications.data?.map((r) => (
+              <tr>
+                <td><a href={`/ordenes/${r.order_id}`} class="font-medium">{orderNumber(r.order_number)}</a></td>
+                <td>{r.buyer_name}<div class="text-xs text-slate-500">{r.company_name}</div></td>
+                <td>{RECLASSIFICATION_REASON_LABELS[r.reason!]}{r.notes && <div class="text-xs text-slate-500">{r.notes}</div>}</td>
+                <td class="text-right whitespace-nowrap">{cop(r.balance_transferred ?? r.balance_at_request)}</td>
+                <td class="whitespace-nowrap text-xs">{r.new_installments_count} cuota(s) {r.new_periodicity} · desde {fmtDate(r.new_first_due_date)}</td>
+                <td class="text-xs">{r.requested_by_name}<br />{fmtDateTime(r.requested_at)}</td>
+                <td>
+                  <span class={RECLASSIFICATION_STATUS_BADGE[r.status!]}>{RECLASSIFICATION_STATUS_LABELS[r.status!]}</span>
+                  {r.decided_by_name && <div class="text-xs text-slate-500">{r.decided_by_name}{r.decision_notes && ` · ${r.decision_notes}`}</div>}
+                </td>
+              </tr>
+            ))}
+            {!reclassifications.data?.length && <tr><td colspan="7" class="py-6 text-center text-slate-500">No hay reclasificaciones. Se solicitan desde la ficha de una orden por nómina.</td></tr>}
+          </tbody>
+        </table>
+      </div>
     ) : (
       <div class="card overflow-x-auto p-0">
         <table class="table">

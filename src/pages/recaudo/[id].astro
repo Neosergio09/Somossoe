@@ -6,7 +6,7 @@ import { date, ensure, FormError, parseForm, runActions, text, uuid, z } from '.
 import { COLLECTION_RESPONSIBLE_LABELS, PAYMENT_MODALITY_LABELS } from '../../lib/labels';
 import { money, orderNumber } from '../../lib/orders';
 
-if (!hasRole(Astro.locals, 'administracion_cartera', 'direccion', 'comercial')) return Astro.redirect('/');
+if (!hasRole(Astro.locals, 'administracion_cartera', 'direccion', 'comercial', 'socio')) return Astro.redirect('/');
 const { supabase } = Astro.locals;
 const id = Astro.params.id!;
 const isAdmin = hasRole(Astro.locals, 'administracion_cartera');

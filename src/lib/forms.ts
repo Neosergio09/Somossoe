@@ -177,6 +177,11 @@ const FIELD_LABELS: Record<string, string> = {
   void_reason: 'Motivo de la anulación',
   component: 'Componente',
   basis: 'Tipo de costo',
+  new_installments_count: 'Número de cuotas',
+  new_first_due_date: 'Fecha de la primera cuota',
+  new_periodicity: 'Periodicidad',
+  decision_notes: 'Motivo',
+  reason: 'Motivo',
 };
 
 const UNIQUE_MESSAGES: Record<string, string> = {
@@ -187,6 +192,7 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   campaign_attendance_unique_person: 'Esa persona ya está registrada en esta sesión.',
   campaign_attendance_one_attended_key: 'Esa persona ya figura como atendida en esta jornada.',
   order_costs_replaces_key: 'Ese costo ya fue reemplazado por otra versión.',
+  portfolio_reclassifications_one_pending_key: 'La orden ya tiene una reclasificación pendiente de autorización.',
   cities_name_key: 'Ya existe una ciudad con ese nombre.',
   lab_providers_name_key: 'Ya existe un laboratorio con ese nombre.',
   deal_origins_pkey: 'Ya existe un origen con ese código.',
@@ -251,6 +257,9 @@ const CHECK_MESSAGES: Record<string, string> = {
   order_costs_source_check: 'Indique la fuente del costo (entre 3 y 300 caracteres).',
   order_costs_void_reason: 'Indique el motivo de la anulación.',
   campaigns_jornadas_reopen_reason_check: 'El motivo es demasiado largo.',
+  portfolio_reclassifications_other_notes: 'Con el motivo «Otro», explique el caso en las notas.',
+  portfolio_reclassifications_decision_notes: 'Indique el motivo del rechazo o de la anulación.',
+  portfolio_reclassifications_new_installments_count_check: 'El plan nuevo admite entre 1 y 24 cuotas.',
 };
 
 /** Reemplaza códigos internos (etapas, estados) por su etiqueta. */
