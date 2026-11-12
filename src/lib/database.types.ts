@@ -949,6 +949,18 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "v_receivables"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_installments_reclassification_fkey"
+      columns: ["superseded_by_reclassification_id"]
+isOneToOne: false
+      referencedRelation: "portfolio_reclassifications"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_installments_reclassification_fkey"
+      columns: ["superseded_by_reclassification_id"]
+isOneToOne: false
+      referencedRelation: "v_portfolio_reclassifications"
+      referencedColumns: ["id"]
     }
                   ]
                 },"order_items": {
@@ -1230,6 +1242,62 @@ isOneToOne: false
     },{
       foreignKeyName: "payment_allocations_voided_by_fkey"
       columns: ["voided_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"portfolio_reclassifications": {
+                  Row: {
+                    "balance_at_request": number,"balance_transferred": number | null,"decided_at": string | null,"decided_by": string | null,"decision_notes": string | null,"from_responsible": Database["public"]['Enums']["collection_responsible"],"id": string,"new_first_due_date": string,"new_installments_count": number,"new_periodicity": Database["public"]['Enums']["payroll_frequency"],"notes": string | null,"order_id": string,"reason": Database["public"]['Enums']["reclassification_reason"],"requested_at": string,"requested_by": string | null,"status": Database["public"]['Enums']["reclassification_status"],"to_responsible": Database["public"]['Enums']["collection_responsible"]
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "balance_at_request"?: number,"balance_transferred"?: number | null,"decided_at"?: string | null,"decided_by"?: string | null,"decision_notes"?: string | null,"from_responsible"?: Database["public"]['Enums']["collection_responsible"],"id"?: string,"new_first_due_date": string,"new_installments_count": number,"new_periodicity": Database["public"]['Enums']["payroll_frequency"],"notes"?: string | null,"order_id": string,"reason": Database["public"]['Enums']["reclassification_reason"],"requested_at"?: string,"requested_by"?: string | null,"status"?: Database["public"]['Enums']["reclassification_status"],"to_responsible"?: Database["public"]['Enums']["collection_responsible"]
+                  }
+                  Update: {
+                    "balance_at_request"?: number,"balance_transferred"?: number | null,"decided_at"?: string | null,"decided_by"?: string | null,"decision_notes"?: string | null,"from_responsible"?: Database["public"]['Enums']["collection_responsible"],"id"?: string,"new_first_due_date"?: string,"new_installments_count"?: number,"new_periodicity"?: Database["public"]['Enums']["payroll_frequency"],"notes"?: string | null,"order_id"?: string,"reason"?: Database["public"]['Enums']["reclassification_reason"],"requested_at"?: string,"requested_by"?: string | null,"status"?: Database["public"]['Enums']["reclassification_status"],"to_responsible"?: Database["public"]['Enums']["collection_responsible"]
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "portfolio_reclassifications_decided_by_fkey"
+      columns: ["decided_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "portfolio_reclassifications_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "portfolio_reclassifications_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_order_margins"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "portfolio_reclassifications_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "portfolio_reclassifications_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders_to_invoice"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "portfolio_reclassifications_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_receivables"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "portfolio_reclassifications_requested_by_fkey"
+      columns: ["requested_by"]
 isOneToOne: false
       referencedRelation: "users_profiles"
       referencedColumns: ["id"]
@@ -1716,6 +1784,18 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "v_receivables"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_installments_reclassification_fkey"
+      columns: ["superseded_by_reclassification_id"]
+isOneToOne: false
+      referencedRelation: "portfolio_reclassifications"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_installments_reclassification_fkey"
+      columns: ["superseded_by_reclassification_id"]
+isOneToOne: false
+      referencedRelation: "v_portfolio_reclassifications"
+      referencedColumns: ["id"]
     }
                   ]
                 },"v_order_item_delivery": {
@@ -1988,6 +2068,68 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"v_portfolio_reclassifications": {
+                  Row: {
+                    "balance_at_request": number,"balance_transferred": number | null,"buyer_document_id": string,"buyer_id": string,"buyer_name": string,"company_id": string | null,"company_name": string | null,"current_balance": number,"decided_at": string | null,"decided_by": string | null,"decided_by_name": string | null,"decision_notes": string | null,"from_responsible": Database["public"]['Enums']["collection_responsible"],"id": string,"new_first_due_date": string,"new_installments_count": number,"new_periodicity": Database["public"]['Enums']["payroll_frequency"],"notes": string | null,"order_id": string,"order_number": number,"reason": Database["public"]['Enums']["reclassification_reason"],"requested_at": string,"requested_by": string | null,"requested_by_name": string | null,"status": Database["public"]['Enums']["reclassification_status"],"to_responsible": Database["public"]['Enums']["collection_responsible"]
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "orders_buyer_id_fkey"
+      columns: ["buyer_id"]
+isOneToOne: false
+      referencedRelation: "buyers"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_company_id_fkey"
+      columns: ["company_id"]
+isOneToOne: false
+      referencedRelation: "companies"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "portfolio_reclassifications_decided_by_fkey"
+      columns: ["decided_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "portfolio_reclassifications_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "portfolio_reclassifications_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_order_margins"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "portfolio_reclassifications_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "portfolio_reclassifications_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders_to_invoice"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "portfolio_reclassifications_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_receivables"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "portfolio_reclassifications_requested_by_fkey"
+      columns: ["requested_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"v_productions": {
                   Row: {
                     "buyer_document_id": string,"buyer_name": string,"cancel_reason": string | null,"city_name": string | null,"company_name": string | null,"id": string,"is_overdue": boolean | null,"lab_name": string,"lab_provider_id": string,"notes": string | null,"ops_status": Database["public"]['Enums']["order_ops_status"],"order_id": string,"order_number": number,"promised_date": string,"ready_at": string | null,"released_at": string,"released_by": string | null,"released_by_name": string | null,"sent_to_lab_at": string,"status": Database["public"]['Enums']["production_status"],"warranty_id": string | null
@@ -2151,7 +2293,7 @@ isOneToOne: false
                            }
           }
           Enums: {
-            "agreement_document_type": "convenio_firmado"|"camara_comercio"|"rut"|"formato_rrhh"|"otro","agreement_status": "borrador"|"pendiente_aprobacion"|"aprobado"|"cancelado","app_role": "comercial"|"operacion"|"administracion_cartera"|"direccion"|"proveedor_lab"|"socio","attendance_status": "agendado"|"presente"|"atendido"|"no_asistio"|"cancelado","buyer_document_type": "cc"|"ce"|"ti"|"pasaporte"|"otro","campaign_status": "borrador"|"programada"|"en_ejecucion"|"captura_cerrada"|"operacion_cerrada"|"cancelada","collection_responsible": "empresa"|"empleado","contact_area": "rrhh"|"sst"|"gerencia"|"compras"|"otra","cost_basis": "estimado"|"verificado","cost_component": "lente"|"montura"|"kit"|"otro","deal_stage": "prospecto"|"reunion_exploratoria"|"propuesta_enviada"|"negociacion"|"convenio_firmado"|"jornada_en_ejecucion"|"facturacion_cerrada"|"cierre_perdido","interaction_type": "reunion"|"llamada"|"whatsapp"|"correo","invoice_radication_status": "pendiente"|"radicada"|"rechazada","lost_substatus": "nurturing"|"no_contactar","order_accounting_status": "pendiente_vincular"|"factura_vinculada"|"factura_con_diferencia","order_collection_status": "con_saldo"|"parcialmente_recaudado"|"recaudado_total","order_doc_status": "pendiente_soportes"|"requisitos_verificados","order_item_type": "gafas_completas"|"montura"|"lentes"|"otro","order_ops_status": "pendiente_liberar"|"en_produccion"|"listo_para_entregar"|"entrega_parcial"|"entrega_completa","payment_modality": "contado"|"nomina_empresa","payroll_frequency": "mensual"|"quincenal","production_status": "en_produccion"|"listo_para_entregar"|"cancelada","warranty_incident_type": "garantia"|"reclamo"|"ajuste"|"otro","warranty_status": "abierta"|"en_reposicion"|"cerrada"
+            "agreement_document_type": "convenio_firmado"|"camara_comercio"|"rut"|"formato_rrhh"|"otro","agreement_status": "borrador"|"pendiente_aprobacion"|"aprobado"|"cancelado","app_role": "comercial"|"operacion"|"administracion_cartera"|"direccion"|"proveedor_lab"|"socio","attendance_status": "agendado"|"presente"|"atendido"|"no_asistio"|"cancelado","buyer_document_type": "cc"|"ce"|"ti"|"pasaporte"|"otro","campaign_status": "borrador"|"programada"|"en_ejecucion"|"captura_cerrada"|"operacion_cerrada"|"cancelada","collection_responsible": "empresa"|"empleado","contact_area": "rrhh"|"sst"|"gerencia"|"compras"|"otra","cost_basis": "estimado"|"verificado","cost_component": "lente"|"montura"|"kit"|"otro","deal_stage": "prospecto"|"reunion_exploratoria"|"propuesta_enviada"|"negociacion"|"convenio_firmado"|"jornada_en_ejecucion"|"facturacion_cerrada"|"cierre_perdido","interaction_type": "reunion"|"llamada"|"whatsapp"|"correo","invoice_radication_status": "pendiente"|"radicada"|"rechazada","lost_substatus": "nurturing"|"no_contactar","order_accounting_status": "pendiente_vincular"|"factura_vinculada"|"factura_con_diferencia","order_collection_status": "con_saldo"|"parcialmente_recaudado"|"recaudado_total","order_doc_status": "pendiente_soportes"|"requisitos_verificados","order_item_type": "gafas_completas"|"montura"|"lentes"|"otro","order_ops_status": "pendiente_liberar"|"en_produccion"|"listo_para_entregar"|"entrega_parcial"|"entrega_completa","payment_modality": "contado"|"nomina_empresa","payroll_frequency": "mensual"|"quincenal","production_status": "en_produccion"|"listo_para_entregar"|"cancelada","reclassification_reason": "retiro"|"incapacidad"|"otro","reclassification_status": "pendiente"|"autorizada"|"rechazada"|"anulada","warranty_incident_type": "garantia"|"reclamo"|"ajuste"|"otro","warranty_status": "abierta"|"en_reposicion"|"cerrada"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -2271,7 +2413,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "agreement_document_type": ["convenio_firmado", "camara_comercio", "rut", "formato_rrhh", "otro"],"agreement_status": ["borrador", "pendiente_aprobacion", "aprobado", "cancelado"],"app_role": ["comercial", "operacion", "administracion_cartera", "direccion", "proveedor_lab", "socio"],"attendance_status": ["agendado", "presente", "atendido", "no_asistio", "cancelado"],"buyer_document_type": ["cc", "ce", "ti", "pasaporte", "otro"],"campaign_status": ["borrador", "programada", "en_ejecucion", "captura_cerrada", "operacion_cerrada", "cancelada"],"collection_responsible": ["empresa", "empleado"],"contact_area": ["rrhh", "sst", "gerencia", "compras", "otra"],"cost_basis": ["estimado", "verificado"],"cost_component": ["lente", "montura", "kit", "otro"],"deal_stage": ["prospecto", "reunion_exploratoria", "propuesta_enviada", "negociacion", "convenio_firmado", "jornada_en_ejecucion", "facturacion_cerrada", "cierre_perdido"],"interaction_type": ["reunion", "llamada", "whatsapp", "correo"],"invoice_radication_status": ["pendiente", "radicada", "rechazada"],"lost_substatus": ["nurturing", "no_contactar"],"order_accounting_status": ["pendiente_vincular", "factura_vinculada", "factura_con_diferencia"],"order_collection_status": ["con_saldo", "parcialmente_recaudado", "recaudado_total"],"order_doc_status": ["pendiente_soportes", "requisitos_verificados"],"order_item_type": ["gafas_completas", "montura", "lentes", "otro"],"order_ops_status": ["pendiente_liberar", "en_produccion", "listo_para_entregar", "entrega_parcial", "entrega_completa"],"payment_modality": ["contado", "nomina_empresa"],"payroll_frequency": ["mensual", "quincenal"],"production_status": ["en_produccion", "listo_para_entregar", "cancelada"],"warranty_incident_type": ["garantia", "reclamo", "ajuste", "otro"],"warranty_status": ["abierta", "en_reposicion", "cerrada"]
+            "agreement_document_type": ["convenio_firmado", "camara_comercio", "rut", "formato_rrhh", "otro"],"agreement_status": ["borrador", "pendiente_aprobacion", "aprobado", "cancelado"],"app_role": ["comercial", "operacion", "administracion_cartera", "direccion", "proveedor_lab", "socio"],"attendance_status": ["agendado", "presente", "atendido", "no_asistio", "cancelado"],"buyer_document_type": ["cc", "ce", "ti", "pasaporte", "otro"],"campaign_status": ["borrador", "programada", "en_ejecucion", "captura_cerrada", "operacion_cerrada", "cancelada"],"collection_responsible": ["empresa", "empleado"],"contact_area": ["rrhh", "sst", "gerencia", "compras", "otra"],"cost_basis": ["estimado", "verificado"],"cost_component": ["lente", "montura", "kit", "otro"],"deal_stage": ["prospecto", "reunion_exploratoria", "propuesta_enviada", "negociacion", "convenio_firmado", "jornada_en_ejecucion", "facturacion_cerrada", "cierre_perdido"],"interaction_type": ["reunion", "llamada", "whatsapp", "correo"],"invoice_radication_status": ["pendiente", "radicada", "rechazada"],"lost_substatus": ["nurturing", "no_contactar"],"order_accounting_status": ["pendiente_vincular", "factura_vinculada", "factura_con_diferencia"],"order_collection_status": ["con_saldo", "parcialmente_recaudado", "recaudado_total"],"order_doc_status": ["pendiente_soportes", "requisitos_verificados"],"order_item_type": ["gafas_completas", "montura", "lentes", "otro"],"order_ops_status": ["pendiente_liberar", "en_produccion", "listo_para_entregar", "entrega_parcial", "entrega_completa"],"payment_modality": ["contado", "nomina_empresa"],"payroll_frequency": ["mensual", "quincenal"],"production_status": ["en_produccion", "listo_para_entregar", "cancelada"],"reclassification_reason": ["retiro", "incapacidad", "otro"],"reclassification_status": ["pendiente", "autorizada", "rechazada", "anulada"],"warranty_incident_type": ["garantia", "reclamo", "ajuste", "otro"],"warranty_status": ["abierta", "en_reposicion", "cerrada"]
           }
         }
 } as const
