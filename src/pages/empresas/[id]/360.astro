@@ -1,0 +1,393 @@
+---
+// RF-M07-02: Dashboard completo del cliente corporativo (solo lectura, 6 bloques)
+import AppLayout from '../../../layouts/AppLayout.astro';
+import { hasRole } from '../../../lib/auth';
+import { cop, fmtDate, fmtDateTime, pct } from '../../../lib/format';
+import {
+  ACCOUNTING_STATUS_BADGE,
+  ACCOUNTING_STATUS_LABELS,
+  AGREEMENT_STATUS_BADGE,
+  AGREEMENT_STATUS_LABELS,
+  AREA_LABELS,
+  CAMPAIGN_STATUS_BADGE,
+  CAMPAIGN_STATUS_LABELS,
+  COLLECTION_STATUS_BADGE,
+  COLLECTION_STATUS_LABELS,
+  DOC_STATUS_BADGE,
+  DOC_STATUS_LABELS,
+  DOCUMENT_TYPE_LABELS,
+  INTERACTION_LABELS,
+  OPS_STATUS_BADGE,
+  OPS_STATUS_LABELS,
+  PAYROLL_LABELS,
+  STAGE_LABELS,
+} from '../../../lib/labels';
+import { orderNumber } from '../../../lib/orders';
+import { TABLE_LABELS } from '../../../lib/timeline';
+
+const { supabase } = Astro.locals;
+const id = Astro.params.id!;
+const params = Astro.url.searchParams;
+
+const { data: company } = await supabase.from('companies').select('*').eq('id', id).maybeSingle();
+if (!company) return new Response('Empresa no encontrada', { status: 404 });
+
+const canSeeMoney = hasRole(Astro.locals, 'administracion_cartera', 'direccion', 'comercial', 'socio');
+const canSeeCosts = hasRole(Astro.locals, 'direccion', 'socio');
+const canSeeTimeline = hasRole(Astro.locals, 'administracion_cartera', 'direccion', 'socio');
+
+// Filtro de órdenes por los 4 estados independientes
+const filters = {
+  doc_status: params.get('doc') ?? '',
+  ops_status: params.get('ops') ?? '',
+  accounting_status: params.get('acc') ?? '',
+  collection_status: params.get('col') ?? '',
+};
+
+let ordersQuery = supabase
+  .from('v_orders')
+  .select('id, order_number, deal_id, campaign_id, buyer_id, buyer_name, buyer_document_id, total_amount, balance_due, payment_modality, collection_responsible, doc_status, ops_status, accounting_status, collection_status, is_cancelled, is_historical_migration, created_at')
+  .eq('company_id', id)
+  .order('created_at', { ascending: false })
+  .limit(500);
+for (const [col, value] of Object.entries(filters)) if (value) ordersQuery = ordersQuery.eq(col, value as never);
+
+const [assigned, branches, contacts, agreements, deals, campaigns, orders, allOrders, finance, payments, margins, timeline] = await Promise.all([
+  company.assigned_user_id ? supabase.from('users_profiles').select('full_name').eq('id', company.assigned_user_id).maybeSingle() : Promise.resolve({ data: null }),
+  supabase.from('company_branches').select('id, name, address, is_main, city_other, cities(name)').eq('company_id', id).order('is_main', { ascending: false }),
+  supabase.from('contacts').select('*').eq('company_id', id).eq('active', true).order('full_name'),
+  supabase.from('v_agreements').select('*').eq('company_id', id).order('created_at', { ascending: false }),
+  supabase.from('v_deals_board').select('*').eq('company_id', id).order('created_at', { ascending: false }),
+  supabase.from('v_campaigns').select('*').eq('company_id', id).order('first_session_date', { ascending: false, nullsFirst: false }),
+  ordersQuery,
+  supabase.from('v_orders').select('deal_id, campaign_id, buyer_id, total_amount, is_cancelled').eq('company_id', id).limit(5000),
+  canSeeMoney ? supabase.from('v_company_finance').select('*').eq('company_id', id).maybeSingle() : Promise.resolve({ data: null }),
+  canSeeMoney ? supabase.from('v_payments').select('*').eq('company_id', id).order('payment_date', { ascending: false }).limit(50) : Promise.resolve({ data: [] }),
+  canSeeCosts ? supabase.from('v_order_margins').select('total_amount, cost_total, costs_count, is_cancelled').eq('company_id', id) : Promise.resolve({ data: [] }),
+  canSeeTimeline ? supabase.rpc('company_timeline', { p_company_id: id, p_limit: 60 }) : Promise.resolve({ data: [] }),
+]);
+
+const agreementIds = (agreements.data ?? []).map((a) => a.id!);
+const dealIds = (deals.data ?? []).map((d) => d.id!);
+const [documents, logs] = await Promise.all([
+  agreementIds.length ? supabase.from('agreement_documents').select('*').in('agreement_id', agreementIds).order('uploaded_at', { ascending: false }) : Promise.resolve({ data: [] }),
+  dealIds.length
+    ? supabase.from('deal_interaction_logs').select('id, deal_id, interaction_type, interaction_note, created_at, users_profiles(full_name)').in('deal_id', dealIds).order('created_at', { ascending: false }).limit(20)
+    : Promise.resolve({ data: [] }),
+]);
+
+// Facturación Estimada vs Valor Real Vendido por oportunidad (RF-M03-04)
+const active = (allOrders.data ?? []).filter((o) => !o.is_cancelled);
+const soldByDeal = new Map<string, number>();
+for (const o of active) if (o.deal_id) soldByDeal.set(o.deal_id, (soldByDeal.get(o.deal_id) ?? 0) + Number(o.total_amount ?? 0));
+const buyersByCampaign = new Map<string, Set<string>>();
+for (const o of active) {
+  if (!o.campaign_id) continue;
+  const set = buyersByCampaign.get(o.campaign_id) ?? new Set<string>();
+  set.add(o.buyer_id!);
+  buyersByCampaign.set(o.campaign_id, set);
+}
+const dealName = new Map((deals.data ?? []).map((d) => [d.id!, d.deal_name_branch]));
+
+const costRows = (margins.data ?? []) as { total_amount: number | null; cost_total: number | null; costs_count: number | null; is_cancelled: boolean | null }[];
+const costTotal = costRows.reduce((s, m) => s + Number(m.cost_total ?? 0), 0);
+const soldActive = costRows.filter((m) => !m.is_cancelled).reduce((s, m) => s + Number(m.total_amount ?? 0), 0);
+const withoutCost = costRows.filter((m) => !m.is_cancelled && !m.costs_count).length;
+
+const orderList = orders.data ?? [];
+const fin = finance.data;
+const filterHref = (patch: Record<string, string>) => {
+  const q = new URLSearchParams(params);
+  for (const [k, v] of Object.entries(patch)) v ? q.set(k, v) : q.delete(k);
+  return `?${q.toString()}#ordenes`;
+};
+const hasFilter = Object.values(filters).some(Boolean);
+---
+
+<AppLayout title={`360° · ${company.name}`}>
+  <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <a href={`/empresas/${id}`} class="text-sm">← Ficha de la empresa</a>
+      <h1>{company.name} <span class="text-base font-normal text-slate-500">· Vista 360°</span></h1>
+      <p class="text-sm text-slate-600">
+        {company.is_nit_provisional ? <span class="badge badge-amber">NIT provisional</span> : <>NIT {company.nit}-{company.nit_dv}</>}
+        · {company.sector} · Ejecutivo: {assigned.data?.full_name ?? 'sin asignar'}
+      </p>
+    </div>
+    {
+      fin && (
+        <div class="text-right text-sm">
+          <div>Vendido <strong>{cop(fin.total_sold)}</strong> · {fin.active_orders} órdenes</div>
+          <div>Saldo vivo <strong>{cop(fin.balance_due)}</strong>{Number(fin.overdue_amount) > 0 && <span class="badge badge-red ml-1">vencido {cop(fin.overdue_amount)}</span>}</div>
+        </div>
+      )
+    }
+  </div>
+
+  <nav class="mb-4 flex flex-wrap gap-1 text-sm">
+    {[['ficha', 'Ficha'], ['convenios', 'Convenios'], ['embudo', 'Embudo y jornadas'], ['ordenes', 'Órdenes'], ...(canSeeMoney ? [['cartera', 'Facturación y cartera']] : []), ['boveda', 'Soportes y auditoría']].map(([a, l]) => (
+      <a href={`#${a}`} class="rounded-md border border-slate-200 bg-white px-3 py-1.5 hover:no-underline">{l}</a>
+    ))}
+  </nav>
+
+  <div class="space-y-4">
+    <!-- 1. Ficha maestra, sedes y contactos -->
+    <section class="card" id="ficha">
+      <h2 class="mb-3">1. Ficha, sedes y contactos</h2>
+      <div class="grid gap-4 lg:grid-cols-3">
+        <dl class="grid grid-cols-2 gap-2 text-sm">
+          <div><dt class="label">Razón social</dt><dd>{company.name}</dd></div>
+          <div><dt class="label">NIT</dt><dd>{company.is_nit_provisional ? 'Provisional' : `${company.nit}-${company.nit_dv}`}</dd></div>
+          <div><dt class="label">Sector</dt><dd>{company.sector}</dd></div>
+          <div><dt class="label">Empleados</dt><dd>{company.total_employees ?? '—'}</dd></div>
+          <div><dt class="label">Nómina</dt><dd>{company.payroll_frequency ? PAYROLL_LABELS[company.payroll_frequency] : '—'}</dd></div>
+          <div><dt class="label">Sitio web</dt><dd>{company.website ?? '—'}</dd></div>
+        </dl>
+        <div class="text-sm">
+          <div class="label mb-1">Sedes</div>
+          <ul class="space-y-1">
+            {branches.data?.map((b) => (
+              <li>{b.name}{b.is_main && <span class="badge ml-1">Principal</span>} <span class="text-slate-500">· {(b.cities as { name: string } | null)?.name ?? b.city_other ?? '—'}{b.address && ` · ${b.address}`}</span></li>
+            ))}
+            {!branches.data?.length && <li class="text-slate-500">Sin sedes.</li>}
+          </ul>
+        </div>
+        <div class="text-sm">
+          <div class="label mb-1">Contactos activos</div>
+          <ul class="space-y-1">
+            {contacts.data?.map((c) => (
+              <li>
+                {c.full_name} <span class="text-slate-500">· {c.role_title ?? ''} {c.area && `(${AREA_LABELS[c.area]})`}</span>
+                {c.is_coordinator && <span class="badge ml-1">Coordina</span>}
+                {c.is_decision_maker && <span class="badge badge-blue ml-1">Decide</span>}
+                <div class="text-xs text-slate-500">{[c.phone_whatsapp, c.email].filter(Boolean).join(' · ')}</div>
+              </li>
+            ))}
+            {!contacts.data?.length && <li class="text-slate-500">Sin contactos activos.</li>}
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Convenios y documentación -->
+    <section class="card" id="convenios">
+      <h2 class="mb-3">2. Convenios y documentación</h2>
+      <table class="table text-sm">
+        <thead><tr><th>Convenio</th><th>Estado</th><th>Vigencia</th><th>Condiciones</th><th>Documentos</th></tr></thead>
+        <tbody>
+          {agreements.data?.map((a) => (
+            <tr>
+              <td><a href={`/convenios/${a.id}`}>{a.deal_name_branch ?? 'Convenio marco'}</a></td>
+              <td><span class={AGREEMENT_STATUS_BADGE[a.effective_status ?? 'borrador']}>{AGREEMENT_STATUS_LABELS[a.effective_status ?? 'borrador']}</span></td>
+              <td class="whitespace-nowrap text-xs">{fmtDate(a.valid_from)} – {fmtDate(a.valid_until)}</td>
+              <td class="text-xs">Hasta {a.max_installments} cuotas {a.payroll_frequency}{a.hr_approval_required && ' · requiere aval de RRHH'}</td>
+              <td class="text-xs">
+                {a.documents_count} doc.{a.has_signed_document ? ' · convenio firmado ✓' : <span class="text-amber-700"> · sin convenio firmado</span>}
+                {Number(a.documents_pending_file) > 0 && <span class="text-slate-500"> · {a.documents_pending_file} sin archivo</span>}
+              </td>
+            </tr>
+          ))}
+          {!agreements.data?.length && <tr><td colspan="5" class="text-slate-500">Sin convenios.</td></tr>}
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 3. Embudo, bitácora y jornadas -->
+    <section class="card" id="embudo">
+      <h2 class="mb-3">3. Embudo comercial, bitácora y jornadas</h2>
+      <div class="overflow-x-auto">
+        <table class="table text-sm">
+          <thead><tr><th>Oportunidad</th><th>Etapa</th><th>Ciudad</th><th>Inactividad</th><th class="text-right">Facturación estimada</th><th class="text-right">Valor real vendido</th></tr></thead>
+          <tbody>
+            {deals.data?.map((d) => (
+              <tr>
+                <td><a href={`/oportunidades/${d.id}`}>{d.deal_name_branch}</a><div class="text-xs text-slate-500">{d.assigned_user_name ?? '—'}</div></td>
+                <td class="text-xs">{d.stage ? STAGE_LABELS[d.stage] : ''}</td>
+                <td class="text-xs">{d.city_name}</td>
+                <td class="text-xs">{d.inactivity_alert ? <span class="badge badge-amber">{d.days_inactive} días</span> : `${d.days_inactive ?? 0} días`}</td>
+                <td class="text-right whitespace-nowrap">{cop(d.estimated_billing_amount)}</td>
+                <td class="text-right whitespace-nowrap">
+                  {cop(soldByDeal.get(d.id!) ?? 0)}
+                  {Number(d.estimated_billing_amount) > 0 && <div class="text-xs text-slate-500">{pct((soldByDeal.get(d.id!) ?? 0) / Number(d.estimated_billing_amount))} de lo estimado</div>}
+                </td>
+              </tr>
+            ))}
+            {!deals.data?.length && <tr><td colspan="6" class="text-slate-500">Sin oportunidades.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="mt-4 grid gap-4 lg:grid-cols-2">
+        <div>
+          <h3 class="mb-1 text-sm font-semibold">Jornadas</h3>
+          <table class="table text-sm">
+            <thead><tr><th>Jornada</th><th>Estado</th><th class="text-right">Atendidos</th><th class="text-right">Conversión</th></tr></thead>
+            <tbody>
+              {campaigns.data?.map((j) => {
+                const buyers = buyersByCampaign.get(j.id!)?.size ?? 0;
+                return (
+                  <tr>
+                    <td><a href={`/jornadas/${j.id}`}>{fmtDate(j.first_session_date)}</a><div class="text-xs text-slate-500">{j.city_name}{j.branch_name && ` · ${j.branch_name}`}</div></td>
+                    <td><span class={CAMPAIGN_STATUS_BADGE[j.status!]}>{CAMPAIGN_STATUS_LABELS[j.status!]}</span></td>
+                    <td class="text-right">{j.attended_headcount}</td>
+                    <td class="text-right text-xs">{buyers} compradores{Number(j.attended_headcount) > 0 && ` · ${pct(buyers / Number(j.attended_headcount))}`}</td>
+                  </tr>
+                );
+              })}
+              {!campaigns.data?.length && <tr><td colspan="4" class="text-slate-500">Sin jornadas.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <h3 class="mb-1 text-sm font-semibold">Bitácora reciente</h3>
+          <ul class="space-y-2 text-sm">
+            {logs.data?.map((l) => (
+              <li>
+                <span class="badge">{INTERACTION_LABELS[l.interaction_type]}</span>
+                <span class="text-xs text-slate-500"> {fmtDateTime(l.created_at)} · {(l.users_profiles as { full_name: string } | null)?.full_name} · {dealName.get(l.deal_id)}</span>
+                <div class="text-slate-700">{l.interaction_note}</div>
+              </li>
+            ))}
+            {!logs.data?.length && <li class="text-slate-500">Sin interacciones.</li>}
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. Órdenes y 4 estados -->
+    <section class="card" id="ordenes">
+      <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2>4. Órdenes y estado operativo</h2>
+        {hasFilter && <a href={`?#ordenes`} class="text-sm">Quitar filtros</a>}
+      </div>
+      <form method="get" action="#ordenes" class="mb-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
+        <select class="input" name="doc" aria-label="Estado documental">
+          <option value="">Documental: todos</option>
+          {Object.entries(DOC_STATUS_LABELS).map(([k, l]) => <option value={k} selected={filters.doc_status === k}>{l}</option>)}
+        </select>
+        <select class="input" name="ops" aria-label="Estado operativo">
+          <option value="">Operativo: todos</option>
+          {Object.entries(OPS_STATUS_LABELS).map(([k, l]) => <option value={k} selected={filters.ops_status === k}>{l}</option>)}
+        </select>
+        <select class="input" name="acc" aria-label="Estado contable">
+          <option value="">Contable: todos</option>
+          {Object.entries(ACCOUNTING_STATUS_LABELS).map(([k, l]) => <option value={k} selected={filters.accounting_status === k}>{l}</option>)}
+        </select>
+        <select class="input" name="col" aria-label="Estado de cartera">
+          <option value="">Cartera: todos</option>
+          {Object.entries(COLLECTION_STATUS_LABELS).map(([k, l]) => <option value={k} selected={filters.collection_status === k}>{l}</option>)}
+        </select>
+        <button class="btn" type="submit">Filtrar</button>
+      </form>
+      <div class="overflow-x-auto">
+        <table class="table text-sm">
+          <thead><tr><th>Orden</th><th>Comprador</th><th class="text-right">Valor</th><th class="text-right">Saldo</th><th>Documental</th><th>Operativo</th><th>Contable</th><th>Cartera</th></tr></thead>
+          <tbody>
+            {orderList.map((o) => (
+              <tr class:list={[o.is_cancelled && 'opacity-50']}>
+                <td><a href={`/ordenes/${o.id}`}>{orderNumber(o.order_number)}</a>{o.is_historical_migration && <span class="badge ml-1">Histórico</span>}{o.is_cancelled && <span class="badge badge-red ml-1">Anulada</span>}</td>
+                <td><a href={`/compradores/${o.buyer_id}`}>{o.buyer_name}</a><div class="text-xs text-slate-500">{o.buyer_document_id}</div></td>
+                <td class="text-right whitespace-nowrap">{cop(o.total_amount)}</td>
+                <td class="text-right whitespace-nowrap">{cop(o.balance_due)}</td>
+                <td><span class={DOC_STATUS_BADGE[o.doc_status!]}>{DOC_STATUS_LABELS[o.doc_status!]}</span></td>
+                <td><span class={OPS_STATUS_BADGE[o.ops_status!]}>{OPS_STATUS_LABELS[o.ops_status!]}</span></td>
+                <td><span class={ACCOUNTING_STATUS_BADGE[o.accounting_status!]}>{ACCOUNTING_STATUS_LABELS[o.accounting_status!]}</span></td>
+                <td><span class={COLLECTION_STATUS_BADGE[o.collection_status!]}>{COLLECTION_STATUS_LABELS[o.collection_status!]}</span></td>
+              </tr>
+            ))}
+            {!orderList.length && <tr><td colspan="8" class="text-slate-500">{hasFilter ? 'Ninguna orden con esos estados.' : 'Sin órdenes.'}</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 5. Facturación y cartera -->
+    {
+      canSeeMoney && (
+        <section class="card" id="cartera">
+          <h2 class="mb-3">5. Facturación y cartera</h2>
+          {fin ? (
+            <div class="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4 lg:grid-cols-7">
+              <div><div class="label">Total vendido</div><div class="font-semibold">{cop(fin.total_sold)}</div></div>
+              <div>
+                <div class="label">Facturado en Alegra</div>
+                <div class="font-semibold">{cop(fin.total_billed)}</div>
+                {Number(fin.total_billed) !== Number(fin.total_sold) && <div class="text-xs text-amber-700">diferencia {cop(Number(fin.total_sold) - Number(fin.total_billed))}</div>}
+              </div>
+              <div><div class="label">Recaudado en bancos</div><div class="font-semibold">{cop(fin.collected_bank)}</div></div>
+              <div><div class="label">Retenciones aplicadas</div><div class="font-semibold">{cop(fin.withholding_amount)}</div></div>
+              {Number(fin.collected_before_migration) > 0 && <div><div class="label">Recaudado antes de migrar</div><div class="font-semibold">{cop(fin.collected_before_migration)}</div></div>}
+              <div><div class="label">Saldo vivo por cobrar</div><div class="font-semibold">{cop(fin.balance_due)}</div>{Number(fin.overdue_amount) > 0 && <div class="text-xs text-red-700">vencido {cop(fin.overdue_amount)}</div>}</div>
+              <div><div class="label">Próximo vencimiento</div><div class="font-semibold">{fmtDate(fin.next_due_date)}</div></div>
+            </div>
+          ) : (
+            <p class="text-sm text-slate-500">Sin órdenes.</p>
+          )}
+          {canSeeCosts && costRows.length > 0 && (
+            <p class="mt-3 rounded-md bg-slate-50 p-2 text-sm">
+              <span class="font-medium">Costos directos (Dirección y Socio):</span> costo {cop(costTotal)} · diferencia venta − costo {cop(soldActive - costTotal)}
+              {soldActive > 0 && ` (${pct((soldActive - costTotal) / soldActive)})`}
+              {withoutCost > 0 && <span class="text-amber-700"> · {withoutCost} orden(es) sin costo: diferencia incompleta</span>}
+            </p>
+          )}
+          <h3 class="mb-1 mt-4 text-sm font-semibold">Recibos de caja corporativos</h3>
+          <table class="table text-sm">
+            <thead><tr><th>Recibo</th><th>Fecha</th><th>Referencia</th><th class="text-right">Recibido</th><th class="text-right">Asignado</th><th class="text-right">Sin asignar</th></tr></thead>
+            <tbody>
+              {payments.data?.map((p) => (
+                <tr class:list={[p.is_voided && 'opacity-50 line-through']}>
+                  <td><a href={`/recaudo/${p.id}`}>RC-{String(p.payment_number).padStart(5, '0')}</a></td>
+                  <td class="whitespace-nowrap">{fmtDate(p.payment_date)}</td>
+                  <td>{p.bank_reference}</td>
+                  <td class="text-right whitespace-nowrap">{cop(p.total_received_bank)}</td>
+                  <td class="text-right whitespace-nowrap">{cop(p.allocated_amount)}</td>
+                  <td class="text-right whitespace-nowrap">{cop(p.unassigned_amount)}</td>
+                </tr>
+              ))}
+              {!payments.data?.length && <tr><td colspan="6" class="text-slate-500">Sin pagos de la empresa.</td></tr>}
+            </tbody>
+          </table>
+        </section>
+      )
+    }
+
+    <!-- 6. Bóveda documental y línea de tiempo -->
+    <section class="card" id="boveda">
+      <h2 class="mb-3">6. Soportes y línea de tiempo de auditoría</h2>
+      <div class="grid gap-4 lg:grid-cols-2">
+        <div>
+          <h3 class="mb-1 text-sm font-semibold">Documentos de convenios</h3>
+          <ul class="space-y-1 text-sm">
+            {documents.data?.map((d) => (
+              <li>
+                {DOCUMENT_TYPE_LABELS[d.document_type]} · {d.document_name}
+                <span class="text-xs text-slate-500"> · {fmtDate(d.uploaded_at?.slice(0, 10))}{!d.file_r2_key && ' · sin archivo'}</span>
+              </li>
+            ))}
+            {!documents.data?.length && <li class="text-slate-500">Sin documentos.</li>}
+          </ul>
+          <p class="mt-2 text-xs text-slate-500">Los archivos se consultarán con enlaces temporales cuando se integre el almacenamiento documental (R2).</p>
+        </div>
+        <div>
+          <h3 class="mb-1 text-sm font-semibold">Línea de tiempo</h3>
+          {
+            canSeeTimeline ? (
+              <ol class="max-h-96 space-y-1 overflow-y-auto text-xs">
+                {(timeline.data ?? []).map((t) => (
+                  <li class="border-l-2 border-slate-200 pl-2">
+                    <span class="text-slate-500">{fmtDateTime(t.changed_at)}</span> · {t.changed_by_name ?? 'Sistema'} ·{' '}
+                    {t.action === 'INSERT' ? 'creó' : t.action === 'DELETE' ? 'eliminó' : 'modificó'} {TABLE_LABELS[t.table_name] ?? t.table_name}
+                    {t.changed_fields?.length ? <span class="text-slate-500"> ({t.changed_fields.join(', ')})</span> : ''}
+                  </li>
+                ))}
+                {!timeline.data?.length && <li class="text-slate-500">Sin cambios registrados.</li>}
+              </ol>
+            ) : (
+              <p class="text-sm text-slate-500">La auditoría la consultan Dirección, Administración / Cartera y Socio.</p>
+            )
+          }
+        </div>
+      </div>
+    </section>
+  </div>
+</AppLayout>

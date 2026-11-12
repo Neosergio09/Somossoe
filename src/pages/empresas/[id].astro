@@ -176,7 +176,7 @@ const nitDisplay = company.nit ? `${company.nit}${company.nit_dv != null ? `-${c
   <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
     <div>
       <a href="/empresas" class="text-sm">← Empresas</a>
-      <h1>{company.name}</h1>
+      <h1>{company.name} <a href={`/empresas/${id}/360`} class="btn btn-sm ml-2 align-middle">Vista 360°</a></h1>
       <p class="text-sm text-slate-600">
         NIT {nitDisplay}
         {

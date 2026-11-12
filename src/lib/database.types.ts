@@ -151,6 +151,12 @@ isOneToOne: false
       foreignKeyName: "alegra_invoice_orders_order_id_fkey"
       columns: ["order_id"]
 isOneToOne: false
+      referencedRelation: "v_finance_by_order"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "alegra_invoice_orders_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
       referencedRelation: "v_order_margins"
       referencedColumns: ["order_id"]
     },{
@@ -761,6 +767,12 @@ isOneToOne: false
       foreignKeyName: "order_costs_order_id_fkey"
       columns: ["order_id"]
 isOneToOne: false
+      referencedRelation: "v_finance_by_order"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "order_costs_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
       referencedRelation: "v_order_margins"
       referencedColumns: ["order_id"]
     },{
@@ -825,6 +837,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "orders"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_deliveries_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_finance_by_order"
+      referencedColumns: ["order_id"]
     },{
       foreignKeyName: "order_deliveries_order_id_fkey"
       columns: ["order_id"]
@@ -929,6 +947,12 @@ isOneToOne: false
       foreignKeyName: "order_installments_order_id_fkey"
       columns: ["order_id"]
 isOneToOne: false
+      referencedRelation: "v_finance_by_order"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "order_installments_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
       referencedRelation: "v_order_margins"
       referencedColumns: ["order_id"]
     },{
@@ -985,6 +1009,12 @@ isOneToOne: false
       foreignKeyName: "order_items_order_id_fkey"
       columns: ["order_id"]
 isOneToOne: false
+      referencedRelation: "v_finance_by_order"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "order_items_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
       referencedRelation: "v_order_margins"
       referencedColumns: ["order_id"]
     },{
@@ -1009,14 +1039,14 @@ isOneToOne: false
                   ]
                 },"order_productions": {
                   Row: {
-                    "cancel_reason": string | null,"created_at": string,"id": string,"lab_provider_id": string,"notes": string | null,"order_id": string,"promised_date": string,"ready_at": string | null,"released_at": string,"released_by": string | null,"sent_to_lab_at": string,"status": Database["public"]['Enums']["production_status"],"updated_at": string,"warranty_id": string | null
+                    "cancel_reason": string | null,"created_at": string,"id": string,"lab_order_reference": string | null,"lab_provider_id": string,"notes": string | null,"order_id": string,"promised_date": string,"ready_at": string | null,"released_at": string,"released_by": string | null,"sent_to_lab_at": string,"status": Database["public"]['Enums']["production_status"],"updated_at": string,"warranty_id": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "cancel_reason"?: string | null,"created_at"?: string,"id"?: string,"lab_provider_id": string,"notes"?: string | null,"order_id": string,"promised_date": string,"ready_at"?: string | null,"released_at"?: string,"released_by"?: string | null,"sent_to_lab_at"?: string,"status"?: Database["public"]['Enums']["production_status"],"updated_at"?: string,"warranty_id"?: string | null
+                    "cancel_reason"?: string | null,"created_at"?: string,"id"?: string,"lab_order_reference"?: string | null,"lab_provider_id": string,"notes"?: string | null,"order_id": string,"promised_date": string,"ready_at"?: string | null,"released_at"?: string,"released_by"?: string | null,"sent_to_lab_at"?: string,"status"?: Database["public"]['Enums']["production_status"],"updated_at"?: string,"warranty_id"?: string | null
                   }
                   Update: {
-                    "cancel_reason"?: string | null,"created_at"?: string,"id"?: string,"lab_provider_id"?: string,"notes"?: string | null,"order_id"?: string,"promised_date"?: string,"ready_at"?: string | null,"released_at"?: string,"released_by"?: string | null,"sent_to_lab_at"?: string,"status"?: Database["public"]['Enums']["production_status"],"updated_at"?: string,"warranty_id"?: string | null
+                    "cancel_reason"?: string | null,"created_at"?: string,"id"?: string,"lab_order_reference"?: string | null,"lab_provider_id"?: string,"notes"?: string | null,"order_id"?: string,"promised_date"?: string,"ready_at"?: string | null,"released_at"?: string,"released_by"?: string | null,"sent_to_lab_at"?: string,"status"?: Database["public"]['Enums']["production_status"],"updated_at"?: string,"warranty_id"?: string | null
                   }
                   Relationships: [
                     {
@@ -1031,6 +1061,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "orders"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_productions_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_finance_by_order"
+      referencedColumns: ["order_id"]
     },{
       foreignKeyName: "order_productions_order_id_fkey"
       columns: ["order_id"]
@@ -1195,6 +1231,12 @@ isOneToOne: false
       foreignKeyName: "payment_allocations_installment_id_fkey"
       columns: ["installment_id"]
 isOneToOne: false
+      referencedRelation: "v_installments_due"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payment_allocations_installment_id_fkey"
+      columns: ["installment_id"]
+isOneToOne: false
       referencedRelation: "v_order_installments"
       referencedColumns: ["id"]
     },{
@@ -1203,6 +1245,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "orders"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payment_allocations_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_finance_by_order"
+      referencedColumns: ["order_id"]
     },{
       foreignKeyName: "payment_allocations_order_id_fkey"
       columns: ["order_id"]
@@ -1275,6 +1323,12 @@ isOneToOne: false
       foreignKeyName: "portfolio_reclassifications_order_id_fkey"
       columns: ["order_id"]
 isOneToOne: false
+      referencedRelation: "v_finance_by_order"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "portfolio_reclassifications_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
       referencedRelation: "v_order_margins"
       referencedColumns: ["order_id"]
     },{
@@ -1333,6 +1387,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "orders"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "post_sale_warranties_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_finance_by_order"
+      referencedColumns: ["order_id"]
     },{
       foreignKeyName: "post_sale_warranties_order_id_fkey"
       columns: ["order_id"]
@@ -1446,6 +1506,20 @@ isOneToOne: false
       referencedColumns: ["id","company_id"]
     }
                   ]
+                },"v_buyer_finance": {
+                  Row: {
+                    "active_orders": number | null,"balance_due": number | null,"buyer_id": string,"collected_bank": number | null,"collected_before_migration": number | null,"next_due_date": string | null,"overdue_amount": number | null,"total_billed": number | null,"total_sold": number | null,"withholding_amount": number | null
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "orders_buyer_id_fkey"
+      columns: ["buyer_id"]
+isOneToOne: false
+      referencedRelation: "buyers"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"v_campaign_calendar": {
                   Row: {
                     "branch_name": string | null,"campaign_id": string,"campaign_status": Database["public"]['Enums']["campaign_status"],"city_id": string,"city_name": string,"company_name": string,"deal_name_branch": string,"end_time": string,"has_conflict": boolean | null,"location_detail": string | null,"responsible_user_id": string,"responsible_user_name": string,"session_date": string,"session_id": string,"start_time": string
@@ -1548,6 +1622,20 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"v_company_finance": {
+                  Row: {
+                    "active_orders": number | null,"balance_due": number | null,"collected_bank": number | null,"collected_before_migration": number | null,"company_id": string | null,"next_due_date": string | null,"overdue_amount": number | null,"total_billed": number | null,"total_sold": number | null,"withholding_amount": number | null
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "orders_company_id_fkey"
+      columns: ["company_id"]
+isOneToOne: false
+      referencedRelation: "companies"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"v_deals_board": {
                   Row: {
                     "assigned_user_id": string,"assigned_user_name": string,"branch_id": string | null,"city_id": string,"city_name": string,"company_id": string,"company_name": string,"created_at": string,"days_inactive": number | null,"deal_name_branch": string,"estimated_billing_amount": number | null,"estimated_close_date": string | null,"id": string,"inactivity_alert": boolean | null,"is_new_business": boolean | null,"last_interaction_at": string | null,"last_interaction_note": string | null,"last_interaction_type": Database["public"]['Enums']["interaction_type"] | null,"lost_substatus": Database["public"]['Enums']["lost_substatus"] | null,"next_action": string | null,"next_action_due_date": string | null,"next_action_overdue": boolean | null,"next_action_owner_id": string | null,"origin_code": string,"stage": Database["public"]['Enums']["deal_stage"],"target_employees_n": number | null,"tentative_campaign_date": string | null,"updated_at": string
@@ -1592,6 +1680,82 @@ isOneToOne: false
       referencedColumns: ["code"]
     }
                   ]
+                },"v_finance_by_order": {
+                  Row: {
+                    "balance_due": number,"billed_amount": number | null,"buyer_id": string,"collected_bank": number | null,"company_id": string | null,"historical_collected_before_migration": number,"is_cancelled": boolean,"next_due_date": string | null,"order_id": string,"overdue_amount": number | null,"total_amount": number,"withholding_amount": number | null
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "orders_buyer_id_fkey"
+      columns: ["buyer_id"]
+isOneToOne: false
+      referencedRelation: "buyers"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_company_id_fkey"
+      columns: ["company_id"]
+isOneToOne: false
+      referencedRelation: "companies"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"v_installments_due": {
+                  Row: {
+                    "buyer_document_id": string,"buyer_id": string,"buyer_name": string,"collection_responsible": Database["public"]['Enums']["collection_responsible"],"company_id": string | null,"company_name": string | null,"days_to_due": number | null,"due_date": string,"expected_amount": number,"id": string,"installment_number": number,"is_overdue": boolean | null,"order_id": string,"order_number": number,"paid_amount": number,"payment_modality": Database["public"]['Enums']["payment_modality"],"pending_amount": number | null
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "order_installments_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_installments_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_finance_by_order"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "order_installments_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_order_margins"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "order_installments_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_installments_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders_to_invoice"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_installments_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_receivables"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_buyer_id_fkey"
+      columns: ["buyer_id"]
+isOneToOne: false
+      referencedRelation: "buyers"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_company_id_fkey"
+      columns: ["company_id"]
+isOneToOne: false
+      referencedRelation: "companies"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"v_invoice_orders": {
                   Row: {
                     "accounting_status": Database["public"]['Enums']["order_accounting_status"],"alegra_invoice_number": string,"amount_assigned": number,"buyer_document_id": string,"buyer_name": string,"created_at": string,"discrepancy_amount": number | null,"id": string,"invoice_date": string,"invoice_id": string,"invoice_voided": boolean,"order_billed_total": number | null,"order_cancelled": boolean,"order_difference": number | null,"order_id": string,"order_number": number,"order_total": number
@@ -1616,6 +1780,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "orders"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "alegra_invoice_orders_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_finance_by_order"
+      referencedColumns: ["order_id"]
     },{
       foreignKeyName: "alegra_invoice_orders_order_id_fkey"
       columns: ["order_id"]
@@ -1708,6 +1878,12 @@ isOneToOne: false
       foreignKeyName: "order_costs_order_id_fkey"
       columns: ["order_id"]
 isOneToOne: false
+      referencedRelation: "v_finance_by_order"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "order_costs_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
       referencedRelation: "v_order_margins"
       referencedColumns: ["order_id"]
     },{
@@ -1764,6 +1940,12 @@ isOneToOne: false
       foreignKeyName: "order_installments_order_id_fkey"
       columns: ["order_id"]
 isOneToOne: false
+      referencedRelation: "v_finance_by_order"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "order_installments_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
       referencedRelation: "v_order_margins"
       referencedColumns: ["order_id"]
     },{
@@ -1810,6 +1992,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "orders"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_items_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_finance_by_order"
+      referencedColumns: ["order_id"]
     },{
       foreignKeyName: "order_items_order_id_fkey"
       columns: ["order_id"]
@@ -1996,6 +2184,12 @@ isOneToOne: false
       foreignKeyName: "payment_allocations_installment_id_fkey"
       columns: ["installment_id"]
 isOneToOne: false
+      referencedRelation: "v_installments_due"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payment_allocations_installment_id_fkey"
+      columns: ["installment_id"]
+isOneToOne: false
       referencedRelation: "v_order_installments"
       referencedColumns: ["id"]
     },{
@@ -2004,6 +2198,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "orders"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payment_allocations_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_finance_by_order"
+      referencedColumns: ["order_id"]
     },{
       foreignKeyName: "payment_allocations_order_id_fkey"
       columns: ["order_id"]
@@ -2102,6 +2302,12 @@ isOneToOne: false
       foreignKeyName: "portfolio_reclassifications_order_id_fkey"
       columns: ["order_id"]
 isOneToOne: false
+      referencedRelation: "v_finance_by_order"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "portfolio_reclassifications_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
       referencedRelation: "v_order_margins"
       referencedColumns: ["order_id"]
     },{
@@ -2132,7 +2338,7 @@ isOneToOne: false
                   ]
                 },"v_productions": {
                   Row: {
-                    "buyer_document_id": string,"buyer_name": string,"cancel_reason": string | null,"city_name": string | null,"company_name": string | null,"id": string,"is_overdue": boolean | null,"lab_name": string,"lab_provider_id": string,"notes": string | null,"ops_status": Database["public"]['Enums']["order_ops_status"],"order_id": string,"order_number": number,"promised_date": string,"ready_at": string | null,"released_at": string,"released_by": string | null,"released_by_name": string | null,"sent_to_lab_at": string,"status": Database["public"]['Enums']["production_status"],"warranty_id": string | null
+                    "buyer_document_id": string,"buyer_id": string,"buyer_name": string,"cancel_reason": string | null,"city_name": string | null,"company_id": string | null,"company_name": string | null,"id": string,"is_overdue": boolean | null,"lab_name": string,"lab_order_reference": string | null,"lab_provider_id": string,"notes": string | null,"ops_status": Database["public"]['Enums']["order_ops_status"],"order_id": string,"order_number": number,"promised_date": string,"ready_at": string | null,"released_at": string,"released_by": string | null,"released_by_name": string | null,"sent_to_lab_at": string,"status": Database["public"]['Enums']["production_status"],"warranty_id": string | null
                   }
                   ComputedFields: never
                   Relationships: [
@@ -2148,6 +2354,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "orders"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_productions_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_finance_by_order"
+      referencedColumns: ["order_id"]
     },{
       foreignKeyName: "order_productions_order_id_fkey"
       columns: ["order_id"]
@@ -2190,6 +2402,18 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "v_warranties"
       referencedColumns: ["id","order_id"]
+    },{
+      foreignKeyName: "orders_buyer_id_fkey"
+      columns: ["buyer_id"]
+isOneToOne: false
+      referencedRelation: "buyers"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_company_id_fkey"
+      columns: ["company_id"]
+isOneToOne: false
+      referencedRelation: "companies"
+      referencedColumns: ["id"]
     }
                   ]
                 },"v_receivables": {
@@ -2240,6 +2464,12 @@ isOneToOne: false
       foreignKeyName: "post_sale_warranties_order_id_fkey"
       columns: ["order_id"]
 isOneToOne: false
+      referencedRelation: "v_finance_by_order"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "post_sale_warranties_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
       referencedRelation: "v_order_margins"
       referencedColumns: ["order_id"]
     },{
@@ -2276,6 +2506,11 @@ isOneToOne: false
                            },
 "apply_payment_batch":
 { Args: { "p_items": Json,"p_payment_id": string }; Returns: number
+                           },
+"company_timeline":
+{ Args: { "p_company_id": string,"p_limit"?: number }; Returns: {
+              "action": string,"changed_at": string,"changed_by": string,"changed_by_name": string,"changed_fields": (string)[],"record_id": string,"table_name": string
+            }[]
                            },
 "create_historical_order":
 { Args: { "p_items"?: Json,"p_order": Json }; Returns: string

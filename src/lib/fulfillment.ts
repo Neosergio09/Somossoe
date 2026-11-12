@@ -36,6 +36,7 @@ export function fulfillmentActions(
           lab_provider_id: uuid(),
           sent_to_lab_at: date(),
           promised_date: date(),
+          lab_order_reference: text(60).optional(),
           notes: text(1000).optional(),
         }),
         form,
@@ -43,7 +44,13 @@ export function fulfillmentActions(
       ensure(
         await supabase
           .from('order_productions')
-          .insert({ ...input, notes: input.notes ?? null, order_id: context.orderId, warranty_id: context.warrantyId ?? null })
+          .insert({
+            ...input,
+            lab_order_reference: input.lab_order_reference ?? null,
+            notes: input.notes ?? null,
+            order_id: context.orderId,
+            warranty_id: context.warrantyId ?? null,
+          })
           .select('id')
           .single(),
       );
@@ -55,11 +62,12 @@ export function fulfillmentActions(
           lab_provider_id: uuid(),
           sent_to_lab_at: date(),
           promised_date: date(),
+          lab_order_reference: text(60).optional(),
           notes: text(1000).optional(),
         }),
         form,
       );
-      await updateProduction(productionId(form), { ...input, notes: input.notes ?? null });
+      await updateProduction(productionId(form), { ...input, lab_order_reference: input.lab_order_reference ?? null, notes: input.notes ?? null });
       return { message: 'Producción actualizada.' };
     },
     production_ready: async (form) => {

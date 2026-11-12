@@ -48,6 +48,7 @@ const { data: companies } = await query;
                 <a href={`/empresas/${c.id}`} class="font-medium">
                   {c.name}
                 </a>
+                <a href={`/empresas/${c.id}/360`} class="ml-2 text-xs">360°</a>
               </td>
               <td class="whitespace-nowrap">
                 {c.nit ? `${c.nit}${c.nit_dv != null ? `-${c.nit_dv}` : ''}` : '—'}

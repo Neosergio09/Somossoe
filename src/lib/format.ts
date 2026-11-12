@@ -52,3 +52,10 @@ export function todayCo(): string {
 export function pct(value: number | null | undefined): string {
   return value == null ? '—' : `${(Number(value) * 100).toLocaleString('es-CO', { maximumFractionDigits: 1 })} %`;
 }
+
+/** Suma días a una fecha YYYY-MM-DD (sin zona horaria). */
+export function addDays(value: string, days: number): string {
+  const d = new Date(`${value}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}

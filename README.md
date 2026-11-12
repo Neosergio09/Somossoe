@@ -2,7 +2,7 @@
 
 CRM interno de Somos SOE: preventa, jornadas empresariales, órdenes, producción, entregas, facturación (vínculo con Alegra) y cartera.
 
-La especificación funcional (SRS v1.5.2) es la fuente de verdad y vive fuera de este repositorio, en `documentacion aceptada/`.
+La especificación funcional (SRS v1.5.3) es la fuente de verdad y vive fuera de este repositorio, en `documentacion aceptada/`.
 
 **Stack:** Astro 7 (SSR) + Tailwind 4 + TypeScript + Zod · Supabase (Postgres, Auth, RLS) · Vercel.
 
