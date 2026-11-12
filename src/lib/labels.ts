@@ -339,3 +339,20 @@ export const RECLASSIFICATION_REASON_LABELS: Record<ReclassificationReason, stri
   incapacidad: 'Incapacidad',
   otro: 'Otro',
 };
+
+// ---------------------------------------------------------------------
+// M06 Históricos (RF-M06-05)
+// ---------------------------------------------------------------------
+export type HistoricalStage = Enums['historical_stage'];
+
+export const HISTORICAL_STAGE_LABELS: Record<HistoricalStage, string> = {
+  venta: '07 Venta',
+  produccion: '08 Producción',
+  entregada: '11 Entregada',
+};
+
+export const HISTORICAL_STAGE_HINTS: Record<HistoricalStage, string> = {
+  venta: 'por verificar y liberar (sigue el flujo normal)',
+  produccion: 'ya en el laboratorio, falta entregar',
+  entregada: 'entregada, solo queda cobrar',
+};

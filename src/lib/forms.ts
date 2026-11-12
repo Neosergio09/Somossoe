@@ -182,6 +182,12 @@ const FIELD_LABELS: Record<string, string> = {
   new_periodicity: 'Periodicidad',
   decision_notes: 'Motivo',
   reason: 'Motivo',
+  total_amount: 'Valor total',
+  balance_due: 'Saldo vivo',
+  historical_reference: 'Referencia de origen',
+  historical_stage: 'Etapa',
+  collection_responsible: 'Responsable de cobro',
+  installment_periodicity: 'Periodicidad',
 };
 
 const UNIQUE_MESSAGES: Record<string, string> = {
@@ -192,6 +198,7 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   campaign_attendance_unique_person: 'Esa persona ya está registrada en esta sesión.',
   campaign_attendance_one_attended_key: 'Esa persona ya figura como atendida en esta jornada.',
   order_costs_replaces_key: 'Ese costo ya fue reemplazado por otra versión.',
+  orders_historical_reference_key: 'Ya se cargó una orden histórica con esa referencia de origen.',
   portfolio_reclassifications_one_pending_key: 'La orden ya tiene una reclasificación pendiente de autorización.',
   cities_name_key: 'Ya existe una ciudad con ese nombre.',
   lab_providers_name_key: 'Ya existe un laboratorio con ese nombre.',
@@ -257,6 +264,7 @@ const CHECK_MESSAGES: Record<string, string> = {
   order_costs_source_check: 'Indique la fuente del costo (entre 3 y 300 caracteres).',
   order_costs_void_reason: 'Indique el motivo de la anulación.',
   campaigns_jornadas_reopen_reason_check: 'El motivo es demasiado largo.',
+  orders_historical_fields: 'Revise la referencia de origen (entre 3 y 200 caracteres) y que lo recaudado no supere el valor.',
   portfolio_reclassifications_other_notes: 'Con el motivo «Otro», explique el caso en las notas.',
   portfolio_reclassifications_decision_notes: 'Indique el motivo del rechazo o de la anulación.',
   portfolio_reclassifications_new_installments_count_check: 'El plan nuevo admite entre 1 y 24 cuotas.',
