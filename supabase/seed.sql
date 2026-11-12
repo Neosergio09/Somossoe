@@ -15,6 +15,7 @@ begin
       ('66666666-6666-6666-6666-666666666666'::uuid, 'comercial2@somossoe.test', 'Pablo (Comercial)', 'comercial'::public.app_role),
       ('33333333-3333-3333-3333-333333333333'::uuid, 'operacion@somossoe.test', 'Andrés (Operación)', 'operacion'::public.app_role),
       ('44444444-4444-4444-4444-444444444444'::uuid, 'cartera@somossoe.test', 'Marta (Cartera)', 'administracion_cartera'::public.app_role),
+      ('88888888-8888-8888-8888-888888888888'::uuid, 'socio@somossoe.test', 'Luis (Socio)', 'socio'::public.app_role),
       ('55555555-5555-5555-5555-555555555555'::uuid, 'nuevo@somossoe.test', 'Usuario sin activar', null)
     ) as t (id, email, full_name, role)
   loop
@@ -82,9 +83,9 @@ insert into public.campaign_sessions (id, campaign_id, session_date, start_time,
 values ('ffffffff-0000-0000-0000-000000000001', 'eeeeeeee-0000-0000-0000-000000000001',
         current_date, '08:00', '12:00', 'Sala de capacitación', '33333333-3333-3333-3333-333333333333');
 
-insert into public.campaign_attendance (campaign_id, session_id, full_name, document_id, area) values
-  ('eeeeeeee-0000-0000-0000-000000000001', 'ffffffff-0000-0000-0000-000000000001', 'Ana Pérez', '1088123456', 'Producción'),
-  ('eeeeeeee-0000-0000-0000-000000000001', 'ffffffff-0000-0000-0000-000000000001', 'Carlos Ruiz', '1088654321', 'Bodega');
+insert into public.campaign_attendance (campaign_id, session_id, full_name, document_id, area, status) values
+  ('eeeeeeee-0000-0000-0000-000000000001', 'ffffffff-0000-0000-0000-000000000001', 'Ana Pérez', '1088123456', 'Producción', 'atendido'),
+  ('eeeeeeee-0000-0000-0000-000000000001', 'ffffffff-0000-0000-0000-000000000001', 'Carlos Ruiz', '1088654321', 'Bodega', 'atendido');
 
 update public.deals_opportunities set stage = 'jornada_en_ejecucion' where id = 'dddddddd-0000-0000-0000-000000000001';
 

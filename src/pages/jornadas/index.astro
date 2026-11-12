@@ -1,7 +1,7 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
 import { fmtDate, fmtMonth, fmtTime, fmtWeekday, todayCo } from '../../lib/format';
-import { CAMPAIGN_STATUS_BADGE, CAMPAIGN_STATUS_LABELS } from '../../lib/labels';
+import { ACTIVE_CAMPAIGN_STATUSES, CAMPAIGN_STATUS_BADGE, CAMPAIGN_STATUS_LABELS } from '../../lib/labels';
 import { operationalCities } from '../../lib/options';
 
 const { supabase } = Astro.locals;
@@ -27,7 +27,7 @@ if (cityId) sessionsQuery = sessionsQuery.eq('city_id', cityId);
 let campaignsQuery = supabase
   .from('v_campaigns')
   .select('id, company_name, deal_name_branch, city_name, status, first_session_date, sessions_count, attended_headcount, responsible_user_name, logistics_confirmed')
-  .in('status', ['programada', 'en_ejecucion'])
+  .in('status', ACTIVE_CAMPAIGN_STATUSES)
   .order('first_session_date', { nullsFirst: true });
 if (cityId) campaignsQuery = campaignsQuery.eq('city_id', cityId);
 
@@ -117,13 +117,13 @@ const q = (patch: Record<string, string>) => {
                 {j.status && <span class={CAMPAIGN_STATUS_BADGE[j.status]}>{CAMPAIGN_STATUS_LABELS[j.status]}</span>}
               </div>
               <div class="text-xs text-slate-500">
-                {j.deal_name_branch} · {j.city_name} · {fmtDate(j.first_session_date)} · {j.sessions_count} sesión(es) · {j.attended_headcount} asistentes
+                {j.deal_name_branch} · {j.city_name} · {fmtDate(j.first_session_date)} · {j.sessions_count} sesión(es) · {j.attended_headcount} atendidos
               </div>
               {!j.logistics_confirmed && j.status === 'programada' && <span class="badge badge-amber mt-1">Logística sin confirmar</span>}
             </li>
           ))
         }
-        {!campaigns?.length && <li class="text-slate-500">No hay jornadas programadas ni en ejecución.</li>}
+        {!campaigns?.length && <li class="text-slate-500">No hay jornadas abiertas.</li>}
       </ul>
     </section>
   </div>

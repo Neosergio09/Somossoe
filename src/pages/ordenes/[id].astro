@@ -7,7 +7,7 @@ import { activeLabs, fulfillmentActions } from '../../lib/fulfillment';
 import { itemLabel, loadDeliveries } from '../../lib/deliveries';
 import { activeUsers } from '../../lib/options';
 import { hasRole } from '../../lib/auth';
-import { cop, fmtDate, fmtDateTime } from '../../lib/format';
+import { cop, fmtDate, fmtDateTime, pct } from '../../lib/format';
 import { checkbox, date, ensure, FormError, int, parseForm, runActions, text, uuid, z } from '../../lib/forms';
 import {
   ACCOUNTING_STATUS_BADGE,
@@ -17,11 +17,16 @@ import {
   COLLECTION_RESPONSIBLE_LABELS,
   COLLECTION_STATUS_BADGE,
   COLLECTION_STATUS_LABELS,
+  COST_BASIS_BADGE,
+  COST_BASIS_LABELS,
+  COST_COMPONENT_LABELS,
   DOC_STATUS_BADGE,
   DOC_STATUS_LABELS,
   INSTALLMENT_STATUS_BADGE,
   INSTALLMENT_STATUS_LABELS,
   ITEM_TYPE_LABELS,
+  MARGIN_BASIS_BADGE,
+  MARGIN_BASIS_LABELS,
   OPS_STATUS_BADGE,
   OPS_STATUS_LABELS,
   PAYMENT_MODALITY_LABELS,
@@ -29,14 +34,19 @@ import {
   WARRANTY_STATUS_BADGE,
   WARRANTY_STATUS_LABELS,
   WARRANTY_TYPE_LABELS,
+  type CostBasis,
+  type CostComponent,
 } from '../../lib/labels';
-import { itemSchema, orderNumber, requirementChecklist } from '../../lib/orders';
+import { itemSchema, money, orderNumber, requirementChecklist } from '../../lib/orders';
 import type { Database } from '../../lib/database.types';
 
 type OrderUpdate = Database['public']['Tables']['orders']['Update'];
 
 const { supabase } = Astro.locals;
 const id = Astro.params.id!;
+
+const COST_COMPONENTS = Object.keys(COST_COMPONENT_LABELS) as [CostComponent, ...CostComponent[]];
+const COST_BASES = Object.keys(COST_BASIS_LABELS) as [CostBasis, ...CostBasis[]];
 
 async function updateOrder(patch: OrderUpdate) {
   ensure(await supabase.from('orders').update(patch).eq('id', id).select('id').single());
@@ -155,6 +165,46 @@ const outcome = await runActions(Astro, {
     );
     return { message: 'Datos del comprador actualizados.' };
   },
+  // Costos directos: solo Dirección (la BD lo exige). Corregir = versión nueva.
+  add_cost: async (form) => {
+    const input = parseForm(
+      z.object({
+        component: z.enum(COST_COMPONENTS),
+        amount: money(),
+        basis: z.enum(COST_BASES),
+        source: text(300).min(3, { error: 'mínimo 3 caracteres' }),
+        lab_provider_id: uuid().optional(),
+        order_item_id: uuid().optional(),
+        notes: text(1000).optional(),
+        replaces_id: uuid().optional(),
+      }),
+      form,
+    );
+    ensure(
+      await supabase.from('order_costs').insert({
+        ...input,
+        order_id: id,
+        lab_provider_id: input.lab_provider_id ?? null,
+        order_item_id: input.order_item_id ?? null,
+        notes: input.notes ?? null,
+        replaces_id: input.replaces_id ?? null,
+      }),
+    );
+    return { message: input.replaces_id ? 'Costo corregido (se conserva la versión anterior).' : 'Costo registrado.' };
+  },
+  void_cost: async (form) => {
+    const input = parseForm(z.object({ cost_id: uuid(), void_reason: text(500).min(1, { error: 'indique el motivo' }) }), form);
+    ensure(
+      await supabase
+        .from('order_costs')
+        .update({ is_voided: true, void_reason: input.void_reason })
+        .eq('id', input.cost_id)
+        .eq('order_id', id)
+        .select('id')
+        .single(),
+    );
+    return { message: 'Costo anulado.' };
+  },
 });
 if (outcome?.kind === 'redirect') return outcome.response;
 const error = outcome?.kind === 'error' ? outcome.error : null;
@@ -229,7 +279,23 @@ const activeLinks = (invoiceLinks.data ?? []).filter((l) => !l.invoice_voided);
 const billedTotal = activeLinks.reduce((sum, l) => sum + Number(l.amount_assigned ?? 0), 0);
 const canInvoice = isAdmin && !isCancelled && verified && o.accounting_status !== 'factura_vinculada';
 // M06: recaudo (Operación no tiene acceso)
-const canSeeCollection = hasRole(Astro.locals, 'administracion_cartera', 'direccion', 'comercial');
+const canSeeCollection = hasRole(Astro.locals, 'administracion_cartera', 'direccion', 'comercial', 'socio');
+
+// Costos y diferencia: solo Dirección (edita) y Socio (consulta)
+const canViewCosts = hasRole(Astro.locals, 'direccion', 'socio');
+const canEditCosts = hasRole(Astro.locals, 'direccion');
+const [costRows, margin] = canViewCosts
+  ? await Promise.all([
+      supabase.from('v_order_costs').select('*').eq('order_id', id).order('created_at'),
+      supabase.from('v_order_margins').select('*').eq('order_id', id).maybeSingle(),
+    ])
+  : [{ data: [] }, { data: null }];
+const currentCosts = (costRows.data ?? []).filter((c) => c.is_current);
+const pastCosts = (costRows.data ?? []).filter((c) => !c.is_current);
+const costItemLabel = (itemId: string) => {
+  const item = itemList.find((i) => i.id === itemId);
+  return item ? itemLabel(item) : '';
+};
 const activeAllocations = (allocations.data ?? []).filter((a) => !a.is_voided);
 const collectedMoney = activeAllocations.reduce((s2, a) => s2 + Number(a.amount_applied ?? 0), 0);
 const collectedWithholding = activeAllocations.reduce((s2, a) => s2 + Number(a.withholding_applied ?? 0), 0);
@@ -517,6 +583,144 @@ const collectedWithholding = activeAllocations.reduce((s2, a) => s2 + Number(a.w
                 </form>
               </details>
             )}
+          </section>
+        )
+      }
+      {
+        canViewCosts && (
+          <section class="card space-y-3 text-sm">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <h2>Costos directos</h2>
+              {margin.data && <span class={MARGIN_BASIS_BADGE[margin.data.cost_basis ?? 'sin_costos']}>{MARGIN_BASIS_LABELS[margin.data.cost_basis ?? 'sin_costos']}</span>}
+            </div>
+            <p class="text-xs text-slate-500">
+              Solo Dirección y Socio. Un costo no se edita: se corrige con una versión nueva o se anula con motivo. Sin costos, la diferencia queda «no disponible», nunca en cero.
+            </p>
+            {
+              margin.data && (
+                <dl class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <div><dt class="label">Venta</dt><dd>{cop(margin.data.total_amount)}</dd></div>
+                  <div><dt class="label">Costo directo</dt><dd>{cop(margin.data.cost_total)}</dd></div>
+                  <div><dt class="label">Diferencia</dt><dd class="font-semibold">{margin.data.margin_amount == null ? 'No disponible' : cop(margin.data.margin_amount)}</dd></div>
+                  <div><dt class="label">% sobre venta</dt><dd>{pct(margin.data.margin_ratio)}</dd></div>
+                </dl>
+              )
+            }
+            <div class="overflow-x-auto">
+              <table class="table">
+                <thead><tr><th>Componente</th><th class="text-right">Valor</th><th>Tipo</th><th>Fuente</th><th>Registró</th><th></th></tr></thead>
+                <tbody>
+                  {currentCosts.map((c) => (
+                    <tr>
+                      <td>
+                        {COST_COMPONENT_LABELS[c.component!]}
+                        {c.order_item_id && <div class="text-xs text-slate-500">{costItemLabel(c.order_item_id)}</div>}
+                      </td>
+                      <td class="text-right whitespace-nowrap">{cop(c.amount)}</td>
+                      <td><span class={COST_BASIS_BADGE[c.basis!]}>{COST_BASIS_LABELS[c.basis!]}</span></td>
+                      <td>
+                        {c.source}
+                        {c.lab_provider_name && <div class="text-xs text-slate-500">{c.lab_provider_name}</div>}
+                        {c.notes && <div class="text-xs text-slate-500">{c.notes}</div>}
+                      </td>
+                      <td class="text-xs text-slate-500">{c.created_by_name}<br />{fmtDateTime(c.created_at)}</td>
+                      <td>
+                        {canEditCosts && (
+                          <details>
+                            <summary class="cursor-pointer text-xs">Corregir / anular</summary>
+                            <form method="post" class="mt-2 space-y-1">
+                              <input type="hidden" name="_action" value="add_cost" />
+                              <input type="hidden" name="replaces_id" value={c.id} />
+                              <input type="hidden" name="component" value={c.component} />
+                              {c.order_item_id && <input type="hidden" name="order_item_id" value={c.order_item_id} />}
+                              {c.lab_provider_id && <input type="hidden" name="lab_provider_id" value={c.lab_provider_id} />}
+                              <input class="input" name="amount" inputmode="numeric" required placeholder="Valor correcto" aria-label="Valor correcto" />
+                              <select class="input" name="basis" aria-label="Tipo de costo">
+                                {COST_BASES.map((b) => <option value={b} selected={b === 'verificado'}>{COST_BASIS_LABELS[b]}</option>)}
+                              </select>
+                              <input class="input" name="source" required minlength="3" maxlength="300" placeholder="Fuente (p. ej., factura del laboratorio)" aria-label="Fuente" />
+                              <button class="btn btn-sm w-full" type="submit">Guardar versión nueva</button>
+                            </form>
+                            <form method="post" class="mt-2 space-y-1">
+                              <input type="hidden" name="_action" value="void_cost" />
+                              <input type="hidden" name="cost_id" value={c.id} />
+                              <input class="input" name="void_reason" required placeholder="Motivo de la anulación" aria-label="Motivo de la anulación" />
+                              <button class="btn btn-sm btn-danger w-full" type="submit">Anular</button>
+                            </form>
+                          </details>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {!currentCosts.length && <tr><td colspan="6" class="text-slate-500">Sin costos registrados.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+            {
+              pastCosts.length > 0 && (
+                <details>
+                  <summary class="cursor-pointer text-xs text-slate-600">Historial ({pastCosts.length} versiones reemplazadas o anuladas)</summary>
+                  <ul class="mt-2 space-y-1 text-xs text-slate-600">
+                    {pastCosts.map((c) => (
+                      <li>
+                        <span class="line-through">{COST_COMPONENT_LABELS[c.component!]} {cop(c.amount)}</span> · {COST_BASIS_LABELS[c.basis!]} · {c.source} ·{' '}
+                        {c.is_voided ? `anulado: ${c.void_reason}` : `reemplazado ${fmtDateTime(c.superseded_at)}`}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )
+            }
+            {
+              canEditCosts && (
+                <details open={lastAction === 'add_cost' && !v.replaces_id}>
+                  <summary class="cursor-pointer font-medium text-brand-800">Registrar costo</summary>
+                  <form method="post" class="mt-2 grid gap-2 sm:grid-cols-2">
+                    <input type="hidden" name="_action" value="add_cost" />
+                    <div>
+                      <label class="label">Componente *</label>
+                      <select class="input" name="component">
+                        {COST_COMPONENTS.map((k) => <option value={k} selected={v.component === k}>{COST_COMPONENT_LABELS[k]}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label class="label">Valor (COP) *</label>
+                      <input class="input" name="amount" inputmode="numeric" required value={lastAction === 'add_cost' ? v.amount : ''} />
+                    </div>
+                    <div>
+                      <label class="label">Tipo *</label>
+                      <select class="input" name="basis">
+                        {COST_BASES.map((b) => <option value={b} selected={(v.basis ?? 'estimado') === b}>{COST_BASIS_LABELS[b]}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label class="label">Fuente *</label>
+                      <input class="input" name="source" required minlength="3" maxlength="300" placeholder="Cotización, factura del proveedor…" value={lastAction === 'add_cost' ? v.source : ''} />
+                    </div>
+                    <div>
+                      <label class="label">Proveedor</label>
+                      <select class="input" name="lab_provider_id">
+                        <option value="">—</option>
+                        {labs.map((l) => <option value={l.id} selected={v.lab_provider_id === l.id}>{l.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label class="label">Ítem de la orden</label>
+                      <select class="input" name="order_item_id">
+                        <option value="">Toda la orden</option>
+                        {itemList.map((i) => <option value={i.id} selected={v.order_item_id === i.id}>{itemLabel(i)}</option>)}
+                      </select>
+                    </div>
+                    <div class="sm:col-span-2">
+                      <label class="label">Notas</label>
+                      <input class="input" name="notes" maxlength="1000" value={lastAction === 'add_cost' ? v.notes : ''} />
+                    </div>
+                    <p class="text-xs text-slate-500 sm:col-span-2">No registre datos clínicos (fórmula, graduación) en la fuente ni en las notas.</p>
+                    <button class="btn btn-primary sm:col-span-2" type="submit">Registrar costo</button>
+                  </form>
+                </details>
+              )
+            }
           </section>
         )
       }

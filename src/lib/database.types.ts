@@ -151,6 +151,12 @@ isOneToOne: false
       foreignKeyName: "alegra_invoice_orders_order_id_fkey"
       columns: ["order_id"]
 isOneToOne: false
+      referencedRelation: "v_order_margins"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "alegra_invoice_orders_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
       referencedRelation: "v_orders"
       referencedColumns: ["id"]
     },{
@@ -285,14 +291,14 @@ isOneToOne: false
                   ]
                 },"campaign_attendance": {
                   Row: {
-                    "area": string | null,"buyer_id": string | null,"campaign_id": string,"created_at": string,"document_id": string,"full_name": string,"id": string,"registered_by": string | null,"session_id": string,"updated_at": string
+                    "area": string | null,"attended_at": string | null,"buyer_id": string | null,"campaign_id": string,"created_at": string,"document_id": string,"full_name": string,"id": string,"registered_by": string | null,"session_id": string,"status": Database["public"]['Enums']["attendance_status"],"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "area"?: string | null,"buyer_id"?: string | null,"campaign_id": string,"created_at"?: string,"document_id": string,"full_name": string,"id"?: string,"registered_by"?: string | null,"session_id": string,"updated_at"?: string
+                    "area"?: string | null,"attended_at"?: string | null,"buyer_id"?: string | null,"campaign_id": string,"created_at"?: string,"document_id": string,"full_name": string,"id"?: string,"registered_by"?: string | null,"session_id": string,"status"?: Database["public"]['Enums']["attendance_status"],"updated_at"?: string
                   }
                   Update: {
-                    "area"?: string | null,"buyer_id"?: string | null,"campaign_id"?: string,"created_at"?: string,"document_id"?: string,"full_name"?: string,"id"?: string,"registered_by"?: string | null,"session_id"?: string,"updated_at"?: string
+                    "area"?: string | null,"attended_at"?: string | null,"buyer_id"?: string | null,"campaign_id"?: string,"created_at"?: string,"document_id"?: string,"full_name"?: string,"id"?: string,"registered_by"?: string | null,"session_id"?: string,"status"?: Database["public"]['Enums']["attendance_status"],"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -307,6 +313,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "campaigns_jornadas"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "campaign_attendance_campaign_id_fkey"
+      columns: ["campaign_id"]
+isOneToOne: false
+      referencedRelation: "v_campaign_margins"
+      referencedColumns: ["campaign_id"]
     },{
       foreignKeyName: "campaign_attendance_campaign_id_fkey"
       columns: ["campaign_id"]
@@ -355,6 +367,12 @@ isOneToOne: false
       foreignKeyName: "campaign_sessions_campaign_id_fkey"
       columns: ["campaign_id"]
 isOneToOne: false
+      referencedRelation: "v_campaign_margins"
+      referencedColumns: ["campaign_id"]
+    },{
+      foreignKeyName: "campaign_sessions_campaign_id_fkey"
+      columns: ["campaign_id"]
+isOneToOne: false
       referencedRelation: "v_campaigns"
       referencedColumns: ["id"]
     },{
@@ -367,14 +385,14 @@ isOneToOne: false
                   ]
                 },"campaigns_jornadas": {
                   Row: {
-                    "agreement_id": string,"branch_id": string | null,"cancel_reason": string | null,"cancelled_at": string | null,"city_id": string,"closed_at": string | null,"company_id": string,"created_at": string,"created_by": string | null,"deal_id": string,"id": string,"logistics_confirmed": boolean,"notes": string | null,"responsible_user_id": string,"started_at": string | null,"status": Database["public"]['Enums']["campaign_status"],"updated_at": string
+                    "agreement_id": string,"branch_id": string | null,"cancel_reason": string | null,"cancelled_at": string | null,"capture_closed_at": string | null,"capture_reopened_at": string | null,"city_id": string,"closed_at": string | null,"company_id": string,"created_at": string,"created_by": string | null,"deal_id": string,"id": string,"logistics_confirmed": boolean,"notes": string | null,"reopen_reason": string | null,"responsible_user_id": string,"scheduled_at": string | null,"started_at": string | null,"status": Database["public"]['Enums']["campaign_status"],"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "agreement_id": string,"branch_id"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"city_id": string,"closed_at"?: string | null,"company_id": string,"created_at"?: string,"created_by"?: string | null,"deal_id": string,"id"?: string,"logistics_confirmed"?: boolean,"notes"?: string | null,"responsible_user_id": string,"started_at"?: string | null,"status"?: Database["public"]['Enums']["campaign_status"],"updated_at"?: string
+                    "agreement_id": string,"branch_id"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"capture_closed_at"?: string | null,"capture_reopened_at"?: string | null,"city_id": string,"closed_at"?: string | null,"company_id": string,"created_at"?: string,"created_by"?: string | null,"deal_id": string,"id"?: string,"logistics_confirmed"?: boolean,"notes"?: string | null,"reopen_reason"?: string | null,"responsible_user_id": string,"scheduled_at"?: string | null,"started_at"?: string | null,"status"?: Database["public"]['Enums']["campaign_status"],"updated_at"?: string
                   }
                   Update: {
-                    "agreement_id"?: string,"branch_id"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"city_id"?: string,"closed_at"?: string | null,"company_id"?: string,"created_at"?: string,"created_by"?: string | null,"deal_id"?: string,"id"?: string,"logistics_confirmed"?: boolean,"notes"?: string | null,"responsible_user_id"?: string,"started_at"?: string | null,"status"?: Database["public"]['Enums']["campaign_status"],"updated_at"?: string
+                    "agreement_id"?: string,"branch_id"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"capture_closed_at"?: string | null,"capture_reopened_at"?: string | null,"city_id"?: string,"closed_at"?: string | null,"company_id"?: string,"created_at"?: string,"created_by"?: string | null,"deal_id"?: string,"id"?: string,"logistics_confirmed"?: boolean,"notes"?: string | null,"reopen_reason"?: string | null,"responsible_user_id"?: string,"scheduled_at"?: string | null,"started_at"?: string | null,"status"?: Database["public"]['Enums']["campaign_status"],"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -697,6 +715,92 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"order_costs": {
+                  Row: {
+                    "amount": number,"basis": Database["public"]['Enums']["cost_basis"],"component": Database["public"]['Enums']["cost_component"],"created_at": string,"created_by": string | null,"id": string,"is_voided": boolean,"lab_provider_id": string | null,"notes": string | null,"order_id": string,"order_item_id": string | null,"replaces_id": string | null,"source": string,"superseded_at": string | null,"void_reason": string | null,"voided_at": string | null,"voided_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount": number,"basis": Database["public"]['Enums']["cost_basis"],"component": Database["public"]['Enums']["cost_component"],"created_at"?: string,"created_by"?: string | null,"id"?: string,"is_voided"?: boolean,"lab_provider_id"?: string | null,"notes"?: string | null,"order_id": string,"order_item_id"?: string | null,"replaces_id"?: string | null,"source": string,"superseded_at"?: string | null,"void_reason"?: string | null,"voided_at"?: string | null,"voided_by"?: string | null
+                  }
+                  Update: {
+                    "amount"?: number,"basis"?: Database["public"]['Enums']["cost_basis"],"component"?: Database["public"]['Enums']["cost_component"],"created_at"?: string,"created_by"?: string | null,"id"?: string,"is_voided"?: boolean,"lab_provider_id"?: string | null,"notes"?: string | null,"order_id"?: string,"order_item_id"?: string | null,"replaces_id"?: string | null,"source"?: string,"superseded_at"?: string | null,"void_reason"?: string | null,"voided_at"?: string | null,"voided_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "order_costs_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_costs_item_same_order"
+      columns: ["order_item_id","order_id"]
+isOneToOne: false
+      referencedRelation: "order_items"
+      referencedColumns: ["id","order_id"]
+    },{
+      foreignKeyName: "order_costs_item_same_order"
+      columns: ["order_item_id","order_id"]
+isOneToOne: false
+      referencedRelation: "v_order_item_delivery"
+      referencedColumns: ["order_item_id","order_id"]
+    },{
+      foreignKeyName: "order_costs_lab_provider_id_fkey"
+      columns: ["lab_provider_id"]
+isOneToOne: false
+      referencedRelation: "lab_providers"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_costs_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_costs_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_order_margins"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "order_costs_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_costs_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders_to_invoice"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_costs_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_receivables"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_costs_replaces_same_order"
+      columns: ["replaces_id","order_id"]
+isOneToOne: false
+      referencedRelation: "order_costs"
+      referencedColumns: ["id","order_id"]
+    },{
+      foreignKeyName: "order_costs_replaces_same_order"
+      columns: ["replaces_id","order_id"]
+isOneToOne: false
+      referencedRelation: "v_order_costs"
+      referencedColumns: ["id","order_id"]
+    },{
+      foreignKeyName: "order_costs_voided_by_fkey"
+      columns: ["voided_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"order_deliveries": {
                   Row: {
                     "created_at": string,"delivered_at": string,"delivered_by": string | null,"delivery_evidence_r2_key": string | null,"evidence_received": boolean,"id": string,"notes": string | null,"order_id": string,"production_id": string | null,"receiver_name": string,"updated_at": string,"warranty_id": string | null
@@ -721,6 +825,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "orders"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_deliveries_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_order_margins"
+      referencedColumns: ["order_id"]
     },{
       foreignKeyName: "order_deliveries_order_id_fkey"
       columns: ["order_id"]
@@ -819,6 +929,12 @@ isOneToOne: false
       foreignKeyName: "order_installments_order_id_fkey"
       columns: ["order_id"]
 isOneToOne: false
+      referencedRelation: "v_order_margins"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "order_installments_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
       referencedRelation: "v_orders"
       referencedColumns: ["id"]
     },{
@@ -853,6 +969,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "orders"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_items_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_order_margins"
+      referencedColumns: ["order_id"]
     },{
       foreignKeyName: "order_items_order_id_fkey"
       columns: ["order_id"]
@@ -897,6 +1019,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "orders"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_productions_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_order_margins"
+      referencedColumns: ["order_id"]
     },{
       foreignKeyName: "order_productions_order_id_fkey"
       columns: ["order_id"]
@@ -981,6 +1109,12 @@ isOneToOne: false
       foreignKeyName: "orders_campaign_id_fkey"
       columns: ["campaign_id"]
 isOneToOne: false
+      referencedRelation: "v_campaign_margins"
+      referencedColumns: ["campaign_id"]
+    },{
+      foreignKeyName: "orders_campaign_id_fkey"
+      columns: ["campaign_id"]
+isOneToOne: false
       referencedRelation: "v_campaigns"
       referencedColumns: ["id"]
     },{
@@ -1061,6 +1195,12 @@ isOneToOne: false
       foreignKeyName: "payment_allocations_order_id_fkey"
       columns: ["order_id"]
 isOneToOne: false
+      referencedRelation: "v_order_margins"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "payment_allocations_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
       referencedRelation: "v_orders"
       referencedColumns: ["id"]
     },{
@@ -1125,6 +1265,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "orders"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "post_sale_warranties_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_order_margins"
+      referencedColumns: ["order_id"]
     },{
       foreignKeyName: "post_sale_warranties_order_id_fkey"
       columns: ["order_id"]
@@ -1248,6 +1394,12 @@ isOneToOne: false
       foreignKeyName: "campaign_sessions_campaign_id_fkey"
       columns: ["campaign_id"]
 isOneToOne: false
+      referencedRelation: "v_campaign_margins"
+      referencedColumns: ["campaign_id"]
+    },{
+      foreignKeyName: "campaign_sessions_campaign_id_fkey"
+      columns: ["campaign_id"]
+isOneToOne: false
       referencedRelation: "v_campaigns"
       referencedColumns: ["id"]
     },{
@@ -1264,9 +1416,17 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"v_campaign_margins": {
+                  Row: {
+                    "active_orders": number | null,"campaign_id": string,"cost_total": number | null,"has_estimated": boolean | null,"margin_amount": number | null,"margin_ratio": number | null,"orders_without_costs": number | null,"sold_amount": number | null
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    
+                  ]
                 },"v_campaigns": {
                   Row: {
-                    "agreement_id": string,"attended_headcount": number | null,"branch_id": string | null,"branch_name": string | null,"cancel_reason": string | null,"cancelled_at": string | null,"city_id": string,"city_name": string,"closed_at": string | null,"company_id": string,"company_name": string,"created_at": string,"deal_id": string,"deal_name_branch": string,"estimated_billing_amount": number | null,"first_session_date": string | null,"id": string,"last_session_date": string | null,"logistics_confirmed": boolean,"notes": string | null,"responsible_user_id": string,"responsible_user_name": string,"sessions_count": number | null,"started_at": string | null,"status": Database["public"]['Enums']["campaign_status"],"target_employees_n": number | null,"updated_at": string
+                    "agreement_id": string,"attended_headcount": number | null,"branch_id": string | null,"branch_name": string | null,"cancel_reason": string | null,"cancelled_at": string | null,"capture_closed_at": string | null,"capture_reopened_at": string | null,"city_id": string,"city_name": string,"closed_at": string | null,"company_id": string,"company_name": string,"created_at": string,"deal_id": string,"deal_name_branch": string,"estimated_billing_amount": number | null,"first_session_date": string | null,"id": string,"last_session_date": string | null,"logistics_confirmed": boolean,"no_show_count": number | null,"notes": string | null,"reopen_reason": string | null,"responsible_user_id": string,"responsible_user_name": string,"scheduled_at": string | null,"scheduled_count": number | null,"sessions_count": number | null,"started_at": string | null,"status": Database["public"]['Enums']["campaign_status"],"target_employees_n": number | null,"updated_at": string
                   }
                   ComputedFields: never
                   Relationships: [
@@ -1392,6 +1552,12 @@ isOneToOne: false
       foreignKeyName: "alegra_invoice_orders_order_id_fkey"
       columns: ["order_id"]
 isOneToOne: false
+      referencedRelation: "v_order_margins"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "alegra_invoice_orders_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
       referencedRelation: "v_orders"
       referencedColumns: ["id"]
     },{
@@ -1434,6 +1600,80 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"v_order_costs": {
+                  Row: {
+                    "amount": number,"basis": Database["public"]['Enums']["cost_basis"],"component": Database["public"]['Enums']["cost_component"],"created_at": string,"created_by": string | null,"created_by_name": string | null,"id": string,"is_current": boolean | null,"is_voided": boolean,"lab_provider_id": string | null,"lab_provider_name": string | null,"notes": string | null,"order_id": string,"order_item_id": string | null,"replaces_id": string | null,"source": string,"superseded_at": string | null,"void_reason": string | null,"voided_at": string | null
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "order_costs_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_costs_item_same_order"
+      columns: ["order_item_id","order_id"]
+isOneToOne: false
+      referencedRelation: "order_items"
+      referencedColumns: ["id","order_id"]
+    },{
+      foreignKeyName: "order_costs_item_same_order"
+      columns: ["order_item_id","order_id"]
+isOneToOne: false
+      referencedRelation: "v_order_item_delivery"
+      referencedColumns: ["order_item_id","order_id"]
+    },{
+      foreignKeyName: "order_costs_lab_provider_id_fkey"
+      columns: ["lab_provider_id"]
+isOneToOne: false
+      referencedRelation: "lab_providers"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_costs_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_costs_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_order_margins"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "order_costs_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_costs_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders_to_invoice"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_costs_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_receivables"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_costs_replaces_same_order"
+      columns: ["replaces_id","order_id"]
+isOneToOne: false
+      referencedRelation: "order_costs"
+      referencedColumns: ["id","order_id"]
+    },{
+      foreignKeyName: "order_costs_replaces_same_order"
+      columns: ["replaces_id","order_id"]
+isOneToOne: false
+      referencedRelation: "v_order_costs"
+      referencedColumns: ["id","order_id"]
+    }
+                  ]
                 },"v_order_installments": {
                   Row: {
                     "due_date": string,"expected_amount": number,"id": string,"installment_number": number,"order_id": string,"paid_amount": number,"pending_amount": number | null,"status": string | null,"superseded_by_reclassification_id": string | null
@@ -1452,6 +1692,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "orders"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_installments_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_order_margins"
+      referencedColumns: ["order_id"]
     },{
       foreignKeyName: "order_installments_order_id_fkey"
       columns: ["order_id"]
@@ -1488,6 +1734,12 @@ isOneToOne: false
       foreignKeyName: "order_items_order_id_fkey"
       columns: ["order_id"]
 isOneToOne: false
+      referencedRelation: "v_order_margins"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "order_items_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
       referencedRelation: "v_orders"
       referencedColumns: ["id"]
     },{
@@ -1501,6 +1753,38 @@ isOneToOne: false
       columns: ["order_id"]
 isOneToOne: false
       referencedRelation: "v_receivables"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"v_order_margins": {
+                  Row: {
+                    "campaign_id": string | null,"company_id": string | null,"cost_basis": string | null,"cost_kit": number | null,"cost_lente": number | null,"cost_montura": number | null,"cost_otro": number | null,"cost_total": number | null,"costs_count": number | null,"is_cancelled": boolean,"margin_amount": number | null,"margin_ratio": number | null,"order_id": string,"order_number": number,"total_amount": number
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "orders_campaign_id_fkey"
+      columns: ["campaign_id"]
+isOneToOne: false
+      referencedRelation: "campaigns_jornadas"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_campaign_id_fkey"
+      columns: ["campaign_id"]
+isOneToOne: false
+      referencedRelation: "v_campaign_margins"
+      referencedColumns: ["campaign_id"]
+    },{
+      foreignKeyName: "orders_campaign_id_fkey"
+      columns: ["campaign_id"]
+isOneToOne: false
+      referencedRelation: "v_campaigns"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_company_id_fkey"
+      columns: ["company_id"]
+isOneToOne: false
+      referencedRelation: "companies"
       referencedColumns: ["id"]
     }
                   ]
@@ -1540,6 +1824,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "campaigns_jornadas"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_campaign_id_fkey"
+      columns: ["campaign_id"]
+isOneToOne: false
+      referencedRelation: "v_campaign_margins"
+      referencedColumns: ["campaign_id"]
     },{
       foreignKeyName: "orders_campaign_id_fkey"
       columns: ["campaign_id"]
@@ -1638,6 +1928,12 @@ isOneToOne: false
       foreignKeyName: "payment_allocations_order_id_fkey"
       columns: ["order_id"]
 isOneToOne: false
+      referencedRelation: "v_order_margins"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "payment_allocations_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
       referencedRelation: "v_orders"
       referencedColumns: ["id"]
     },{
@@ -1710,6 +2006,12 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "orders"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_productions_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_order_margins"
+      referencedColumns: ["order_id"]
     },{
       foreignKeyName: "order_productions_order_id_fkey"
       columns: ["order_id"]
@@ -1796,6 +2098,12 @@ isOneToOne: false
       foreignKeyName: "post_sale_warranties_order_id_fkey"
       columns: ["order_id"]
 isOneToOne: false
+      referencedRelation: "v_order_margins"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "post_sale_warranties_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
       referencedRelation: "v_orders"
       referencedColumns: ["id"]
     },{
@@ -1843,7 +2151,7 @@ isOneToOne: false
                            }
           }
           Enums: {
-            "agreement_document_type": "convenio_firmado"|"camara_comercio"|"rut"|"formato_rrhh"|"otro","agreement_status": "borrador"|"pendiente_aprobacion"|"aprobado"|"cancelado","app_role": "comercial"|"operacion"|"administracion_cartera"|"direccion"|"proveedor_lab","buyer_document_type": "cc"|"ce"|"ti"|"pasaporte"|"otro","campaign_status": "programada"|"en_ejecucion"|"cerrada"|"cancelada","collection_responsible": "empresa"|"empleado","contact_area": "rrhh"|"sst"|"gerencia"|"compras"|"otra","deal_stage": "prospecto"|"reunion_exploratoria"|"propuesta_enviada"|"negociacion"|"convenio_firmado"|"jornada_en_ejecucion"|"facturacion_cerrada"|"cierre_perdido","interaction_type": "reunion"|"llamada"|"whatsapp"|"correo","invoice_radication_status": "pendiente"|"radicada"|"rechazada","lost_substatus": "nurturing"|"no_contactar","order_accounting_status": "pendiente_vincular"|"factura_vinculada"|"factura_con_diferencia","order_collection_status": "con_saldo"|"parcialmente_recaudado"|"recaudado_total","order_doc_status": "pendiente_soportes"|"requisitos_verificados","order_item_type": "gafas_completas"|"montura"|"lentes"|"otro","order_ops_status": "pendiente_liberar"|"en_produccion"|"listo_para_entregar"|"entrega_parcial"|"entrega_completa","payment_modality": "contado"|"nomina_empresa","payroll_frequency": "mensual"|"quincenal","production_status": "en_produccion"|"listo_para_entregar"|"cancelada","warranty_incident_type": "garantia"|"reclamo"|"ajuste"|"otro","warranty_status": "abierta"|"en_reposicion"|"cerrada"
+            "agreement_document_type": "convenio_firmado"|"camara_comercio"|"rut"|"formato_rrhh"|"otro","agreement_status": "borrador"|"pendiente_aprobacion"|"aprobado"|"cancelado","app_role": "comercial"|"operacion"|"administracion_cartera"|"direccion"|"proveedor_lab"|"socio","attendance_status": "agendado"|"presente"|"atendido"|"no_asistio"|"cancelado","buyer_document_type": "cc"|"ce"|"ti"|"pasaporte"|"otro","campaign_status": "borrador"|"programada"|"en_ejecucion"|"captura_cerrada"|"operacion_cerrada"|"cancelada","collection_responsible": "empresa"|"empleado","contact_area": "rrhh"|"sst"|"gerencia"|"compras"|"otra","cost_basis": "estimado"|"verificado","cost_component": "lente"|"montura"|"kit"|"otro","deal_stage": "prospecto"|"reunion_exploratoria"|"propuesta_enviada"|"negociacion"|"convenio_firmado"|"jornada_en_ejecucion"|"facturacion_cerrada"|"cierre_perdido","interaction_type": "reunion"|"llamada"|"whatsapp"|"correo","invoice_radication_status": "pendiente"|"radicada"|"rechazada","lost_substatus": "nurturing"|"no_contactar","order_accounting_status": "pendiente_vincular"|"factura_vinculada"|"factura_con_diferencia","order_collection_status": "con_saldo"|"parcialmente_recaudado"|"recaudado_total","order_doc_status": "pendiente_soportes"|"requisitos_verificados","order_item_type": "gafas_completas"|"montura"|"lentes"|"otro","order_ops_status": "pendiente_liberar"|"en_produccion"|"listo_para_entregar"|"entrega_parcial"|"entrega_completa","payment_modality": "contado"|"nomina_empresa","payroll_frequency": "mensual"|"quincenal","production_status": "en_produccion"|"listo_para_entregar"|"cancelada","warranty_incident_type": "garantia"|"reclamo"|"ajuste"|"otro","warranty_status": "abierta"|"en_reposicion"|"cerrada"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -1963,7 +2271,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "agreement_document_type": ["convenio_firmado", "camara_comercio", "rut", "formato_rrhh", "otro"],"agreement_status": ["borrador", "pendiente_aprobacion", "aprobado", "cancelado"],"app_role": ["comercial", "operacion", "administracion_cartera", "direccion", "proveedor_lab"],"buyer_document_type": ["cc", "ce", "ti", "pasaporte", "otro"],"campaign_status": ["programada", "en_ejecucion", "cerrada", "cancelada"],"collection_responsible": ["empresa", "empleado"],"contact_area": ["rrhh", "sst", "gerencia", "compras", "otra"],"deal_stage": ["prospecto", "reunion_exploratoria", "propuesta_enviada", "negociacion", "convenio_firmado", "jornada_en_ejecucion", "facturacion_cerrada", "cierre_perdido"],"interaction_type": ["reunion", "llamada", "whatsapp", "correo"],"invoice_radication_status": ["pendiente", "radicada", "rechazada"],"lost_substatus": ["nurturing", "no_contactar"],"order_accounting_status": ["pendiente_vincular", "factura_vinculada", "factura_con_diferencia"],"order_collection_status": ["con_saldo", "parcialmente_recaudado", "recaudado_total"],"order_doc_status": ["pendiente_soportes", "requisitos_verificados"],"order_item_type": ["gafas_completas", "montura", "lentes", "otro"],"order_ops_status": ["pendiente_liberar", "en_produccion", "listo_para_entregar", "entrega_parcial", "entrega_completa"],"payment_modality": ["contado", "nomina_empresa"],"payroll_frequency": ["mensual", "quincenal"],"production_status": ["en_produccion", "listo_para_entregar", "cancelada"],"warranty_incident_type": ["garantia", "reclamo", "ajuste", "otro"],"warranty_status": ["abierta", "en_reposicion", "cerrada"]
+            "agreement_document_type": ["convenio_firmado", "camara_comercio", "rut", "formato_rrhh", "otro"],"agreement_status": ["borrador", "pendiente_aprobacion", "aprobado", "cancelado"],"app_role": ["comercial", "operacion", "administracion_cartera", "direccion", "proveedor_lab", "socio"],"attendance_status": ["agendado", "presente", "atendido", "no_asistio", "cancelado"],"buyer_document_type": ["cc", "ce", "ti", "pasaporte", "otro"],"campaign_status": ["borrador", "programada", "en_ejecucion", "captura_cerrada", "operacion_cerrada", "cancelada"],"collection_responsible": ["empresa", "empleado"],"contact_area": ["rrhh", "sst", "gerencia", "compras", "otra"],"cost_basis": ["estimado", "verificado"],"cost_component": ["lente", "montura", "kit", "otro"],"deal_stage": ["prospecto", "reunion_exploratoria", "propuesta_enviada", "negociacion", "convenio_firmado", "jornada_en_ejecucion", "facturacion_cerrada", "cierre_perdido"],"interaction_type": ["reunion", "llamada", "whatsapp", "correo"],"invoice_radication_status": ["pendiente", "radicada", "rechazada"],"lost_substatus": ["nurturing", "no_contactar"],"order_accounting_status": ["pendiente_vincular", "factura_vinculada", "factura_con_diferencia"],"order_collection_status": ["con_saldo", "parcialmente_recaudado", "recaudado_total"],"order_doc_status": ["pendiente_soportes", "requisitos_verificados"],"order_item_type": ["gafas_completas", "montura", "lentes", "otro"],"order_ops_status": ["pendiente_liberar", "en_produccion", "listo_para_entregar", "entrega_parcial", "entrega_completa"],"payment_modality": ["contado", "nomina_empresa"],"payroll_frequency": ["mensual", "quincenal"],"production_status": ["en_produccion", "listo_para_entregar", "cancelada"],"warranty_incident_type": ["garantia", "reclamo", "ajuste", "otro"],"warranty_status": ["abierta", "en_reposicion", "cerrada"]
           }
         }
 } as const

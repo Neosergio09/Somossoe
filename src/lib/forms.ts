@@ -171,6 +171,12 @@ const FIELD_LABELS: Record<string, string> = {
   bank_reference: 'Referencia bancaria',
   amount_applied: 'Dinero recibido',
   withholding_applied: 'Retención',
+  reopen_reason: 'Motivo de la reapertura',
+  amount: 'Valor',
+  source: 'Fuente del costo',
+  void_reason: 'Motivo de la anulación',
+  component: 'Componente',
+  basis: 'Tipo de costo',
 };
 
 const UNIQUE_MESSAGES: Record<string, string> = {
@@ -179,6 +185,8 @@ const UNIQUE_MESSAGES: Record<string, string> = {
   company_branches_name_key: 'La empresa ya tiene una sede con ese nombre.',
   company_branches_one_main_key: 'La empresa ya tiene una sede principal.',
   campaign_attendance_unique_person: 'Esa persona ya está registrada en esta sesión.',
+  campaign_attendance_one_attended_key: 'Esa persona ya figura como atendida en esta jornada.',
+  order_costs_replaces_key: 'Ese costo ya fue reemplazado por otra versión.',
   cities_name_key: 'Ya existe una ciudad con ese nombre.',
   lab_providers_name_key: 'Ya existe un laboratorio con ese nombre.',
   deal_origins_pkey: 'Ya existe un origen con ese código.',
@@ -239,6 +247,10 @@ const CHECK_MESSAGES: Record<string, string> = {
   collections_payments_total_received_bank_check: 'El valor recibido debe ser mayor que cero.',
   payment_allocations_positive: 'Indique dinero recibido o retención mayor que cero.',
   payment_allocations_void_reason: 'Indique el motivo de la anulación.',
+  order_costs_amount_check: 'El costo no puede ser negativo.',
+  order_costs_source_check: 'Indique la fuente del costo (entre 3 y 300 caracteres).',
+  order_costs_void_reason: 'Indique el motivo de la anulación.',
+  campaigns_jornadas_reopen_reason_check: 'El motivo es demasiado largo.',
 };
 
 /** Reemplaza códigos internos (etapas, estados) por su etiqueta. */

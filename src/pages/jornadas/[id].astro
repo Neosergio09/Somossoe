@@ -1,9 +1,23 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
 import { hasRole } from '../../lib/auth';
-import { cop, fmtDate, fmtDateTime, fmtTime, fmtWeekday } from '../../lib/format';
+import { cop, fmtDate, fmtDateTime, fmtTime, fmtWeekday, pct } from '../../lib/format';
 import { checkbox, date, ensure, FormError, parseForm, runActions, text, time, uuid, z } from '../../lib/forms';
-import { CAMPAIGN_STATUS_BADGE, CAMPAIGN_STATUS_LABELS, DOC_STATUS_BADGE, DOC_STATUS_LABELS, PAYMENT_MODALITY_LABELS } from '../../lib/labels';
+import {
+  ATTENDANCE_STATUS_BADGE,
+  ATTENDANCE_STATUS_LABELS,
+  CAMPAIGN_STATUS_BADGE,
+  CAMPAIGN_STATUS_LABELS,
+  DOC_STATUS_BADGE,
+  DOC_STATUS_LABELS,
+  MARGIN_BASIS_BADGE,
+  MARGIN_BASIS_LABELS,
+  OPS_STATUS_BADGE,
+  OPS_STATUS_LABELS,
+  PAYMENT_MODALITY_LABELS,
+  type AttendanceStatus,
+  type CampaignStatus,
+} from '../../lib/labels';
 import { orderNumber } from '../../lib/orders';
 import { activeUsers, operationalCities } from '../../lib/options';
 
@@ -18,7 +32,9 @@ const sessionSchema = z.object({
   responsible_user_id: uuid(),
 });
 
-async function setStatus(status: 'en_ejecucion' | 'cerrada' | 'cancelada', extra: Record<string, unknown> = {}) {
+const ATTENDANCE_STATUSES = Object.keys(ATTENDANCE_STATUS_LABELS) as [AttendanceStatus, ...AttendanceStatus[]];
+
+async function setStatus(status: CampaignStatus, extra: Record<string, unknown> = {}) {
   ensure(await supabase.from('campaigns_jornadas').update({ status, ...extra }).eq('id', id).select('id').single());
 }
 
@@ -54,13 +70,27 @@ const outcome = await runActions(Astro, {
     ensure(await supabase.from('campaign_sessions').delete().eq('id', sessionId).eq('campaign_id', id).select('id').single());
     return { message: 'Sesión eliminada.' };
   },
+  schedule: async () => {
+    await setStatus('programada');
+    return { message: 'Jornada programada.' };
+  },
   start: async () => {
     await setStatus('en_ejecucion');
-    return { message: 'Jornada iniciada. Ya puede registrar la asistencia.' };
+    return { message: 'Jornada iniciada. Ya puede marcar la asistencia y registrar órdenes.' };
   },
-  close: async () => {
-    await setStatus('cerrada');
-    return { message: 'Jornada cerrada.' };
+  close_capture: async () => {
+    await setStatus('captura_cerrada');
+    return { message: 'Captura cerrada: asistencia y órdenes quedan congeladas.' };
+  },
+  reopen: async (form) => {
+    const reason = String(form.get('reopen_reason') ?? '').trim();
+    if (!reason) throw new FormError('Indique el motivo para reabrir la captura.');
+    await setStatus('en_ejecucion', { reopen_reason: reason });
+    return { message: 'Captura reabierta.' };
+  },
+  close_operation: async () => {
+    await setStatus('operacion_cerrada');
+    return { message: 'Operación de la jornada cerrada.' };
   },
   cancel: async (form) => {
     const reason = String(form.get('cancel_reason') ?? '').trim();
@@ -75,11 +105,25 @@ const outcome = await runActions(Astro, {
         full_name: text(150),
         document_id: z.string().regex(/^[0-9A-Za-z]{4,15}$/, { error: 'entre 4 y 15 letras o números, sin puntos' }),
         area: text(100).optional(),
+        status: z.enum(ATTENDANCE_STATUSES),
       }),
       form,
     );
     ensure(await supabase.from('campaign_attendance').insert({ ...input, area: input.area ?? null, campaign_id: id }));
-    return { message: `${input.full_name} registrado(a).` };
+    return { message: `${input.full_name}: ${ATTENDANCE_STATUS_LABELS[input.status].toLowerCase()}.` };
+  },
+  set_attendance: async (form) => {
+    const input = parseForm(z.object({ attendee_id: uuid(), status: z.enum(ATTENDANCE_STATUSES) }), form);
+    ensure(
+      await supabase
+        .from('campaign_attendance')
+        .update({ status: input.status })
+        .eq('id', input.attendee_id)
+        .eq('campaign_id', id)
+        .select('id')
+        .single(),
+    );
+    return { message: `Asistencia: ${ATTENDANCE_STATUS_LABELS[input.status].toLowerCase()}.` };
   },
   delete_attendee: async (form) => {
     const attendeeId = String(form.get('attendee_id') ?? '');
@@ -105,7 +149,7 @@ const [sessions, attendance, agreement, branches, opsUsers, sessionUsers, cities
   operationalCities(supabase),
   supabase
     .from('v_orders')
-    .select('id, order_number, buyer_name, buyer_document_id, payment_modality, installments_count, total_amount, doc_status, is_cancelled')
+    .select('id, order_number, buyer_name, buyer_document_id, payment_modality, installments_count, total_amount, doc_status, ops_status, is_cancelled')
     .eq('campaign_id', id)
     .order('order_number'),
 ]);
@@ -116,16 +160,40 @@ const sessionRows = j.status === 'cancelada'
 
 const status = j.status!;
 const isOps = hasRole(Astro.locals, 'operacion');
-const canEdit = hasRole(Astro.locals, 'operacion', 'comercial') && (status === 'programada' || status === 'en_ejecucion');
-const canCancel = hasRole(Astro.locals, 'operacion', 'direccion') && status === 'programada';
-const canAttend = hasRole(Astro.locals, 'operacion', 'comercial') && status === 'en_ejecucion';
+const isTeam = hasRole(Astro.locals, 'operacion', 'comercial');
+const beforeExecution = status === 'borrador' || status === 'programada';
+const canEdit = isTeam && (beforeExecution || status === 'en_ejecucion');
+const canCancel = hasRole(Astro.locals, 'operacion', 'direccion') && beforeExecution;
+const canAttend = isTeam && (beforeExecution || status === 'en_ejecucion');
+// Antes de ejecutar solo se agenda o cancela; en ejecución, cualquier estado
+const attendanceOptions: AttendanceStatus[] = beforeExecution ? ['agendado', 'cancelado'] : ATTENDANCE_STATUSES;
 const attendees = attendance.data ?? [];
 const orderList = orders.data ?? [];
 const activeOrders = orderList.filter((o) => !o.is_cancelled);
+
+// Cierre operativo: todo entregado y sin posventa abierta
+const undelivered = activeOrders.filter((o) => o.ops_status !== 'entrega_completa').length;
+const openWarranties = orderList.length
+  ? ((await supabase
+      .from('post_sale_warranties')
+      .select('id', { count: 'exact', head: true })
+      .in('order_id', orderList.map((o) => o.id!))
+      .neq('status', 'cerrada')).count ?? 0)
+  : 0;
+
+// Costos y márgenes: solo Dirección y Socio (la BD no los entrega a otros roles)
+const canViewCosts = hasRole(Astro.locals, 'direccion', 'socio');
+const [campaignMargin, orderMargins] = canViewCosts
+  ? await Promise.all([
+      supabase.from('v_campaign_margins').select('*').eq('campaign_id', id).maybeSingle(),
+      supabase.from('v_order_margins').select('order_id, cost_total, cost_basis, margin_amount').eq('campaign_id', id),
+    ])
+  : [{ data: null }, { data: [] }];
+const marginByOrder = new Map((orderMargins.data ?? []).map((m) => [m.order_id, m]));
 // RF-M03-04: valor real vendido = órdenes no anuladas; conversión = compradores ÷ asistentes
 const realSold = activeOrders.reduce((sum, o) => sum + (o.total_amount ?? 0), 0);
 const buyersCount = new Set(activeOrders.map((o) => o.buyer_document_id)).size;
-const canOrder = hasRole(Astro.locals, 'comercial') && (status === 'en_ejecucion' || status === 'cerrada');
+const canOrder = hasRole(Astro.locals, 'comercial') && status === 'en_ejecucion';
 const orderLink = (a?: { document_id: string; full_name: string }) =>
   `/ordenes/nueva?campaign_id=${id}${a ? `&document_type=cc&document_id=${encodeURIComponent(a.document_id)}&full_name=${encodeURIComponent(a.full_name)}` : ''}`;
 const sessionLabel = (sid: string) => {
@@ -146,7 +214,9 @@ const sessionLabel = (sid: string) => {
     <div class="text-right">
       <span class={`${CAMPAIGN_STATUS_BADGE[status]} text-sm`}>{CAMPAIGN_STATUS_LABELS[status]}</span>
       <div class="mt-2 text-sm text-slate-600">
-        Asistencia: <strong>{j.attended_headcount}</strong>{j.target_employees_n ? ` de ${j.target_employees_n} proyectados` : ''}
+        Atendidos: <strong>{j.attended_headcount}</strong>{j.target_employees_n ? ` de ${j.target_employees_n} proyectados` : ''}
+        {Number(j.scheduled_count) > 0 && <span class="text-slate-500"> · {j.scheduled_count} agendados</span>}
+        {Number(j.no_show_count) > 0 && <span class="text-slate-500"> · {j.no_show_count} no asistieron</span>}
       </div>
       <div class="text-xs text-slate-500">Facturación estimada de la oportunidad: {cop(j.estimated_billing_amount)}</div>
       <div class="text-sm text-slate-600">
@@ -225,13 +295,23 @@ const sessionLabel = (sid: string) => {
               <div><label class="label">Nombre completo</label><input class="input" name="full_name" required autofocus={lastAction === 'add_attendee'} /></div>
               <div><label class="label">Documento</label><input class="input" name="document_id" required inputmode="numeric" /></div>
               <div><label class="label">Área</label><input class="input" name="area" value={lastAction === 'add_attendee' ? v.area : ''} /></div>
-              <button class="btn btn-primary" type="submit">Registrar</button>
+              <div>
+                <label class="label">Estado</label>
+                <select class="input" name="status">
+                  {attendanceOptions.map((st) => (
+                    <option value={st} selected={(lastAction === 'add_attendee' && v.status ? v.status : beforeExecution ? 'agendado' : 'atendido') === st}>
+                      {ATTENDANCE_STATUS_LABELS[st]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button class="btn btn-primary sm:col-span-5 sm:justify-self-end" type="submit">Registrar</button>
             </form>
           )
         }
-        {status === 'programada' && <p class="mb-3 text-sm text-slate-500">La asistencia se registra cuando la jornada está En ejecución.</p>}
+        {beforeExecution && <p class="mb-3 text-sm text-slate-500">Antes de iniciar la jornada solo se agenda o cancela la asistencia; se marca atendido con la jornada En ejecución.</p>}
         <table class="table">
-          <thead><tr><th>Nombre</th><th>Documento</th><th>Área</th><th>Sesión</th><th>Registro</th><th>Compra</th><th></th></tr></thead>
+          <thead><tr><th>Nombre</th><th>Documento</th><th>Área</th><th>Sesión</th><th>Estado</th><th>Compra</th><th></th></tr></thead>
           <tbody>
             {attendees.map((a) => (
               <tr>
@@ -239,7 +319,23 @@ const sessionLabel = (sid: string) => {
                 <td>{a.document_id}</td>
                 <td>{a.area ?? '—'}</td>
                 <td class="text-xs">{sessionLabel(a.session_id)}</td>
-                <td class="text-xs text-slate-500">{fmtDateTime(a.created_at)}</td>
+                <td class="whitespace-nowrap">
+                  {canAttend ? (
+                    <form method="post" class="flex items-center gap-1">
+                      <input type="hidden" name="_action" value="set_attendance" />
+                      <input type="hidden" name="attendee_id" value={a.id} />
+                      <select class="input py-1 text-xs" name="status" aria-label={`Estado de ${a.full_name}`}>
+                        {(attendanceOptions.includes(a.status) ? attendanceOptions : [a.status, ...attendanceOptions]).map((st) => (
+                          <option value={st} selected={st === a.status}>{ATTENDANCE_STATUS_LABELS[st]}</option>
+                        ))}
+                      </select>
+                      <button class="btn btn-sm" type="submit">OK</button>
+                    </form>
+                  ) : (
+                    <span class={ATTENDANCE_STATUS_BADGE[a.status]}>{ATTENDANCE_STATUS_LABELS[a.status]}</span>
+                  )}
+                  {a.attended_at && <div class="text-xs text-slate-500">{fmtDateTime(a.attended_at)}</div>}
+                </td>
                 <td class="whitespace-nowrap">
                   {a.buyer_id ? (
                     <span class="badge badge-green">Compró</span>
@@ -268,10 +364,17 @@ const sessionLabel = (sid: string) => {
           <h2>Órdenes de la jornada</h2>
           {canOrder && <a class="btn btn-primary btn-sm" href={orderLink()}>Registrar orden</a>}
         </div>
-        {status === 'programada' && <p class="mb-3 text-sm text-slate-500">Las órdenes se registran con la jornada En ejecución o Cerrada.</p>}
+        {beforeExecution && <p class="mb-3 text-sm text-slate-500">Las órdenes se registran con la jornada En ejecución.</p>}
+        {status === 'captura_cerrada' && <p class="mb-3 text-sm text-slate-500">Captura cerrada: para una venta tardía, Operación reabre la captura indicando el motivo.</p>}
         <div class="overflow-x-auto">
           <table class="table">
-            <thead><tr><th>Orden</th><th>Comprador</th><th>Modalidad</th><th class="text-right">Valor</th><th>Documental</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Orden</th><th>Comprador</th><th>Modalidad</th><th class="text-right">Valor</th><th>Documental</th><th>Operativo</th>
+                {canViewCosts && <th class="text-right">Costo</th>}
+                {canViewCosts && <th class="text-right">Diferencia</th>}
+              </tr>
+            </thead>
             <tbody>
               {orderList.map((o) => (
                 <tr class:list={[o.is_cancelled && 'opacity-60']}>
@@ -280,9 +383,17 @@ const sessionLabel = (sid: string) => {
                   <td class="text-xs">{PAYMENT_MODALITY_LABELS[o.payment_modality!]}{o.installments_count && ` · ${o.installments_count} cuotas`}</td>
                   <td class="text-right whitespace-nowrap">{cop(o.total_amount)}</td>
                   <td>{o.is_cancelled ? <span class="badge badge-red">Anulada</span> : <span class={DOC_STATUS_BADGE[o.doc_status!]}>{DOC_STATUS_LABELS[o.doc_status!]}</span>}</td>
+                  <td>{!o.is_cancelled && <span class={OPS_STATUS_BADGE[o.ops_status!]}>{OPS_STATUS_LABELS[o.ops_status!]}</span>}</td>
+                  {canViewCosts && (
+                    <td class="text-right whitespace-nowrap">
+                      {cop(marginByOrder.get(o.id!)?.cost_total)}
+                      {marginByOrder.get(o.id!)?.cost_basis === 'estimado' && <span class="badge badge-amber ml-1">Est.</span>}
+                    </td>
+                  )}
+                  {canViewCosts && <td class="text-right whitespace-nowrap">{cop(marginByOrder.get(o.id!)?.margin_amount)}</td>}
                 </tr>
               ))}
-              {!orderList.length && <tr><td colspan="5" class="text-slate-500">Sin órdenes registradas.</td></tr>}
+              {!orderList.length && <tr><td colspan={canViewCosts ? 8 : 6} class="text-slate-500">Sin órdenes registradas.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -293,20 +404,55 @@ const sessionLabel = (sid: string) => {
       <section class="card space-y-3 text-sm">
         <h2>Estado de la jornada</h2>
         <ul class="space-y-1">
-          <li class:list={[j.logistics_confirmed ? 'text-green-700' : 'text-amber-700']}>{j.logistics_confirmed ? '✓' : '○'} Logística confirmada</li>
           <li class:list={[sessionRows.length ? 'text-green-700' : 'text-amber-700']}>{sessionRows.length ? '✓' : '○'} Al menos una sesión</li>
+          <li class:list={[j.logistics_confirmed ? 'text-green-700' : 'text-amber-700']}>{j.logistics_confirmed ? '✓' : '○'} Logística confirmada</li>
+          {
+            (status === 'captura_cerrada' || status === 'operacion_cerrada') && (
+              <>
+                <li class:list={[undelivered ? 'text-amber-700' : 'text-green-700']}>{undelivered ? `○ ${undelivered} orden(es) sin entrega completa` : '✓ Todas las órdenes entregadas'}</li>
+                <li class:list={[openWarranties ? 'text-amber-700' : 'text-green-700']}>{openWarranties ? `○ ${openWarranties} caso(s) de posventa abiertos` : '✓ Sin posventa abierta'}</li>
+              </>
+            )
+          }
+          {j.scheduled_at && <li class="text-slate-600">Programada: {fmtDateTime(j.scheduled_at)}</li>}
           {j.started_at && <li class="text-slate-600">Iniciada: {fmtDateTime(j.started_at)}</li>}
-          {j.closed_at && <li class="text-slate-600">Cerrada: {fmtDateTime(j.closed_at)}</li>}
+          {j.capture_reopened_at && <li class="text-slate-600">Captura reabierta: {fmtDateTime(j.capture_reopened_at)} · {j.reopen_reason}</li>}
+          {j.capture_closed_at && <li class="text-slate-600">Captura cerrada: {fmtDateTime(j.capture_closed_at)}</li>}
+          {j.closed_at && <li class="text-slate-600">Operación cerrada: {fmtDateTime(j.closed_at)}</li>}
           {j.cancelled_at && <li class="text-red-700">Cancelada: {j.cancel_reason}</li>}
         </ul>
         {
-          canEdit && status === 'programada' && (
+          isTeam && status === 'borrador' && (
+            <form method="post"><input type="hidden" name="_action" value="schedule" /><button class="btn btn-primary w-full" disabled={!sessionRows.length}>Programar jornada</button></form>
+          )
+        }
+        {
+          isTeam && status === 'programada' && (
             <form method="post"><input type="hidden" name="_action" value="start" /><button class="btn btn-primary w-full" disabled={!j.logistics_confirmed || !sessionRows.length}>Iniciar jornada</button></form>
           )
         }
         {
-          canEdit && status === 'en_ejecucion' && (
-            <form method="post"><input type="hidden" name="_action" value="close" /><button class="btn btn-primary w-full">Cerrar jornada</button></form>
+          isTeam && status === 'en_ejecucion' && (
+            <form method="post">
+              <input type="hidden" name="_action" value="close_capture" />
+              <button class="btn btn-primary w-full">Cerrar captura</button>
+              <p class="mt-1 text-xs text-slate-500">Congela asistencia y órdenes. Producción, entregas, factura y cobro siguen su curso.</p>
+            </form>
+          )
+        }
+        {
+          isTeam && status === 'captura_cerrada' && (
+            <>
+              <form method="post"><input type="hidden" name="_action" value="close_operation" /><button class="btn btn-primary w-full" disabled={undelivered > 0 || openWarranties > 0}>Cerrar operación</button></form>
+              <details open={lastAction === 'reopen'}>
+                <summary class="cursor-pointer text-slate-700">Reabrir captura</summary>
+                <form method="post" class="mt-2 space-y-2">
+                  <input type="hidden" name="_action" value="reopen" />
+                  <textarea class="input" name="reopen_reason" rows="2" required maxlength="1000" placeholder="Motivo (p. ej., venta tardía)" />
+                  <button class="btn w-full">Reabrir</button>
+                </form>
+              </details>
+            </>
           )
         }
         {
@@ -347,6 +493,32 @@ const sessionLabel = (sid: string) => {
               <textarea class="input" name="notes" rows="3">{j.notes ?? ''}</textarea>
               <button class="btn btn-primary w-full" type="submit">Guardar</button>
             </form>
+          </section>
+        )
+      }
+
+      {
+        canViewCosts && (
+          <section class="card text-sm">
+            <h2 class="mb-1">Costos y diferencia</h2>
+            <p class="mb-3 text-xs text-slate-500">Solo Dirección y Socio. Diferencia = venta − costo directo; no es utilidad neta.</p>
+            {
+              campaignMargin.data ? (
+                <dl class="space-y-1">
+                  <div class="flex justify-between"><dt>Venta (sin anuladas)</dt><dd>{cop(campaignMargin.data.sold_amount)}</dd></div>
+                  <div class="flex justify-between"><dt>Costo directo</dt><dd>{cop(campaignMargin.data.cost_total)}</dd></div>
+                  <div class="flex justify-between font-semibold"><dt>Diferencia</dt><dd>{cop(campaignMargin.data.margin_amount)} <span class="font-normal text-slate-500">({pct(campaignMargin.data.margin_ratio)})</span></dd></div>
+                </dl>
+              ) : (
+                <p class="text-slate-500">—</p>
+              )
+            }
+            {
+              campaignMargin.data && Number(campaignMargin.data.orders_without_costs) > 0 && (
+                <p class="mt-2"><span class={MARGIN_BASIS_BADGE.sin_costos}>{campaignMargin.data.orders_without_costs} orden(es) sin costos</span> <span class="text-xs text-slate-500">la diferencia está incompleta</span></p>
+              )
+            }
+            {campaignMargin.data?.has_estimated && <p class="mt-2"><span class={MARGIN_BASIS_BADGE.estimado}>{MARGIN_BASIS_LABELS.estimado}</span> <span class="text-xs text-slate-500">incluye costos sin verificar</span></p>}
           </section>
         )
       }

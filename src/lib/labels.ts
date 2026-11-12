@@ -9,6 +9,7 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   operacion: 'Operación',
   administracion_cartera: 'Administración / Cartera',
   direccion: 'Dirección',
+  socio: 'Socio (consulta)',
   proveedor_lab: 'Laboratorio',
 };
 
@@ -92,18 +93,45 @@ export const DOCUMENT_TYPE_LABELS: Record<Enums['agreement_document_type'], stri
   otro: 'Otro',
 };
 
-export const CAMPAIGN_STATUS_LABELS: Record<Enums['campaign_status'], string> = {
+export type CampaignStatus = Enums['campaign_status'];
+
+export const CAMPAIGN_STATUS_LABELS: Record<CampaignStatus, string> = {
+  borrador: 'Borrador',
   programada: 'Programada',
   en_ejecucion: 'En ejecución',
-  cerrada: 'Cerrada',
+  captura_cerrada: 'Captura cerrada',
+  operacion_cerrada: 'Operación cerrada',
   cancelada: 'Cancelada',
 };
 
-export const CAMPAIGN_STATUS_BADGE: Record<Enums['campaign_status'], string> = {
+export const CAMPAIGN_STATUS_BADGE: Record<CampaignStatus, string> = {
+  borrador: 'badge',
   programada: 'badge badge-blue',
   en_ejecucion: 'badge badge-amber',
-  cerrada: 'badge badge-green',
+  captura_cerrada: 'badge badge-blue',
+  operacion_cerrada: 'badge badge-green',
   cancelada: 'badge badge-red',
+};
+
+/** Jornadas que todavía requieren gestión (no cerradas ni canceladas). */
+export const ACTIVE_CAMPAIGN_STATUSES: CampaignStatus[] = ['borrador', 'programada', 'en_ejecucion', 'captura_cerrada'];
+
+export type AttendanceStatus = Enums['attendance_status'];
+
+export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
+  agendado: 'Agendado',
+  presente: 'Presente',
+  atendido: 'Atendido',
+  no_asistio: 'No asistió',
+  cancelado: 'Cancelado',
+};
+
+export const ATTENDANCE_STATUS_BADGE: Record<AttendanceStatus, string> = {
+  agendado: 'badge badge-blue',
+  presente: 'badge badge-amber',
+  atendido: 'badge badge-green',
+  no_asistio: 'badge',
+  cancelado: 'badge badge-red',
 };
 
 // ---------------------------------------------------------------------
@@ -248,4 +276,40 @@ export const RADICATION_BADGE: Record<Enums['invoice_radication_status'], string
   pendiente: 'badge badge-amber',
   radicada: 'badge badge-green',
   rechazada: 'badge badge-red',
+};
+
+// ---------------------------------------------------------------------
+// Costos directos (solo Dirección y Socio)
+// ---------------------------------------------------------------------
+export type CostComponent = Enums['cost_component'];
+export type CostBasis = Enums['cost_basis'];
+
+export const COST_COMPONENT_LABELS: Record<CostComponent, string> = {
+  lente: 'Lente',
+  montura: 'Montura',
+  kit: 'Kit',
+  otro: 'Otro',
+};
+
+export const COST_BASIS_LABELS: Record<CostBasis, string> = {
+  estimado: 'Estimado',
+  verificado: 'Verificado',
+};
+
+export const COST_BASIS_BADGE: Record<CostBasis, string> = {
+  estimado: 'badge badge-amber',
+  verificado: 'badge badge-green',
+};
+
+/** Estado del margen: sin costos no hay margen (nunca se asume cero). */
+export const MARGIN_BASIS_LABELS: Record<string, string> = {
+  sin_costos: 'Sin costos',
+  estimado: 'Estimado',
+  verificado: 'Verificado',
+};
+
+export const MARGIN_BASIS_BADGE: Record<string, string> = {
+  sin_costos: 'badge',
+  estimado: 'badge badge-amber',
+  verificado: 'badge badge-green',
 };
