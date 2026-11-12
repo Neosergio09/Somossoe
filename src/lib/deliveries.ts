@@ -24,7 +24,7 @@ export async function loadDeliveries(
 ): Promise<{ records: DeliveryRecord[]; byItem: Map<string, number> }> {
   let query = supabase
     .from('order_deliveries')
-    .select('id, delivered_at, receiver_name, notes, created_at, delivered_by, order_delivery_items(order_item_id, quantity, order_items(item_type, frame_description, lens_type, description))')
+    .select('id, delivered_at, receiver_name, notes, created_at, delivered_by, evidence_file_path, order_delivery_items(order_item_id, quantity, order_items(item_type, frame_description, lens_type, description))')
     .eq('order_id', orderId)
     .order('delivered_at', { ascending: false })
     .order('created_at', { ascending: false });
@@ -45,6 +45,7 @@ export async function loadDeliveries(
       delivered_at: d.delivered_at,
       receiver_name: d.receiver_name,
       notes: d.notes,
+      evidence_file_path: d.evidence_file_path,
       created_at: d.created_at,
       delivered_by_name: users?.find((u) => u.id === d.delivered_by)?.full_name ?? null,
       items: d.order_delivery_items

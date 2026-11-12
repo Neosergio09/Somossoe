@@ -1,5 +1,7 @@
 ---
 import { fmtDate, fmtDateTime, todayCo } from '../lib/format';
+import { supportHref } from '../lib/supports';
+import SupportFile from './SupportFile.astro';
 import { ITEM_TYPE_LABELS, type OrderItemType } from '../lib/labels';
 
 export type DeliveryRow = {
@@ -18,6 +20,7 @@ export type DeliveryRecord = {
   delivered_by_name: string | null;
   created_at: string;
   notes: string | null;
+  evidence_file_path: string | null;
   items: string;
 };
 
@@ -34,9 +37,11 @@ interface Props {
   canDelete: boolean;
   note?: string;
   values?: Record<string, string>;
+  /** Se exige el archivo de evidencia (require_document_files) */
+  requireFiles?: boolean;
 }
 
-const { title, rows, deliveries, canDeliver, labReady, onlyWhenReady = false, canDelete, note, values: v = {} } = Astro.props;
+const { title, rows, deliveries, canDeliver, labReady, onlyWhenReady = false, canDelete, note, values: v = {}, requireFiles = false } = Astro.props;
 const today = todayCo();
 const needsLab = (t: OrderItemType) => onlyWhenReady || t === 'gafas_completas' || t === 'lentes';
 const deliverable = rows.filter((r) => r.pending > 0 && (labReady || !needsLab(r.item_type)));
@@ -93,11 +98,13 @@ const deliverable = rows.filter((r) => r.pending > 0 && (labReady || !needsLab(r
               <input class="input" name="notes" value={v.notes} />
             </div>
           </div>
-          <label class="flex items-center gap-2">
-            <input type="checkbox" name="evidence_received" required />
-            Evidencia recibida (foto o acta firmada)
-          </label>
-          <p class="text-xs text-slate-500">La carga del archivo de evidencia se habilitará con Cloudflare R2.</p>
+          <SupportFile kind="entregas" name="evidence_file_path" label="Evidencia: foto o acta firmada" required={requireFiles} />
+          {!requireFiles && (
+            <label class="flex items-center gap-2">
+              <input type="checkbox" name="evidence_received" />
+              Evidencia recibida en papel (si no adjunta el archivo)
+            </label>
+          )}
           <button class="btn btn-primary w-full" type="submit">Registrar entrega</button>
         </form>
       </details>
@@ -110,7 +117,10 @@ const deliverable = rows.filter((r) => r.pending > 0 && (labReady || !needsLab(r
         {deliveries.map((d) => (
           <li class="flex items-start justify-between gap-2 py-2">
             <div>
-              <div class="font-medium">{fmtDate(d.delivered_at)} · recibió {d.receiver_name}</div>
+              <div class="font-medium">
+                {fmtDate(d.delivered_at)} · recibió {d.receiver_name}
+                {d.evidence_file_path && <a class="ml-1 text-xs font-normal" href={supportHref(d.evidence_file_path)} target="_blank" rel="noopener">ver evidencia</a>}
+              </div>
               <div class="text-xs text-slate-600">{d.items}</div>
               <div class="text-xs text-slate-500">Registró {d.delivered_by_name ?? '—'} el {fmtDateTime(d.created_at)}{d.notes && ` · ${d.notes}`}</div>
             </div>

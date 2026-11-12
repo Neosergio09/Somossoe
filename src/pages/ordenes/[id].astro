@@ -1,6 +1,8 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
 import OrderItemFields from '../../components/OrderItemFields.astro';
+import SupportFile from '../../components/SupportFile.astro';
+import { filesRequired, supportHref, supportPathFrom } from '../../lib/supports';
 import ProductionPanel from '../../components/ProductionPanel.astro';
 import DeliveriesPanel from '../../components/DeliveriesPanel.astro';
 import { activeLabs, fulfillmentActions } from '../../lib/fulfillment';
@@ -130,7 +132,14 @@ const outcome = await runActions(Astro, {
   },
   update_supports: async (form) => {
     const input = parseForm(z.object({ employee_auth_received: checkbox(), hr_approval_received: checkbox() }), form);
-    await updateOrder(input);
+    const authFile = supportPathFrom(form, 'employee_auth_file_path', 'ordenes');
+    const hrFile = supportPathFrom(form, 'hr_approval_file_path', 'ordenes');
+    // Adjuntar marca el soporte como recibido (lo hace la BD); sin archivo nuevo se conserva el anterior
+    await updateOrder({
+      ...input,
+      ...(authFile ? { employee_auth_file_path: authFile } : {}),
+      ...(hrFile ? { hr_approval_file_path: hrFile } : {}),
+    });
     return { message: 'Soportes actualizados.' };
   },
   verify: async () => {
@@ -165,7 +174,14 @@ const outcome = await runActions(Astro, {
     ensure(
       await supabase
         .from('buyers')
-        .update({ full_name: input.full_name, phone: input.phone ?? null, email: input.email ?? null })
+        .update({
+          full_name: input.full_name,
+          phone: input.phone ?? null,
+          email: input.email ?? null,
+          ...(supportPathFrom(form, 'data_consent_file_path', 'compradores')
+            ? { data_consent_file_path: supportPathFrom(form, 'data_consent_file_path', 'compradores') }
+            : {}),
+        })
         .eq('id', input.buyer_id)
         .select('id')
         .single(),
@@ -306,6 +322,7 @@ const canEdit = !isCancelled && !released && (verified ? isAdmin : isAdmin || is
 const canCancel = !isCancelled && (isAdmin || (isCreator && !verified));
 const canException = !isCancelled && !released && o.payment_modality === 'contado' && hasRole(Astro.locals, 'direccion');
 const isPayroll = o.payment_modality === 'nomina_empresa';
+const requireFiles = await filesRequired(supabase);
 
 // Convenios utilizables para nómina: el de la jornada, o los aprobados y vigentes de la empresa
 const usableAgreements = (agreements.data ?? []).filter((a) =>
@@ -638,7 +655,7 @@ const collectedWithholding = activeAllocations.reduce((s2, a) => s2 + Number(a.w
 
       {
         (production || hasDeliveries) && (
-          <DeliveriesPanel
+          <DeliveriesPanel requireFiles={requireFiles}
             title="Entregas (Etapa 09)"
             rows={deliveryRows}
             deliveries={deliveries.records}
@@ -852,11 +869,15 @@ const collectedWithholding = activeAllocations.reduce((s2, a) => s2 + Number(a.w
             <form method="post" class="space-y-2 border-t border-slate-100 pt-3">
               <input type="hidden" name="_action" value="update_supports" />
               <label class="flex items-center gap-2"><input type="checkbox" name="employee_auth_received" checked={!!o.employee_auth_received} /> Autorización firmada del empleado recibida</label>
+              <SupportFile kind="ordenes" name="employee_auth_file_path" label="Archivo de la autorización" current={o.employee_auth_file_path} required={requireFiles} compact />
               {o.hr_approval_required !== false && (
-                <label class="flex items-center gap-2"><input type="checkbox" name="hr_approval_received" checked={!!o.hr_approval_received} /> Aval de RRHH recibido</label>
+                <>
+                  <label class="flex items-center gap-2"><input type="checkbox" name="hr_approval_received" checked={!!o.hr_approval_received} /> Aval de RRHH recibido</label>
+                  <SupportFile kind="ordenes" name="hr_approval_file_path" label="Archivo del aval de RRHH" current={o.hr_approval_file_path} compact />
+                </>
               )}
               <button class="btn w-full" type="submit">Guardar soportes</button>
-              <p class="text-xs text-slate-500">La carga de archivos se habilitará con Cloudflare R2.</p>
+              <p class="text-xs text-slate-500">{requireFiles ? 'Se exige el archivo de cada soporte.' : 'Puede marcar el soporte recibido en papel o adjuntar el archivo.'}</p>
             </form>
           )
         }
@@ -1051,7 +1072,9 @@ const collectedWithholding = activeAllocations.reduce((s2, a) => s2 + Number(a.w
         </p>
         <p class:list={[buyer.data?.data_consent_at ? 'text-green-700' : 'text-amber-700']}>
           {buyer.data?.data_consent_at ? `✓ Autorización de datos: ${fmtDateTime(buyer.data.data_consent_at)}` : '○ Sin autorización de datos'}
+          {buyer.data?.data_consent_file_path && <> · <a href={supportHref(buyer.data.data_consent_file_path)} target="_blank" rel="noopener">ver soporte</a></>}
         </p>
+        <p><a href={`/compradores/${o.buyer_id}`}>Expediente 360° del comprador</a></p>
         {
           hasRole(Astro.locals, 'comercial', 'administracion_cartera') && buyer.data && (
             <details open={lastAction === 'update_buyer'}>
@@ -1065,6 +1088,7 @@ const collectedWithholding = activeAllocations.reduce((s2, a) => s2 + Number(a.w
                 <input class="input" name="phone" type="tel" value={v.phone ?? buyer.data.phone ?? ''} />
                 <label class="label">Correo</label>
                 <input class="input" name="email" type="email" value={v.email ?? buyer.data.email ?? ''} />
+                <SupportFile kind="compradores" name="data_consent_file_path" label="Soporte de la autorización de datos" current={buyer.data.data_consent_file_path} compact />
                 <button class="btn w-full" type="submit">Guardar</button>
               </form>
             </details>

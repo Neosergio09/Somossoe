@@ -1,3 +1,4 @@
+import { supportPathFrom } from './supports';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from './database.types';
 import { checkbox, date, ensure, FormError, parseForm, text, uuid, z, type ActionHandler } from './forms';
@@ -95,7 +96,10 @@ export function fulfillmentActions(
         }),
         form,
       );
-      if (!input.evidence_received) throw new FormError('Registre la evidencia de la entrega (foto o acta firmada).');
+      const evidencePath = supportPathFrom(form, 'evidence_file_path', 'entregas');
+      if (!input.evidence_received && !evidencePath) {
+        throw new FormError('Adjunte la evidencia de la entrega (foto o acta firmada) o márquela como recibida en papel.');
+      }
       const items = [...form.entries()]
         .map(([key, value]) => ({ m: /^qty\[([0-9a-f-]{36})\]$/.exec(key), value: String(value).trim() }))
         .filter((x) => x.m && x.value !== '')
@@ -112,6 +116,7 @@ export function fulfillmentActions(
             delivered_at: input.delivered_at,
             receiver_name: input.receiver_name,
             evidence_received: true,
+            evidence_file_path: evidencePath,
             notes: input.notes ?? null,
           },
           p_items: items,

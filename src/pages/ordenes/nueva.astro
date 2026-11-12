@@ -1,6 +1,8 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
 import OrderItemFields from '../../components/OrderItemFields.astro';
+import SupportFile from '../../components/SupportFile.astro';
+import { filesRequired, supportPathFrom } from '../../lib/supports';
 import { hasRole } from '../../lib/auth';
 import { fmtDate, fmtDateTime } from '../../lib/format';
 import { checkbox, date, ensure, FormError, int, parseForm, runActions, text, uuid, z } from '../../lib/forms';
@@ -56,6 +58,9 @@ const outcome = await runActions(Astro, {
       phone: input.phone ?? null,
       email: input.email ?? null,
       data_consent_at: new Date().toISOString(),
+      ...(supportPathFrom(form, 'data_consent_file_path', 'compradores')
+        ? { data_consent_file_path: supportPathFrom(form, 'data_consent_file_path', 'compradores') }
+        : {}),
     };
     if (input.buyer_id) {
       ensure(await supabase.from('buyers').update(row).eq('id', input.buyer_id).select('id').single());
@@ -96,6 +101,8 @@ const outcome = await runActions(Astro, {
       first_due_date: payroll ? input.first_due_date : null,
       employee_auth_received: payroll && input.employee_auth_received,
       hr_approval_received: payroll && input.hr_approval_received,
+      employee_auth_file_path: payroll ? supportPathFrom(form, 'employee_auth_file_path', 'ordenes') : null,
+      hr_approval_file_path: payroll ? supportPathFrom(form, 'hr_approval_file_path', 'ordenes') : null,
       notes: input.notes ?? null,
     };
     const id = ensure(await supabase.rpc('create_order', { p_order: order, p_items: items }));
@@ -121,6 +128,7 @@ const [buyerRes, companies, branches, agreements, settings] = await Promise.all(
   supabase.from('system_settings').select('key, value').in('key', ['max_installments_monthly', 'max_installments_biweekly']),
 ]);
 const buyer = buyerRes.data;
+const requireFiles = await filesRequired(supabase);
 // En jornada, el convenio es el de la jornada (debe seguir aprobado); en venta directa, aprobado y vigente
 const payrollAgreements = (agreements.data ?? []).filter((a) => (campaign ? a.status === 'aprobado' : a.effective_status === 'aprobado'));
 const selectedAgreement = payrollAgreements.find((a) => a.id === v.agreement_id) ?? payrollAgreements[0];
@@ -218,6 +226,7 @@ const backHref = campaign ? `/jornadas/${campaign.id}` : '/ordenes';
               política de tratamiento de datos vigente. <span class="text-slate-500">(Requisito previo a la orden.)</span>
             </span>
           </label>
+          <SupportFile kind="compradores" name="data_consent_file_path" label="Soporte firmado de la autorización" current={buyer?.data_consent_file_path} required={requireFiles} />
           <button class="btn btn-primary" type="submit" disabled={!canSaveBuyer}>Guardar comprador</button>
         </form>
       ) : (
@@ -336,13 +345,17 @@ const backHref = campaign ? `/jornadas/${campaign.id}` : '/ordenes';
                 <input type="checkbox" name="employee_auth_received" checked={v.employee_auth_received === 'on'} />
                 Autorización de descuento firmada por el empleado recibida
               </label>
+              <SupportFile kind="ordenes" name="employee_auth_file_path" label="Archivo de la autorización" compact />
               {selectedAgreement!.hr_approval_required && (
-                <label class="flex items-center gap-2 text-sm">
-                  <input type="checkbox" name="hr_approval_received" checked={v.hr_approval_received === 'on'} />
-                  Aval de RRHH recibido
-                </label>
+                <>
+                  <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="hr_approval_received" checked={v.hr_approval_received === 'on'} />
+                    Aval de RRHH recibido
+                  </label>
+                  <SupportFile kind="ordenes" name="hr_approval_file_path" label="Archivo del aval de RRHH" compact />
+                </>
               )}
-              <p class="text-xs text-slate-500">La carga de los archivos se habilitará con el almacenamiento documental (Cloudflare R2).</p>
+              <p class="text-xs text-slate-500">Adjuntar el archivo marca el soporte como recibido.</p>
             </fieldset>
           )}
 

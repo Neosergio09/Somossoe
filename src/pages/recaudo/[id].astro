@@ -1,5 +1,7 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
+import SupportFile from '../../components/SupportFile.astro';
+import { filesRequired, isSupportPath, supportHref } from '../../lib/supports';
 import { hasRole } from '../../lib/auth';
 import { cop, fmtDate, fmtDateTime, todayCo } from '../../lib/format';
 import { date, ensure, FormError, parseForm, runActions, text, uuid, z } from '../../lib/forms';
@@ -14,13 +16,14 @@ const focusOrder = Astro.url.searchParams.get('order_id');
 
 const outcome = await runActions(Astro, {
   apply: async (form) => {
-    const rows = new Map<string, { order_id: string; amount: number; withholding: number; certificate_received: boolean }>();
+    const rows = new Map<string, { order_id: string; amount: number; withholding: number; certificate_received: boolean; certificate_path: string | null }>();
     for (const [key, raw] of form.entries()) {
-      const m = /^(amount|withholding|cert)\[([0-9a-f-]{36})\]$/.exec(key);
+      const m = /^(amount|withholding|cert|certpath)\[([0-9a-f-]{36})\]$/.exec(key);
       if (!m) continue;
       const value = String(raw).trim().replace(/[.\s$]/g, '');
-      const row = rows.get(m[2]!) ?? { order_id: m[2]!, amount: 0, withholding: 0, certificate_received: false };
+      const row = rows.get(m[2]!) ?? { order_id: m[2]!, amount: 0, withholding: 0, certificate_received: false, certificate_path: null };
       if (m[1] === 'cert') row.certificate_received = value === 'on';
+      else if (m[1] === 'certpath') row.certificate_path = isSupportPath(String(raw).trim(), 'retenciones') ? String(raw).trim() : null;
       else {
         const n = value === '' ? 0 : Number(value);
         if (!Number.isInteger(n) || n < 0) throw new FormError('Los valores deben ser números enteros positivos.');
@@ -79,6 +82,13 @@ const editable = isAdmin && !p.is_voided;
 const unassigned = Number(p.unassigned_amount ?? 0);
 const candidates = (receivables.data ?? []).sort((a, b) => (a.id === focusOrder ? -1 : b.id === focusOrder ? 1 : 0));
 const receiptNo = `RC-${String(p.payment_number).padStart(5, '0')}`;
+const [{ data: payFile }, { data: certRows }, requireFiles] = await Promise.all([
+  supabase.from('collections_payments').select('support_file_path').eq('id', id).maybeSingle(),
+  supabase.from('payment_allocations').select('id, withholding_certificate_file_path').eq('payment_id', id),
+  filesRequired(supabase),
+]);
+const supportPath = payFile?.support_file_path ?? null;
+const certPaths = new Map((certRows ?? []).filter((c) => c.withholding_certificate_file_path).map((c) => [c.id, c.withholding_certificate_file_path!]));
 ---
 
 <AppLayout title={`Pago ${receiptNo}`} error={error}>
@@ -87,7 +97,10 @@ const receiptNo = `RC-${String(p.payment_number).padStart(5, '0')}`;
       <a href="/recaudo" class="text-sm">← Recaudo</a>
       <h1>Pago {receiptNo} · {p.payer_name}</h1>
       <p class="text-sm text-slate-600">{fmtDate(p.payment_date)} · Ref. {p.bank_reference} · {p.company_id ? 'Giro corporativo' : 'Pago del comprador'}</p>
-      <p class="text-xs text-slate-500">Verificado por {p.verified_by_name ?? '—'} el {fmtDateTime(p.verified_at)}</p>
+      <p class="text-xs text-slate-500">
+        Verificado por {p.verified_by_name ?? '—'} el {fmtDateTime(p.verified_at)}
+        {supportPath ? <> · <a href={supportHref(supportPath)} target="_blank" rel="noopener">ver soporte bancario</a></> : ' · soporte verificado en papel'}
+      </p>
     </div>
     <div class="grid grid-cols-2 gap-x-6 gap-y-1 text-right text-sm">
       <span class="text-slate-500">Recibido en bancos</span><strong>{cop(p.total_received_bank)}</strong>
@@ -128,7 +141,12 @@ const receiptNo = `RC-${String(p.payment_number).padStart(5, '0')}`;
                           </td>
                           <td><input class="input w-28 text-right" type="number" min="0" max={r.balance_due ?? undefined} step="1" name={`amount[${r.id}]`} value={v[`amount[${r.id}]`] ?? ''} /></td>
                           <td><input class="input w-24 text-right" type="number" min="0" step="1" name={`withholding[${r.id}]`} value={v[`withholding[${r.id}]`] ?? ''} /></td>
-                          <td class="text-center"><input type="checkbox" name={`cert[${r.id}]`} checked={v[`cert[${r.id}]`] === 'on'} /></td>
+                          <td class="min-w-48">
+                            <SupportFile kind="retenciones" name={`certpath[${r.id}]`} label="Certificado (si hay retención)" compact />
+                            {!requireFiles && (
+                              <label class="mt-1 flex items-center gap-1 text-xs"><input type="checkbox" name={`cert[${r.id}]`} checked={v[`cert[${r.id}]`] === 'on'} /> recibido en papel</label>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -158,7 +176,11 @@ const receiptNo = `RC-${String(p.payment_number).padStart(5, '0')}`;
                   <td>{a.buyer_name}</td>
                   <td>{a.installment_number ? `${a.installment_number} · vence ${fmtDate(a.installment_due_date)}` : '—'}</td>
                   <td class="text-right whitespace-nowrap">{cop(a.amount_applied)}</td>
-                  <td class="text-right whitespace-nowrap">{cop(a.withholding_applied)}{Number(a.withholding_applied) > 0 && a.withholding_certificate_received && <div class="text-xs text-green-700">con certificado</div>}</td>
+                  <td class="text-right whitespace-nowrap">{cop(a.withholding_applied)}{Number(a.withholding_applied) > 0 && a.withholding_certificate_received && (
+                    <div class="text-xs text-green-700">
+                      con certificado{certPaths.get(a.id!) && <> · <a href={supportHref(certPaths.get(a.id!)!)} target="_blank" rel="noopener">ver</a></>}
+                    </div>
+                  )}</td>
                   <td class="text-xs text-slate-500">{a.created_by_name} · {fmtDateTime(a.created_at)}{a.is_voided && <div class="text-red-700">Anulada: {a.void_reason}</div>}</td>
                   <td>
                     {editable && !a.is_voided && (
