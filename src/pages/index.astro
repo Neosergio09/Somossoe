@@ -1,181 +1,340 @@
 ---
+// Inicio "Circuito SOE": el recorrido del negocio con lo que espera en
+// cada paso, las tareas del rol y las alertas. Solo datos registrados.
 import AppLayout from '../layouts/AppLayout.astro';
+import Icon from '../components/Icon.astro';
 import { hasRole } from '../lib/auth';
-import { cop, fmtDate, fmtTime, fmtWeekday, todayCo } from '../lib/format';
-import { AGREEMENT_STATUS_LABELS, STAGE_LABELS } from '../lib/labels';
+import { cop, fmtDate, fmtTime, fmtWeekday, todayCo, addDays } from '../lib/format';
+import { CAMPAIGN_STATUS_LABELS, COLLECTION_RESPONSIBLE_LABELS, OPS_STATUS_LABELS, ROLE_LABELS, STAGE_LABELS, ACTIVE_CAMPAIGN_STATUSES } from '../lib/labels';
 import { orderNumber } from '../lib/orders';
+import { loadSummary, MONEY_ROLES } from '../lib/circuit';
+import type { IconName } from '../lib/icons';
 
-const { supabase, userId } = Astro.locals;
+const L = Astro.locals;
+const { supabase, userId } = L;
 const today = todayCo();
-const canSeeApprovals = hasRole(Astro.locals, 'administracion_cartera', 'direccion');
-const canSeeOrders = hasRole(Astro.locals, 'administracion_cartera', 'comercial');
+const s = await loadSummary(supabase);
+L.summary = s;
+const canSeeMoney = hasRole(L, ...MONEY_ROLES);
+const role = L.profile?.role ?? null;
 
-const [myActions, sessions, pendingAgreements, stale, pendingOrders] = await Promise.all([
-  supabase
-    .from('v_deals_board')
-    .select('id, deal_name_branch, company_name, stage, next_action, next_action_due_date, next_action_overdue')
-    .eq('next_action_owner_id', userId!)
-    .in('stage', ['prospecto', 'reunion_exploratoria', 'propuesta_enviada', 'negociacion', 'cierre_perdido'])
-    .not('next_action', 'is', null)
-    .order('next_action_due_date')
-    .limit(15),
-  supabase
-    .from('v_campaign_calendar')
-    .select('session_id, campaign_id, company_name, city_name, session_date, start_time, end_time, responsible_user_name, has_conflict')
-    .gte('session_date', today)
-    .order('session_date')
-    .order('start_time')
-    .limit(10),
-  canSeeApprovals
-    ? supabase
-        .from('v_agreements')
-        .select('id, company_name, deal_name_branch, status, documents_verified')
-        .eq('status', 'pendiente_aprobacion')
-        .order('updated_at')
-    : Promise.resolve({ data: [] as { id: string; company_name: string; deal_name_branch: string | null; status: string; documents_verified: boolean }[] }),
-  supabase
-    .from('v_deals_board')
-    .select('id, deal_name_branch, company_name, days_inactive, estimated_billing_amount')
-    .eq('inactivity_alert', true)
-    .order('days_inactive', { ascending: false })
-    .limit(10),
-  canSeeOrders
-    ? supabase
-        .from('v_orders')
-        .select('id, order_number, buyer_name, company_name, total_amount, missing_requirements')
-        .eq('doc_status', 'pendiente_soportes')
-        .eq('is_cancelled', false)
-        .order('created_at')
-        .limit(15)
-    : Promise.resolve({ data: [] as { id: string; order_number: number; buyer_name: string; company_name: string | null; total_amount: number; missing_requirements: string[] | null }[] }),
+type Tone = 'ok' | 'warn' | 'danger';
+type Step = { id: string; label: string; icon: IconName; count: string; unit: string; detail: string; tone: Tone; module: string; href: string };
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+const toneOf = (danger: number, warn: number): Tone => (danger > 0 ? 'danger' : warn > 0 ? 'warn' : 'ok');
+
+const steps: Step[] = [
+  { id: 'vender', label: 'Vender', icon: 'target', count: String(s.vender.abiertas), unit: 'oportunidades abiertas',
+    detail: s.vender.quietas ? plural(s.vender.quietas, 'quieta', 'quietas') : 'todas al día', tone: toneOf(0, s.vender.quietas),
+    module: 'Oportunidades', href: '/oportunidades' },
+  { id: 'jornada', label: 'Jornadas', icon: 'calendar', count: String(s.jornada.en_ejecucion), unit: 'en ejecución',
+    detail: s.jornada.por_ejecutar ? plural(s.jornada.por_ejecutar, 'por ejecutar', 'por ejecutar') : 'al día', tone: 'ok',
+    module: 'Jornadas', href: '/jornadas' },
+  { id: 'orden', label: 'Órdenes', icon: 'file', count: String(s.orden.por_verificar), unit: 'por verificar',
+    detail: s.orden.por_verificar ? plural(s.orden.por_verificar, 'espera soportes', 'esperan soportes') : 'al día',
+    tone: toneOf(0, s.orden.por_verificar), module: 'Órdenes', href: '/ordenes' },
+  { id: 'producir', label: 'Producir', icon: 'flask', count: String(s.producir.en_lab), unit: 'en laboratorio',
+    detail: s.producir.atrasadas ? plural(s.producir.atrasadas, 'atrasada', 'atrasadas') : 'todas a tiempo', tone: toneOf(s.producir.atrasadas, 0),
+    module: 'Producción', href: '/produccion?vista=en_produccion' },
+  { id: 'entregar', label: 'Entregar', icon: 'truck', count: String(s.entregar.listas + s.entregar.parciales), unit: 'por entregar',
+    detail: s.entregar.parciales ? plural(s.entregar.parciales, 'parcial', 'parciales') : 'al día',
+    tone: toneOf(0, s.entregar.parciales), module: 'Producción', href: '/produccion?vista=listas' },
+  ...(canSeeMoney
+    ? [
+        { id: 'facturar', label: 'Facturar', icon: 'invoice' as IconName, count: String(s.facturar.sin_factura), unit: 'sin factura',
+          detail: s.facturar.diferencias ? plural(s.facturar.diferencias, 'con diferencia', 'con diferencia') : 'sin diferencias',
+          tone: toneOf(s.facturar.diferencias, 0), module: 'Facturación', href: '/facturas' },
+        { id: 'cobrar', label: 'Cobrar', icon: 'coin' as IconName,
+          count: s.cobrar.saldo >= 1_000_000 ? `$ ${(s.cobrar.saldo / 1_000_000).toLocaleString('es-CO', { maximumFractionDigits: 1 })} M` : cop(s.cobrar.saldo),
+          unit: 'saldo por cobrar',
+          detail: s.cobrar.vencidas ? plural(s.cobrar.vencidas, 'cuota vencida', 'cuotas vencidas') : s.cobrar.proximas ? plural(s.cobrar.proximas, 'cuota en 7 días', 'cuotas en 7 días') : 'al día',
+          tone: toneOf(s.cobrar.vencidas, s.cobrar.proximas), module: 'Recaudo', href: '/recaudo?vista=cartera' },
+      ]
+    : []),
+];
+
+// Paso abierto: el pedido, o el más urgente
+const asked = Astro.url.searchParams.get('paso');
+const current = steps.find((x) => x.id === asked) ?? steps.find((x) => x.tone === 'danger') ?? steps.find((x) => x.tone === 'warn') ?? steps[0]!;
+
+type Row = { title: string; meta: string; tag: string; tone: Tone; href: string };
+async function rowsFor(id: string): Promise<Row[]> {
+  switch (id) {
+    case 'vender': {
+      const { data } = await supabase.from('v_deals_board').select('id, deal_name_branch, company_name, stage, assigned_user_name, days_inactive, inactivity_alert, next_action_overdue, next_action')
+        .in('stage', ['prospecto', 'reunion_exploratoria', 'propuesta_enviada', 'negociacion', 'convenio_firmado']).order('days_inactive', { ascending: false }).limit(6);
+      return (data ?? []).map((d) => ({
+        title: d.deal_name_branch ?? d.company_name ?? '', href: `/oportunidades/${d.id}`,
+        meta: `${d.stage ? STAGE_LABELS[d.stage].replace(/^\d\.\s*/, '') : ''} · ${d.assigned_user_name ?? 'sin ejecutivo'} · ${d.days_inactive ?? 0} días sin interacción`,
+        tag: d.next_action_overdue ? 'Acción vencida' : d.inactivity_alert ? 'Quieta' : 'Al día',
+        tone: d.next_action_overdue ? 'danger' : d.inactivity_alert ? 'warn' : 'ok',
+      }));
+    }
+    case 'jornada': {
+      const { data } = await supabase.from('v_campaigns').select('id, company_name, city_name, status, attended_headcount, first_session_date, logistics_confirmed')
+        .in('status', ACTIVE_CAMPAIGN_STATUSES).order('first_session_date', { nullsFirst: false }).limit(6);
+      return (data ?? []).map((j) => ({
+        title: `${j.company_name} · ${j.city_name}`, href: `/jornadas/${j.id}`,
+        meta: `${fmtDate(j.first_session_date)} · ${j.attended_headcount} atendidos${j.status === 'programada' && !j.logistics_confirmed ? ' · logística sin confirmar' : ''}`,
+        tag: CAMPAIGN_STATUS_LABELS[j.status!], tone: j.status === 'programada' && !j.logistics_confirmed ? 'warn' : 'ok',
+      }));
+    }
+    case 'orden': {
+      const { data } = await supabase.from('v_orders').select('id, order_number, buyer_name, company_name, total_amount, missing_requirements')
+        .eq('doc_status', 'pendiente_soportes').eq('is_cancelled', false).order('created_at').limit(6);
+      return (data ?? []).map((o) => ({
+        title: `${orderNumber(o.order_number)} · ${o.buyer_name}`, href: `/ordenes/${o.id}`,
+        meta: `${o.company_name ?? 'Particular'} · ${cop(o.total_amount)}${o.missing_requirements?.length ? ` · falta: ${o.missing_requirements.join(', ').toLowerCase()}` : ''}`,
+        tag: o.missing_requirements?.length ? 'Falta soporte' : 'Lista para verificar', tone: o.missing_requirements?.length ? 'warn' : 'ok',
+      }));
+    }
+    case 'producir': {
+      const { data } = await supabase.from('v_productions').select('id, order_id, order_number, warranty_id, buyer_name, lab_name, lab_order_reference, promised_date, is_overdue')
+        .eq('status', 'en_produccion').order('promised_date').limit(6);
+      return (data ?? []).map((p) => ({
+        title: `${orderNumber(p.order_number)} · ${p.buyer_name}${p.warranty_id ? ' (garantía)' : ''}`, href: p.warranty_id ? `/garantias/${p.warranty_id}` : `/ordenes/${p.order_id}`,
+        meta: `${p.lab_name}${p.lab_order_reference ? ` · pedido ${p.lab_order_reference}` : ''} · prometida ${fmtDate(p.promised_date)}`,
+        tag: p.is_overdue ? 'Atrasada' : 'A tiempo', tone: p.is_overdue ? 'danger' : 'ok',
+      }));
+    }
+    case 'entregar': {
+      const { data } = await supabase.from('v_orders').select('id, order_number, buyer_name, company_name, ops_status')
+        .in('ops_status', ['listo_para_entregar', 'entrega_parcial']).eq('is_cancelled', false).order('updated_at').limit(6);
+      return (data ?? []).map((o) => ({
+        title: `${orderNumber(o.order_number)} · ${o.buyer_name}`, href: `/ordenes/${o.id}`, meta: o.company_name ?? 'Particular',
+        tag: OPS_STATUS_LABELS[o.ops_status!], tone: o.ops_status === 'entrega_parcial' ? 'warn' : 'ok',
+      }));
+    }
+    case 'facturar': {
+      const { data } = await supabase.from('v_orders_to_invoice').select('id, order_number, buyer_name, company_name, pending_amount, accounting_status').order('created_at').limit(6);
+      return (data ?? []).map((o) => ({
+        title: `${orderNumber(o.order_number)} · ${o.buyer_name}`, href: `/ordenes/${o.id}`, meta: `${o.company_name ?? 'Particular'} · por facturar ${cop(o.pending_amount)}`,
+        tag: o.accounting_status === 'factura_con_diferencia' ? 'Diferencia' : 'Sin factura', tone: o.accounting_status === 'factura_con_diferencia' ? 'danger' : 'warn',
+      }));
+    }
+    case 'cobrar': {
+      const { data } = await supabase.from('v_installments_due').select('order_id, order_number, installment_number, due_date, pending_amount, is_overdue, buyer_name, company_name, collection_responsible')
+        .lte('due_date', addDays(today, 7)).order('due_date').limit(8);
+      return (data ?? []).map((i) => ({
+        title: `${orderNumber(i.order_number)} · ${i.buyer_name}`, href: `/ordenes/${i.order_id}`,
+        meta: `Cuota ${i.installment_number} · vence ${fmtDate(i.due_date)} · cobro a ${COLLECTION_RESPONSIBLE_LABELS[i.collection_responsible!].toLowerCase()} · ${cop(i.pending_amount)}`,
+        tag: i.is_overdue ? 'Vencida' : i.due_date === today ? 'Vence hoy' : 'Próxima', tone: i.is_overdue || i.due_date === today ? 'danger' : 'warn',
+      }));
+    }
+    default:
+      return [];
+  }
+}
+
+const isComercialLike = hasRole(L, 'comercial', 'direccion');
+const [rows, myActions, sessions, conflicts] = await Promise.all([
+  rowsFor(current.id),
+  isComercialLike
+    ? supabase.from('v_deals_board').select('id, deal_name_branch, next_action, next_action_due_date, next_action_overdue')
+        .eq('next_action_owner_id', userId!).not('next_action', 'is', null)
+        .in('stage', ['prospecto', 'reunion_exploratoria', 'propuesta_enviada', 'negociacion', 'cierre_perdido'])
+        .order('next_action_due_date').limit(5)
+    : Promise.resolve({ data: null }),
+  !isComercialLike
+    ? supabase.from('v_campaign_calendar').select('session_id, campaign_id, company_name, city_name, session_date, start_time, end_time, has_conflict')
+        .gte('session_date', today).order('session_date').order('start_time').limit(5)
+    : Promise.resolve({ data: null }),
+  supabase.from('v_campaign_calendar').select('session_id', { count: 'exact', head: true }).gte('session_date', today).eq('has_conflict', true),
 ]);
+
+// Para ti: lo que le toca a este rol, solo si hay algo
+type Task = { title: string; meta: string; href: string; tone: Tone; n: number };
+const t = (n: number, title: string, meta: string, href: string, tone: Tone): Task => ({ n, title, meta, href, tone });
+const tasksByRole: Record<string, Task[]> = {
+  comercial: [
+    t(s.vender.quietas, plural(s.vender.quietas, 'oportunidad quieta', 'oportunidades quietas'), 'Sin interacción reciente o con acción vencida', '/?paso=vender', 'warn'),
+    t(s.jornada.en_ejecucion, plural(s.jornada.en_ejecucion, 'jornada en ejecución', 'jornadas en ejecución'), 'Registre asistencia y órdenes', '/?paso=jornada', 'ok'),
+    t(s.orden.por_verificar, plural(s.orden.por_verificar, 'orden pendiente de soportes', 'órdenes pendientes de soportes'), 'Complete autorizaciones y avales', '/?paso=orden', 'warn'),
+  ],
+  operacion: [
+    t(s.producir.atrasadas, plural(s.producir.atrasadas, 'producción atrasada', 'producciones atrasadas'), 'Pasó la fecha prometida por el laboratorio', '/?paso=producir', 'danger'),
+    t(s.orden.por_liberar, plural(s.orden.por_liberar, 'orden lista para liberar', 'órdenes listas para liberar'), 'Requisitos verificados', '/produccion', 'ok'),
+    t(s.entregar.listas + s.entregar.parciales, plural(s.entregar.listas + s.entregar.parciales, 'orden por entregar', 'órdenes por entregar'), 'Listas o con entrega parcial', '/?paso=entregar', 'ok'),
+    t(s.jornada.por_ejecutar, plural(s.jornada.por_ejecutar, 'jornada por ejecutar', 'jornadas por ejecutar'), 'Sesiones y logística', '/?paso=jornada', 'warn'),
+  ],
+  administracion_cartera: [
+    t(s.orden.por_verificar, plural(s.orden.por_verificar, 'orden por verificar', 'órdenes por verificar'), 'Requisitos de la Etapa 07', '/?paso=orden', 'warn'),
+    t(s.cobrar.vencidas, plural(s.cobrar.vencidas, 'cuota vencida', 'cuotas vencidas'), `${cop(s.cobrar.monto_vencido)} pendientes`, '/?paso=cobrar', 'danger'),
+    t(s.cobrar.pagos_sin_asignar, plural(s.cobrar.pagos_sin_asignar, 'pago con saldo sin asignar', 'pagos con saldo sin asignar'), 'Repártalos entre las órdenes', '/recaudo', 'warn'),
+    t(s.facturar.sin_factura, plural(s.facturar.sin_factura, 'orden sin factura', 'órdenes sin factura'), 'Vincule la factura de Alegra', '/?paso=facturar', 'warn'),
+  ],
+  direccion: [
+    t(s.convenios_por_aprobar, plural(s.convenios_por_aprobar, 'convenio por aprobar', 'convenios por aprobar'), 'Revise la documentación verificada', '/convenios', 'warn'),
+    t(s.cobrar.reclasificaciones, plural(s.cobrar.reclasificaciones, 'reclasificación por autorizar', 'reclasificaciones por autorizar'), 'Cartera de empleados retirados o incapacitados', '/recaudo?vista=reclasificaciones', 'warn'),
+    t(s.producir.atrasadas, plural(s.producir.atrasadas, 'producción atrasada', 'producciones atrasadas'), 'Laboratorio fuera de la fecha prometida', '/?paso=producir', 'danger'),
+    t(s.vender.quietas, plural(s.vender.quietas, 'oportunidad quieta', 'oportunidades quietas'), 'Sin interacción reciente', '/?paso=vender', 'warn'),
+  ],
+  socio: [
+    t(s.cobrar.vencidas, plural(s.cobrar.vencidas, 'cuota vencida', 'cuotas vencidas'), `${cop(s.cobrar.monto_vencido)} pendientes`, '/?paso=cobrar', 'danger'),
+    t(s.facturar.diferencias, plural(s.facturar.diferencias, 'factura con diferencia', 'facturas con diferencia'), 'Frente al valor de la orden', '/?paso=facturar', 'danger'),
+    t(s.producir.atrasadas, plural(s.producir.atrasadas, 'producción atrasada', 'producciones atrasadas'), 'Laboratorio fuera de la fecha prometida', '/?paso=producir', 'danger'),
+  ],
+};
+const tasks = (role ? (tasksByRole[role] ?? []) : []).filter((x) => x.n > 0);
+
+const alerts = [
+  s.producir.atrasadas && { title: plural(s.producir.atrasadas, 'producción atrasada', 'producciones atrasadas'), meta: 'Pasó la fecha prometida', href: '/?paso=producir', tone: 'danger' as Tone },
+  canSeeMoney && s.facturar.diferencias && { title: plural(s.facturar.diferencias, 'factura con diferencia', 'facturas con diferencia'), meta: 'Diferencia visible frente a la orden', href: '/?paso=facturar', tone: 'danger' as Tone },
+  canSeeMoney && s.cobrar.vencidas && { title: plural(s.cobrar.vencidas, 'cuota vencida', 'cuotas vencidas'), meta: `${cop(s.cobrar.monto_vencido)} pendientes`, href: '/?paso=cobrar', tone: 'danger' as Tone },
+  (conflicts.count ?? 0) > 0 && { title: plural(conflicts.count ?? 0, 'sesión con cruce de horario', 'sesiones con cruce de horario'), meta: 'Mismo responsable en dos sesiones', href: '/jornadas', tone: 'warn' as Tone },
+  s.vender.quietas && { title: plural(s.vender.quietas, 'oportunidad quieta', 'oportunidades quietas'), meta: 'Sin interacción reciente', href: '/?paso=vender', tone: 'warn' as Tone },
+].filter(Boolean) as { title: string; meta: string; href: string; tone: Tone }[];
+
+const dateLabel = new Intl.DateTimeFormat('es-CO', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Bogota' }).format(new Date());
+const chip: Record<Tone, string> = { ok: 'bg-teal-950 text-teal-300', warn: 'bg-amber-950 text-amber-300', danger: 'bg-red-950 text-red-300' };
+const tag: Record<Tone, string> = { ok: 'bg-teal-100 text-teal-800', warn: 'bg-amber-100 text-amber-800', danger: 'bg-red-100 text-red-800' };
+const dot: Record<Tone, string> = { ok: 'bg-teal-500', warn: 'bg-amber-500', danger: 'bg-red-500' };
 ---
 
-<AppLayout title="Inicio">
-  <h1 class="mb-4">Hola, {Astro.locals.profile?.full_name}</h1>
+<AppLayout title="Circuito">
+  <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <p class="mb-1 text-sm text-slate-600 first-letter:uppercase">{dateLabel} · {L.profile?.full_name}{role && ` · ${ROLE_LABELS[role]}`}</p>
+      <h1 class="text-3xl">El circuito hoy</h1>
+    </div>
+    <p class="max-w-sm text-sm text-slate-600">Cada paso muestra cuántos casos esperan. Toque un paso para ver su lista.</p>
+  </div>
 
-  <div class="grid gap-4 lg:grid-cols-2">
-    <section class="card">
-      <h2 class="mb-3">Mis siguientes acciones</h2>
-      {
-        myActions.data?.length ? (
-          <ul class="divide-y divide-slate-100 text-sm">
-            {myActions.data.map((d) => (
-              <li class="flex items-start justify-between gap-3 py-2">
-                <div>
-                  <a href={`/oportunidades/${d.id}`}>{d.deal_name_branch}</a>
-                  <div class="text-slate-600">{d.next_action}</div>
-                  <div class="text-xs text-slate-400">{d.stage ? STAGE_LABELS[d.stage] : ''}</div>
-                </div>
-                <span class:list={['badge shrink-0', d.next_action_overdue && 'badge-red']}>
-                  {fmtDate(d.next_action_due_date)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p class="text-sm text-slate-500">No tiene acciones pendientes.</p>
-        )
-      }
-    </section>
+  <section aria-label="El circuito" class="mb-5 rounded-3xl bg-ink px-3 pt-5 pb-4 sm:px-5 sm:pt-6">
+    <ol
+      class="relative grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:[grid-template-columns:repeat(var(--steps),minmax(0,1fr))]"
+      style={`--steps: ${steps.length}`}
+    >
+      <li aria-hidden="true" class="pointer-events-none absolute top-7 right-[7%] left-[7%] hidden h-0.5 bg-slate-700 lg:block"></li>
+      {steps.map((st) => {
+        const on = st.id === current.id;
+        return (
+          <li class="relative">
+            <a
+              href={`/?paso=${st.id}`}
+              aria-current={on ? 'step' : undefined}
+              class:list={[
+                'flex h-full flex-col items-center gap-1 rounded-2xl border px-1.5 pb-3.5 text-center hover:no-underline',
+                on ? 'border-accent bg-slate-800' : 'border-transparent hover:bg-slate-800/60',
+              ]}
+            >
+              <span
+                class:list={[
+                  'mb-2 flex h-14 w-14 items-center justify-center rounded-full border-[3px] border-ink',
+                  on ? 'bg-accent text-ink shadow-[0_0_0_3px_var(--color-accent)]' : 'bg-slate-800 text-slate-200 shadow-[0_0_0_2px_#334155]',
+                ]}
+              >
+                <Icon name={st.icon} size={22} />
+              </span>
+              <span class="text-[13px] font-semibold tracking-wide text-slate-300 uppercase">{st.label}</span>
+              <span class="font-display text-[28px] leading-tight font-bold text-slate-50">{st.count}</span>
+              <span class="text-xs text-slate-400">{st.unit}</span>
+              <span class:list={['mt-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold', chip[st.tone]]}>{st.detail}</span>
+            </a>
+          </li>
+        );
+      })}
+    </ol>
+  </section>
 
-    <section class="card">
-      <h2 class="mb-3">Próximas sesiones de jornada</h2>
-      {
-        sessions.data?.length ? (
-          <ul class="divide-y divide-slate-100 text-sm">
-            {sessions.data.map((s) => (
-              <li class="flex items-start justify-between gap-3 py-2">
-                <div>
-                  <a href={`/jornadas/${s.campaign_id}`}>{s.company_name}</a>
-                  <span class="text-slate-500"> · {s.city_name}</span>
-                  <div class="text-xs text-slate-500">
-                    {s.session_date && fmtWeekday(s.session_date)}, {fmtTime(s.start_time)}–{fmtTime(s.end_time)} ·{' '}
-                    {s.responsible_user_name}
-                  </div>
-                </div>
-                {s.has_conflict && <span class="badge badge-red shrink-0">Cruce</span>}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p class="text-sm text-slate-500">No hay sesiones programadas.</p>
-        )
-      }
+  <section class="card mb-5" aria-live="polite">
+    <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+      <h2 class="text-xl">{current.label} · {current.count} {current.unit}</h2>
+      <a href={current.href} class="text-sm font-semibold">Abrir {current.module} →</a>
+    </div>
+    <ul>
+      {rows.map((r) => (
+        <li class="border-t border-slate-100 first:border-t-0">
+          <a href={r.href} class="flex flex-wrap items-center gap-3 py-3 text-slate-900 hover:no-underline hover:[&_.t]:underline">
+            <span class="flex min-w-[240px] flex-1 flex-col gap-0.5">
+              <span class="t text-[15px] font-semibold">{r.title}</span>
+              <span class="text-[13px] text-slate-600">{r.meta}</span>
+            </span>
+            <span class:list={['rounded-full px-2.5 py-1 text-xs font-semibold', tag[r.tone]]}>{r.tag}</span>
+          </a>
+        </li>
+      ))}
+      {!rows.length && <li class="py-4 text-sm text-slate-500">Nada pendiente en este paso.</li>}
+    </ul>
+  </section>
+
+  <div class="grid gap-4 lg:grid-cols-3">
+    <section class="card flex flex-col gap-3">
+      <div class="flex items-center justify-between gap-2">
+        <h2 class="text-lg">Para ti</h2>
+        {tasks.length > 0 && <span class="shrink-0 rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-teal-800">{tasks.length} pendientes</span>}
+      </div>
+      {tasks.map((task) => (
+        <a href={task.href} class="flex min-h-[52px] items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-slate-900 hover:border-slate-300 hover:no-underline">
+          <span class:list={['h-2.5 w-2.5 shrink-0 rounded-full', dot[task.tone]]}></span>
+          <span class="flex flex-1 flex-col gap-0.5">
+            <span class="text-sm font-semibold">{task.title}</span>
+            <span class="text-xs text-slate-600">{task.meta}</span>
+          </span>
+          <Icon name="chevronRight" size={16} strokeWidth={2} class="text-slate-500" />
+        </a>
+      ))}
+      {!tasks.length && <p class="text-sm text-slate-500">Nada pendiente para tu rol.</p>}
     </section>
 
     {
-      canSeeApprovals && (
-        <section class="card">
-          <h2 class="mb-3">Convenios pendientes de aprobación</h2>
-          {pendingAgreements.data?.length ? (
+      isComercialLike ? (
+        <section class="card flex flex-col gap-2">
+          <h2 class="text-lg">Mis siguientes acciones</h2>
+          {myActions.data?.length ? (
             <ul class="divide-y divide-slate-100 text-sm">
-              {pendingAgreements.data.map((a) => (
-                <li class="flex items-center justify-between gap-3 py-2">
-                  <a href={`/convenios/${a.id}`}>
-                    {a.company_name}
-                    {a.deal_name_branch && <span class="text-slate-500"> · {a.deal_name_branch}</span>}
-                  </a>
-                  <span class:list={['badge', a.documents_verified ? 'badge-green' : 'badge-amber']}>
-                    {a.documents_verified ? 'Documentos verificados' : AGREEMENT_STATUS_LABELS[a.status]}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p class="text-sm text-slate-500">No hay convenios pendientes.</p>
-          )}
-        </section>
-      )
-    }
-
-    {
-      canSeeOrders && (
-        <section class="card">
-          <h2 class="mb-3">Órdenes pendientes de verificación</h2>
-          {pendingOrders.data?.length ? (
-            <ul class="divide-y divide-slate-100 text-sm">
-              {pendingOrders.data.map((o) => (
-                <li class="flex items-center justify-between gap-3 py-2">
+              {myActions.data.map((d) => (
+                <li class="flex items-start justify-between gap-3 py-2">
                   <div>
-                    <a href={`/ordenes/${o.id}`}>{orderNumber(o.order_number)} · {o.buyer_name}</a>
-                    <div class="text-xs text-slate-500">{o.company_name ?? 'Particular'} · {cop(o.total_amount)}</div>
+                    <a href={`/oportunidades/${d.id}`} class="font-medium">{d.deal_name_branch}</a>
+                    <div class="text-slate-600">{d.next_action}</div>
                   </div>
-                  {o.missing_requirements?.length ? (
-                    <span class="badge badge-amber shrink-0" title={o.missing_requirements.join('; ')}>Faltan {o.missing_requirements.length} soportes</span>
-                  ) : (
-                    <span class="badge badge-green shrink-0">Lista para verificar</span>
-                  )}
+                  <span class:list={['badge shrink-0', d.next_action_overdue && 'badge-red']}>{fmtDate(d.next_action_due_date)}</span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p class="text-sm text-slate-500">No hay órdenes pendientes.</p>
+            <p class="text-sm text-slate-500">No tiene acciones pendientes.</p>
+          )}
+        </section>
+      ) : (
+        <section class="card flex flex-col gap-2">
+          <h2 class="text-lg">Próximas sesiones</h2>
+          {sessions.data?.length ? (
+            <ul class="divide-y divide-slate-100 text-sm">
+              {sessions.data.map((x) => (
+                <li class="flex items-start justify-between gap-3 py-2">
+                  <div>
+                    <a href={`/jornadas/${x.campaign_id}`} class="font-medium">{x.company_name}</a>
+                    <span class="text-slate-500"> · {x.city_name}</span>
+                    <div class="text-xs text-slate-500 first-letter:uppercase">{x.session_date && fmtWeekday(x.session_date)}, {fmtTime(x.start_time)}–{fmtTime(x.end_time)}</div>
+                  </div>
+                  {x.has_conflict && <span class="badge badge-red shrink-0">Cruce</span>}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p class="text-sm text-slate-500">No hay sesiones programadas.</p>
           )}
         </section>
       )
     }
 
-    <section class="card">
-      <h2 class="mb-3">Oportunidades sin interacción reciente</h2>
-      {
-        stale.data?.length ? (
-          <ul class="divide-y divide-slate-100 text-sm">
-            {stale.data.map((d) => (
-              <li class="flex items-center justify-between gap-3 py-2">
-                <div>
-                  <a href={`/oportunidades/${d.id}`}>{d.deal_name_branch}</a>
-                  <span class="text-slate-500"> · {d.company_name}</span>
-                  <div class="text-xs text-slate-500">{cop(d.estimated_billing_amount)}</div>
-                </div>
-                <span class="badge badge-amber shrink-0">{d.days_inactive} días</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p class="text-sm text-slate-500">Todas las oportunidades activas tienen interacción reciente.</p>
-        )
-      }
+    <section class="card flex flex-col gap-2.5">
+      <h2 class="text-lg">Alertas</h2>
+      {alerts.map((a) => (
+        <a
+          href={a.href}
+          class:list={[
+            'flex flex-col gap-0.5 rounded-xl border px-3.5 py-3 hover:no-underline',
+            a.tone === 'danger' ? 'border-red-200 bg-red-50 text-red-900' : 'border-amber-200 bg-amber-50 text-amber-900',
+          ]}
+        >
+          <span class="text-sm font-semibold">{a.title}</span>
+          <span class="text-xs">{a.meta}</span>
+        </a>
+      ))}
+      {!alerts.length && <p class="text-sm text-slate-500">Sin alertas: todo dentro de lo esperado.</p>}
     </section>
   </div>
 </AppLayout>

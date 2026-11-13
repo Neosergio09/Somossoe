@@ -1,8 +1,15 @@
 ---
+// Disposición "Circuito SOE": barra lateral agrupada por fase con
+// contadores de pendientes, colapsable, y buscador global (Ctrl/⌘ + K).
+// La disposición anterior está en la etiqueta git v1-antes-rediseno.
 import '../styles/global.css';
+import Icon from '../components/Icon.astro';
+import CommandPalette from '../components/CommandPalette.astro';
 import { takeFlash } from '../lib/flash';
 import { hasRole } from '../lib/auth';
 import { ROLE_LABELS } from '../lib/labels';
+import { loadSummary, MONEY_ROLES } from '../lib/circuit';
+import type { IconName } from '../lib/icons';
 
 interface Props {
   title: string;
@@ -14,28 +21,63 @@ const { title, error, bare = false } = Astro.props;
 const flash = takeFlash(Astro.cookies);
 const profile = Astro.locals.profile;
 const path = Astro.url.pathname;
+const showChrome = !bare && !!profile?.active;
+const collapsed = Astro.cookies.get('nav_collapsed')?.value === '1';
 
-const nav = [
-  { href: '/', label: 'Inicio' },
-  { href: '/tablero', label: 'Tablero' },
-  { href: '/empresas', label: 'Empresas' },
-  { href: '/oportunidades', label: 'Oportunidades' },
-  { href: '/convenios', label: 'Convenios' },
-  { href: '/jornadas', label: 'Jornadas' },
-  { href: '/ordenes', label: 'Órdenes' },
-  { href: '/compradores', label: 'Compradores' },
-  { href: '/produccion', label: 'Producción' },
-  { href: '/garantias', label: 'Posventa' },
-  { href: '/facturas', label: 'Facturación' },
-  ...(hasRole(Astro.locals, 'administracion_cartera', 'direccion', 'comercial', 'socio') ? [{ href: '/recaudo', label: 'Recaudo' }] : []),
-  ...(hasRole(Astro.locals, 'direccion')
-    ? [
-        { href: '/admin/usuarios', label: 'Usuarios' },
-        { href: '/admin/parametros', label: 'Parámetros' },
-      ]
-    : []),
-];
+const s = showChrome ? (Astro.locals.summary ?? (await loadSummary(Astro.locals.supabase))) : null;
+const canSeeMoney = hasRole(Astro.locals, ...MONEY_ROLES);
+const isDireccion = hasRole(Astro.locals, 'direccion');
+
+type NavItem = { href: string; label: string; icon: IconName; count?: number; hot?: boolean };
+const groups: { phase: string; items: NavItem[] }[] = s
+  ? [
+      {
+        phase: 'Inicio',
+        items: [
+          { href: '/', label: 'Circuito', icon: 'home' },
+          { href: '/tablero', label: 'Tablero', icon: 'grid' },
+        ],
+      },
+      {
+        phase: 'Vender',
+        items: [
+          { href: '/empresas', label: 'Empresas', icon: 'building' },
+          { href: '/oportunidades', label: 'Oportunidades', icon: 'target', count: s.vender.quietas, hot: s.vender.quietas > 0 },
+          { href: '/convenios', label: 'Convenios', icon: 'pen', count: s.convenios_por_aprobar },
+        ],
+      },
+      {
+        phase: 'Operar',
+        items: [
+          { href: '/jornadas', label: 'Jornadas', icon: 'calendar', count: s.jornada.en_ejecucion },
+          { href: '/ordenes', label: 'Órdenes', icon: 'file', count: s.orden.por_verificar },
+          { href: '/produccion', label: 'Producción', icon: 'flask', count: s.producir.en_lab, hot: s.producir.atrasadas > 0 },
+          { href: '/garantias', label: 'Posventa', icon: 'shield', count: s.posventa },
+        ],
+      },
+      {
+        phase: 'Cobrar',
+        items: [
+          { href: '/facturas', label: 'Facturación', icon: 'invoice', count: canSeeMoney ? s.facturar.sin_factura : 0, hot: s.facturar.diferencias > 0 },
+          ...(canSeeMoney ? [{ href: '/recaudo', label: 'Recaudo', icon: 'coin' as IconName, count: s.cobrar.vencidas, hot: s.cobrar.vencidas > 0 }] : []),
+        ],
+      },
+      {
+        phase: 'Control',
+        items: [
+          { href: '/compradores', label: 'Compradores', icon: 'users' },
+          ...(isDireccion
+            ? [
+                { href: '/admin/usuarios', label: 'Usuarios', icon: 'key' as IconName },
+                { href: '/admin/parametros', label: 'Parámetros', icon: 'sliders' as IconName },
+              ]
+            : []),
+        ],
+      },
+    ]
+  : [];
 const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWith(href));
+const initial = (profile?.full_name ?? '?').trim().charAt(0).toUpperCase();
 ---
 
 <!doctype html>
@@ -44,69 +86,168 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" />
     <title>{title} · CRM SOE</title>
   </head>
   <body>
     {
-      !bare && profile?.active && (
-        <header class="border-b border-slate-200 bg-white">
-          <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
-            <a href="/" class="font-semibold text-brand-800 hover:no-underline">
-              CRM SOE
-            </a>
-            <nav class="flex flex-1 flex-wrap gap-1">
-              {nav.map((item) => (
-                <a
-                  href={item.href}
-                  class:list={[
-                    'rounded-md px-3 py-1.5 text-sm hover:bg-slate-100 hover:no-underline',
-                    isActive(item.href) ? 'bg-brand-50 font-medium text-brand-800' : 'text-slate-600',
-                  ]}
-                >
-                  {item.label}
-                </a>
+      showChrome ? (
+        <div class="min-h-screen lg:flex">
+          <div id="nav-backdrop" class="fixed inset-0 z-30 hidden bg-slate-900/50 lg:hidden" aria-hidden="true" />
+          <aside
+            id="sidebar"
+            data-collapsed={collapsed ? 'true' : 'false'}
+            class="group fixed inset-y-0 left-0 z-40 flex w-64 -translate-x-full flex-col bg-ink px-3 py-4 transition-[width,transform] duration-200 data-[open=true]:translate-x-0 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 lg:data-[collapsed=true]:w-[76px]"
+            aria-label="Módulos"
+          >
+            <div class="mb-4 flex items-center justify-between gap-2 px-1 lg:group-data-[collapsed=true]:flex-col lg:group-data-[collapsed=true]:gap-3">
+              <a href="/" class="flex items-center gap-3 hover:no-underline">
+                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-accent font-display text-[14px] font-bold text-ink">SOE</span>
+                <span class="flex flex-col leading-tight lg:group-data-[collapsed=true]:hidden">
+                  <span class="font-display text-[16px] font-semibold text-slate-50">Somos SOE</span>
+                  <span class="text-xs text-slate-400">CRM · Piloto</span>
+                </span>
+              </a>
+              <button
+                type="button"
+                id="nav-collapse"
+                class="hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 lg:flex"
+                aria-label={collapsed ? 'Expandir la barra lateral' : 'Contraer la barra lateral'}
+                aria-expanded={collapsed ? 'false' : 'true'}
+              >
+                <Icon name="chevronLeft" size={16} strokeWidth={2} class="transition-transform lg:group-data-[collapsed=true]:rotate-180" />
+              </button>
+            </div>
+
+            <nav class="flex-1 overflow-y-auto">
+              {groups.map((g) => (
+                <div class="pb-4">
+                  <div class="px-2.5 pb-1.5 text-[11px] font-semibold tracking-[0.08em] text-slate-400 uppercase lg:group-data-[collapsed=true]:sr-only">{g.phase}</div>
+                  <ul class="space-y-0.5">
+                    {g.items.map((item) => (
+                      <li>
+                        <a
+                          href={item.href}
+                          title={item.label}
+                          aria-current={isActive(item.href) ? 'page' : undefined}
+                          class:list={[
+                            'relative flex min-h-10 items-center gap-3 rounded-[10px] px-2.5 text-sm font-medium hover:bg-slate-800 hover:no-underline lg:group-data-[collapsed=true]:justify-center',
+                            isActive(item.href) ? 'bg-slate-800 text-white shadow-[inset_3px_0_0_var(--color-accent)]' : 'text-slate-300',
+                          ]}
+                        >
+                          <Icon name={item.icon} class="shrink-0" />
+                          <span class="flex-1 lg:group-data-[collapsed=true]:sr-only">{item.label}</span>
+                          {!!item.count && (
+                            <span
+                              class:list={[
+                                'flex h-5 min-w-[22px] items-center justify-center rounded-full px-1.5 text-xs font-semibold lg:group-data-[collapsed=true]:absolute lg:group-data-[collapsed=true]:top-1 lg:group-data-[collapsed=true]:right-1.5 lg:group-data-[collapsed=true]:h-2 lg:group-data-[collapsed=true]:min-w-2 lg:group-data-[collapsed=true]:p-0 lg:group-data-[collapsed=true]:text-[0px]',
+                                item.hot ? 'bg-amber-400 text-stone-900' : 'bg-slate-700 text-slate-200',
+                              ]}
+                            >
+                              {item.count}
+                            </span>
+                          )}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
             </nav>
-            <div class="flex items-center gap-3 text-sm">
-              <form method="get" action="/compradores" role="search">
-                <input class="input w-44 py-1 text-sm" name="q" placeholder="Buscar comprador…" aria-label="Buscar comprador por nombre o documento" />
-              </form>
-              <span class="text-slate-600">
-                {profile.full_name}
-                {profile.role && <span class="badge ml-1">{ROLE_LABELS[profile.role]}</span>}
+
+            <div class="mt-2 flex items-center gap-3 border-t border-slate-800 px-1.5 pt-3">
+              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-700 text-[13px] font-semibold text-slate-50">{initial}</span>
+              <span class="flex min-w-0 flex-1 flex-col leading-tight lg:group-data-[collapsed=true]:hidden">
+                <span class="truncate text-[13px] font-medium text-slate-50">{profile!.full_name}</span>
+                <span class="truncate text-xs text-slate-400">{profile!.role ? ROLE_LABELS[profile!.role] : ''}</span>
               </span>
-              <form method="post" action="/logout">
-                <button class="btn btn-sm" type="submit">Salir</button>
+              <form method="post" action="/logout" class="lg:group-data-[collapsed=true]:hidden">
+                <button type="submit" class="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 hover:bg-slate-800" aria-label="Salir" title="Salir">
+                  <Icon name="logout" size={17} />
+                </button>
               </form>
             </div>
+          </aside>
+
+          <div class="min-w-0 flex-1">
+            <header class="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur lg:px-8">
+              <button type="button" id="nav-open" class="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 text-slate-700 lg:hidden" aria-label="Abrir el menú">
+                <Icon name="menu" size={20} />
+              </button>
+              <button
+                type="button"
+                data-open-palette
+                class="flex h-11 max-w-xl min-w-0 flex-1 items-center gap-2.5 rounded-xl border border-slate-300 bg-slate-50 px-3.5 text-left text-sm text-slate-600 hover:border-slate-400"
+              >
+                <Icon name="search" size={18} strokeWidth={2} class="shrink-0" />
+                <span class="flex-1 truncate">Buscar comprador, orden, empresa o acción…</span>
+                <kbd class="hidden rounded-md border border-slate-300 bg-white px-1.5 py-0.5 font-sans text-xs font-semibold text-slate-600 sm:inline">Ctrl K</kbd>
+              </button>
+            </header>
+
+            <main class="mx-auto w-full max-w-7xl px-4 py-6 lg:px-8">
+              {flash && (
+                <div
+                  role="status"
+                  class:list={[
+                    'mb-4 rounded-xl border px-4 py-3 text-sm',
+                    flash.type === 'ok' ? 'border-green-200 bg-green-50 text-green-800' : 'border-red-200 bg-red-50 text-red-800',
+                  ]}
+                >
+                  {flash.message}
+                </div>
+              )}
+              {error && (
+                <div role="alert" class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                  {error}
+                </div>
+              )}
+              <slot />
+            </main>
           </div>
-        </header>
+          <CommandPalette />
+        </div>
+      ) : (
+        <main class="mx-auto max-w-md px-4 py-6">
+          {flash && (
+            <div role="status" class:list={['mb-4 rounded-xl border px-4 py-3 text-sm', flash.type === 'ok' ? 'border-green-200 bg-green-50 text-green-800' : 'border-red-200 bg-red-50 text-red-800']}>
+              {flash.message}
+            </div>
+          )}
+          {error && <div role="alert" class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>}
+          <slot />
+        </main>
       )
     }
-    <main class:list={['mx-auto px-4 py-6', bare ? 'max-w-md' : 'max-w-7xl']}>
-      {
-        flash && (
-          <div
-            role="status"
-            class:list={[
-              'mb-4 rounded-md border px-4 py-3 text-sm',
-              flash.type === 'ok'
-                ? 'border-green-200 bg-green-50 text-green-800'
-                : 'border-red-200 bg-red-50 text-red-800',
-            ]}
-          >
-            {flash.message}
-          </div>
-        )
-      }
-      {
-        error && (
-          <div role="alert" class="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-            {error}
-          </div>
-        )
-      }
-      <slot />
-    </main>
   </body>
 </html>
+
+<script>
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('nav-backdrop');
+  const collapseBtn = document.getElementById('nav-collapse');
+
+  // Contraer / expandir en escritorio (se recuerda en una cookie)
+  collapseBtn?.addEventListener('click', () => {
+    if (!sidebar) return;
+    const next = sidebar.dataset.collapsed !== 'true';
+    sidebar.dataset.collapsed = String(next);
+    collapseBtn.setAttribute('aria-expanded', String(!next));
+    collapseBtn.setAttribute('aria-label', next ? 'Expandir la barra lateral' : 'Contraer la barra lateral');
+    document.cookie = `nav_collapsed=${next ? '1' : '0'}; path=/; max-age=31536000; samesite=lax`;
+  });
+
+  // Menú en el celular
+  const setOpen = (open: boolean) => {
+    if (!sidebar || !backdrop) return;
+    sidebar.dataset.open = String(open);
+    backdrop.classList.toggle('hidden', !open);
+  };
+  document.getElementById('nav-open')?.addEventListener('click', () => setOpen(true));
+  backdrop?.addEventListener('click', () => setOpen(false));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && sidebar?.dataset.open === 'true') setOpen(false);
+  });
+</script>
