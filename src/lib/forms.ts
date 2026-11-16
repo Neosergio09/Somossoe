@@ -96,6 +96,37 @@ export function nullify<T extends Record<string, unknown>>(obj: T): Nullified<T>
  * Lanza FormError con un mensaje en español si la consulta falló.
  * Con `.single()` el dato siempre existe cuando no hay error.
  */
+// ---------------------------------------------------------------------
+// Edición simultánea: el formulario lleva la versión (updated_at) con la
+// que se cargó y la actualización solo aplica si sigue siendo la misma.
+// ---------------------------------------------------------------------
+export const VERSION_FIELD = '_version';
+export const CONFLICT_MESSAGE =
+  'Otra persona modificó este registro mientras lo editaba. Recargue la página para ver los cambios y vuelva a intentarlo.';
+
+/** Versión con la que se cargó el formulario. */
+export function formVersion(form: FormData): string {
+  const version = String(form.get(VERSION_FIELD) ?? '');
+  if (!version) throw new FormError('Falta la versión del registro. Recargue la página y vuelva a intentarlo.');
+  return version;
+}
+
+/**
+ * Como `ensure`, para una actualización filtrada por `updated_at`: si no
+ * tocó filas y el registro existe con otra versión, es un conflicto.
+ */
+export async function ensureFresh<R extends { data: unknown; error: PostgrestError | null }>(
+  result: R,
+  current: () => PromiseLike<{ data: { updated_at: string } | null }>,
+  version: string,
+): Promise<NonNullable<R['data']>> {
+  if (result.error?.code === 'PGRST116') {
+    const { data } = await current();
+    if (data && data.updated_at !== version) throw new FormError(CONFLICT_MESSAGE);
+  }
+  return ensure(result);
+}
+
 export function ensure<R extends { data: unknown; error: PostgrestError | null }>(result: R): NonNullable<R['data']> {
   if (result.error) throw new FormError(dbErrorMessage(result.error));
   return result.data as NonNullable<R['data']>;
@@ -188,6 +219,9 @@ const FIELD_LABELS: Record<string, string> = {
   historical_stage: 'Etapa',
   collection_responsible: 'Responsable de cobro',
   installment_periodicity: 'Periodicidad',
+  discount_amount: 'Descuento',
+  discount_reason: 'Motivo del descuento',
+  capacity: 'Capacidad',
 };
 
 const UNIQUE_MESSAGES: Record<string, string> = {
@@ -268,6 +302,9 @@ const CHECK_MESSAGES: Record<string, string> = {
   portfolio_reclassifications_other_notes: 'Con el motivo «Otro», explique el caso en las notas.',
   portfolio_reclassifications_decision_notes: 'Indique el motivo del rechazo o de la anulación.',
   portfolio_reclassifications_new_installments_count_check: 'El plan nuevo admite entre 1 y 24 cuotas.',
+  order_items_discount_range: 'El descuento debe estar entre 0 y el valor de la línea (cantidad × valor unitario).',
+  order_items_discount_reason: 'Indique el motivo del descuento (hasta 500 caracteres); sin descuento, deje el motivo vacío.',
+  campaign_sessions_capacity_positive: 'La capacidad debe ser mayor que cero.',
 };
 
 /** Reemplaza códigos internos (etapas, estados) por su etiqueta. */

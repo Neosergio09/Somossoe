@@ -2,7 +2,7 @@
 import AppLayout from '../../layouts/AppLayout.astro';
 import { hasRole } from '../../lib/auth';
 import { cop, fmtDate, fmtDateTime, fmtTime, fmtWeekday, pct } from '../../lib/format';
-import { checkbox, date, ensure, FormError, parseForm, runActions, text, time, uuid, z } from '../../lib/forms';
+import { checkbox, date, ensure, ensureFresh, FormError, formVersion, int, parseForm, runActions, text, time, uuid, VERSION_FIELD, z } from '../../lib/forms';
 import {
   ATTENDANCE_STATUS_BADGE,
   ATTENDANCE_STATUS_LABELS,
@@ -19,6 +19,7 @@ import {
   type CampaignStatus,
 } from '../../lib/labels';
 import { orderNumber } from '../../lib/orders';
+import type { Database } from '../../lib/database.types';
 import { activeUsers, operationalCities } from '../../lib/options';
 
 const { supabase } = Astro.locals;
@@ -30,7 +31,42 @@ const sessionSchema = z.object({
   end_time: time(),
   location_detail: text(200).optional(),
   responsible_user_id: uuid(),
+  capacity: int().min(1).optional(),
 });
+
+// Checklist fijo para iniciar la jornada (doc de Jornadas §4.1)
+const CHECKLIST = [
+  ['logistics_confirmed', 'Lugar y logística confirmados'],
+  ['checklist_staff', 'Personal asignado (optometría y asesores)'],
+  ['checklist_equipment', 'Equipos de examen revisados'],
+  ['checklist_materials', 'Muestrario de monturas y material listos'],
+  ['checklist_notice', 'La empresa avisó a los empleados'],
+] as const;
+type ChecklistKey = (typeof CHECKLIST)[number][0];
+
+// Personas que ocupan cupo en una sesión
+const OCCUPYING: AttendanceStatus[] = ['agendado', 'presente', 'atendido'];
+
+/** Actualiza la jornada solo si nadie la cambió desde que se cargó el formulario. */
+async function updateCampaignVersioned(patch: Database['public']['Tables']['campaigns_jornadas']['Update'], form: FormData) {
+  const version = formVersion(form);
+  await ensureFresh(
+    await supabase.from('campaigns_jornadas').update(patch).eq('id', id).eq('updated_at', version).select('id').single(),
+    () => supabase.from('campaigns_jornadas').select('updated_at').eq('id', id).maybeSingle(),
+    version,
+  );
+}
+
+/** Aviso si la sesión quedó por encima de su capacidad (no bloquea). */
+async function capacityWarning(sessionId: string): Promise<string> {
+  const [{ data: session }, { count }] = await Promise.all([
+    supabase.from('campaign_sessions').select('capacity').eq('id', sessionId).maybeSingle(),
+    supabase.from('campaign_attendance').select('id', { count: 'exact', head: true }).eq('session_id', sessionId).in('status', OCCUPYING),
+  ]);
+  return session?.capacity && (count ?? 0) > session.capacity
+    ? ` Atención: la sesión supera su capacidad (${count} de ${session.capacity}).`
+    : '';
+}
 
 const ATTENDANCE_STATUSES = Object.keys(ATTENDANCE_STATUS_LABELS) as [AttendanceStatus, ...AttendanceStatus[]];
 
@@ -45,24 +81,68 @@ const outcome = await runActions(Astro, {
         responsible_user_id: uuid(),
         city_id: uuid(),
         branch_id: uuid().optional(),
-        logistics_confirmed: checkbox(),
         notes: text(2000).optional(),
       }),
       form,
     );
-    ensure(
+    await updateCampaignVersioned({ ...input, branch_id: input.branch_id ?? null, notes: input.notes ?? null }, form);
+    return { message: 'Jornada actualizada.' };
+  },
+  update_checklist: async (form) => {
+    const patch = Object.fromEntries(CHECKLIST.map(([key]) => [key, checkbox().parse(form.get(key) ?? undefined)])) as Record<ChecklistKey, boolean>;
+    await updateCampaignVersioned(patch, form);
+    return { message: 'Checklist actualizado.' };
+  },
+  update_session: async (form) => {
+    const input = parseForm(z.object({ session_id: uuid(), responsible_user_id: uuid(), capacity: int().min(1).optional() }), form);
+    const version = formVersion(form);
+    await ensureFresh(
       await supabase
-        .from('campaigns_jornadas')
-        .update({ ...input, branch_id: input.branch_id ?? null, notes: input.notes ?? null })
-        .eq('id', id)
+        .from('campaign_sessions')
+        .update({ responsible_user_id: input.responsible_user_id, capacity: input.capacity ?? null })
+        .eq('id', input.session_id)
+        .eq('campaign_id', id)
+        .eq('updated_at', version)
         .select('id')
         .single(),
+      () => supabase.from('campaign_sessions').select('updated_at').eq('id', input.session_id).maybeSingle(),
+      version,
     );
-    return { message: 'Jornada actualizada.' };
+    return { message: `Sesión actualizada.${await capacityWarning(input.session_id)}` };
+  },
+  reschedule_session: async (form) => {
+    const input = parseForm(
+      z.object({
+        session_id: uuid(),
+        session_date: date(),
+        start_time: time(),
+        end_time: time(),
+        location_detail: text(200).optional(),
+        reason: text(1000).optional(),
+      }),
+      form,
+    );
+    if (!input.reason?.trim()) throw new FormError('Indique el motivo de la reprogramación.');
+    ensure(
+      await supabase.rpc('reschedule_campaign_session', {
+        p_session_id: input.session_id,
+        p_session_date: input.session_date,
+        p_start_time: input.start_time,
+        p_end_time: input.end_time,
+        p_location_detail: input.location_detail ?? '',
+        p_reason: input.reason,
+        p_expected_updated_at: formVersion(form),
+      }),
+    );
+    return { message: 'Sesión reprogramada. La fecha anterior y el motivo quedan en el historial.' };
   },
   add_session: async (form) => {
     const input = parseForm(sessionSchema, form);
-    ensure(await supabase.from('campaign_sessions').insert({ ...input, location_detail: input.location_detail ?? null, campaign_id: id }));
+    ensure(
+      await supabase
+        .from('campaign_sessions')
+        .insert({ ...input, location_detail: input.location_detail ?? null, capacity: input.capacity ?? null, campaign_id: id }),
+    );
     return { message: 'Sesión agregada.' };
   },
   delete_session: async (form) => {
@@ -110,7 +190,7 @@ const outcome = await runActions(Astro, {
       form,
     );
     ensure(await supabase.from('campaign_attendance').insert({ ...input, area: input.area ?? null, campaign_id: id }));
-    return { message: `${input.full_name}: ${ATTENDANCE_STATUS_LABELS[input.status].toLowerCase()}.` };
+    return { message: `${input.full_name}: ${ATTENDANCE_STATUS_LABELS[input.status].toLowerCase()}.${await capacityWarning(input.session_id)}` };
   },
   set_attendance: async (form) => {
     const input = parseForm(z.object({ attendee_id: uuid(), status: z.enum(ATTENDANCE_STATUSES) }), form);
@@ -123,7 +203,9 @@ const outcome = await runActions(Astro, {
         .select('id')
         .single(),
     );
-    return { message: `Asistencia: ${ATTENDANCE_STATUS_LABELS[input.status].toLowerCase()}.` };
+    const { data: row } = await supabase.from('campaign_attendance').select('session_id').eq('id', input.attendee_id).maybeSingle();
+    const warning = row && OCCUPYING.includes(input.status) ? await capacityWarning(row.session_id) : '';
+    return { message: `Asistencia: ${ATTENDANCE_STATUS_LABELS[input.status].toLowerCase()}.${warning}` };
   },
   delete_attendee: async (form) => {
     const attendeeId = String(form.get('attendee_id') ?? '');
@@ -139,7 +221,7 @@ const lastAction = outcome?.kind === 'error' ? outcome.action : '';
 const { data: j } = await supabase.from('v_campaigns').select('*').eq('id', id).maybeSingle();
 if (!j) return new Response('Jornada no encontrada', { status: 404 });
 
-const [sessions, attendance, agreement, branches, opsUsers, sessionUsers, cities, orders] = await Promise.all([
+const [sessions, attendance, agreement, branches, opsUsers, sessionUsers, cities, orders, campaignRow, sessionMeta, reschedules] = await Promise.all([
   supabase.from('v_campaign_calendar').select('*').eq('campaign_id', id).order('session_date').order('start_time'),
   supabase.from('campaign_attendance').select('*').eq('campaign_id', id).order('created_at', { ascending: false }),
   supabase.from('v_agreements').select('id, max_installments, payroll_frequency, valid_from, valid_until, effective_status').eq('id', j.agreement_id!).maybeSingle(),
@@ -152,6 +234,17 @@ const [sessions, attendance, agreement, branches, opsUsers, sessionUsers, cities
     .select('id, order_number, buyer_name, buyer_document_id, payment_modality, installments_count, total_amount, doc_status, ops_status, is_cancelled')
     .eq('campaign_id', id)
     .order('order_number'),
+  supabase
+    .from('campaigns_jornadas')
+    .select('updated_at, logistics_confirmed, checklist_staff, checklist_equipment, checklist_materials, checklist_notice, checklist_complete')
+    .eq('id', id)
+    .single(),
+  supabase.from('campaign_sessions').select('id, capacity, updated_at, responsible_user_id').eq('campaign_id', id),
+  supabase
+    .from('campaign_session_reschedules')
+    .select('id, session_id, previous_date, previous_start_time, previous_end_time, previous_location, new_date, new_start_time, new_end_time, new_location, reason, rescheduled_at, users_profiles(full_name)')
+    .eq('campaign_id', id)
+    .order('rescheduled_at', { ascending: false }),
 ]);
 // Las sesiones de una jornada cancelada no salen en el calendario: se consultan directo
 const sessionRows = j.status === 'cancelada'
@@ -159,15 +252,22 @@ const sessionRows = j.status === 'cancelada'
   : sessions.data ?? [];
 
 const status = j.status!;
+const campaign = campaignRow.data!;
+const checklistDone = CHECKLIST.filter(([key]) => campaign[key]).length;
+const metaBySession = new Map((sessionMeta.data ?? []).map((m) => [m.id, m]));
+const rescheduleList = reschedules.data ?? [];
 const isOps = hasRole(Astro.locals, 'operacion');
 const isTeam = hasRole(Astro.locals, 'operacion', 'comercial');
 const beforeExecution = status === 'borrador' || status === 'programada';
 const canEdit = isTeam && (beforeExecution || status === 'en_ejecucion');
 const canCancel = hasRole(Astro.locals, 'operacion', 'direccion') && beforeExecution;
 const canAttend = isTeam && (beforeExecution || status === 'en_ejecucion');
+// Reprogramar: Operación o Dirección, antes de ejecutar (con motivo e historial)
+const canReschedule = hasRole(Astro.locals, 'operacion', 'direccion') && beforeExecution;
 // Antes de ejecutar solo se agenda o cancela; en ejecución, cualquier estado
 const attendanceOptions: AttendanceStatus[] = beforeExecution ? ['agendado', 'cancelado'] : ATTENDANCE_STATUSES;
 const attendees = attendance.data ?? [];
+const occupancy = (sid: string) => attendees.filter((a) => a.session_id === sid && OCCUPYING.includes(a.status)).length;
 const orderList = orders.data ?? [];
 const activeOrders = orderList.filter((o) => !o.is_cancelled);
 
@@ -231,31 +331,106 @@ const sessionLabel = (sid: string) => {
       <section class="card">
         <h2 class="mb-3">Sesiones</h2>
         <table class="table">
-          <thead><tr><th>Fecha</th><th>Horario</th><th>Lugar</th><th>Responsable</th><th></th></tr></thead>
+          <thead><tr><th>Fecha</th><th>Horario</th><th>Lugar</th><th>Responsable</th><th class="text-right">Cupo</th><th></th></tr></thead>
           <tbody>
-            {sessionRows.map((s) => (
-              <tr class:list={[s.has_conflict && 'bg-red-50']}>
-                <td class="capitalize">{s.session_date && fmtWeekday(s.session_date)}</td>
-                <td>{fmtTime(s.start_time)}–{fmtTime(s.end_time)} {s.has_conflict && <span class="badge badge-red">Cruce</span>}</td>
-                <td>{s.location_detail ?? '—'}</td>
-                <td>{s.responsible_user_name}</td>
-                <td>
-                  {isOps && canEdit && (
-                    <form method="post">
-                      <input type="hidden" name="_action" value="delete_session" />
-                      <input type="hidden" name="session_id" value={s.session_id} />
-                      <button class="btn btn-sm btn-danger" type="submit">Eliminar</button>
-                    </form>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {!sessionRows.length && <tr><td colspan="5" class="text-slate-500">Sin sesiones. Agregue al menos una para poder iniciar la jornada.</td></tr>}
+            {sessionRows.map((s) => {
+              const meta = metaBySession.get(s.session_id!);
+              const used = occupancy(s.session_id!);
+              const over = !!meta?.capacity && used > meta.capacity;
+              const rescheduled = rescheduleList.some((r) => r.session_id === s.session_id);
+              return (
+                <tr class:list={[s.has_conflict && 'bg-red-50']}>
+                  <td class="capitalize">
+                    {s.session_date && fmtWeekday(s.session_date)}
+                    {rescheduled && <span class="badge badge-amber ml-1">Reprogramada</span>}
+                  </td>
+                  <td>{fmtTime(s.start_time)}–{fmtTime(s.end_time)} {s.has_conflict && <span class="badge badge-red">Cruce</span>}</td>
+                  <td>{s.location_detail ?? '—'}</td>
+                  <td>{s.responsible_user_name}</td>
+                  <td class="text-right whitespace-nowrap">
+                    {meta?.capacity ? (
+                      <span class:list={[over && 'badge badge-red']} title="Agendados, presentes y atendidos sobre la capacidad">{used} / {meta.capacity}</span>
+                    ) : (
+                      <span class="text-slate-500">{used} · sin límite</span>
+                    )}
+                  </td>
+                  <td>
+                    <div class="flex flex-wrap justify-end gap-1">
+                      {isTeam && canEdit && meta && (
+                        <details class="text-left" open={lastAction === 'update_session' && v.session_id === s.session_id}>
+                          <summary class="btn btn-sm">Editar</summary>
+                          <form method="post" class="mt-2 w-56 space-y-2">
+                            <input type="hidden" name="_action" value="update_session" />
+                            <input type="hidden" name="session_id" value={s.session_id} />
+                            <input type="hidden" name={VERSION_FIELD} value={meta.updated_at} />
+                            <label class="label">Responsable</label>
+                            <select class="input" name="responsible_user_id">
+                              {sessionUsers.map((u) => <option value={u.id} selected={u.id === meta.responsible_user_id}>{u.full_name}</option>)}
+                            </select>
+                            <label class="label">Capacidad (personas)</label>
+                            <input class="input" name="capacity" type="number" min="1" step="1" value={meta.capacity ?? ''} placeholder="Sin límite" />
+                            <button class="btn btn-primary btn-sm w-full" type="submit">Guardar</button>
+                          </form>
+                        </details>
+                      )}
+                      {canReschedule && meta && (
+                        <details class="text-left" open={lastAction === 'reschedule_session' && v.session_id === s.session_id}>
+                          <summary class="btn btn-sm">Reprogramar</summary>
+                          <form method="post" class="mt-2 w-64 space-y-2">
+                            <input type="hidden" name="_action" value="reschedule_session" />
+                            <input type="hidden" name="session_id" value={s.session_id} />
+                            <input type="hidden" name={VERSION_FIELD} value={meta.updated_at} />
+                            <label class="label">Nueva fecha</label>
+                            <input class="input" name="session_date" type="date" required value={s.session_date} min={agreement.data?.valid_from ?? undefined} max={agreement.data?.valid_until ?? undefined} />
+                            <div class="grid grid-cols-2 gap-2">
+                              <div><label class="label">Inicio</label><input class="input" name="start_time" type="time" required value={s.start_time?.slice(0, 5)} /></div>
+                              <div><label class="label">Fin</label><input class="input" name="end_time" type="time" required value={s.end_time?.slice(0, 5)} /></div>
+                            </div>
+                            <label class="label">Lugar</label>
+                            <input class="input" name="location_detail" value={s.location_detail ?? ''} />
+                            <label class="label">Motivo</label>
+                            <textarea class="input" name="reason" rows="2" required maxlength="1000" placeholder="Por qué cambia la sesión" />
+                            <button class="btn btn-primary btn-sm w-full" type="submit">Reprogramar</button>
+                          </form>
+                        </details>
+                      )}
+                      {isOps && canEdit && !rescheduled && (
+                        <form method="post">
+                          <input type="hidden" name="_action" value="delete_session" />
+                          <input type="hidden" name="session_id" value={s.session_id} />
+                          <button class="btn btn-sm btn-danger" type="submit">Eliminar</button>
+                        </form>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+            {!sessionRows.length && <tr><td colspan="6" class="text-slate-500">Sin sesiones. Agregue al menos una para poder iniciar la jornada.</td></tr>}
           </tbody>
         </table>
         {
+          rescheduleList.length > 0 && (
+            <details class="mt-3 text-sm" open={lastAction === 'reschedule_session'}>
+              <summary class="cursor-pointer text-slate-700">Historial de reprogramaciones ({rescheduleList.length})</summary>
+              <ul class="mt-2 divide-y divide-slate-100">
+                {rescheduleList.map((r) => (
+                  <li class="py-2">
+                    <div>
+                      <span class="text-slate-500 line-through">{fmtDate(r.previous_date)} {fmtTime(r.previous_start_time)}–{fmtTime(r.previous_end_time)}{r.previous_location && ` · ${r.previous_location}`}</span>
+                      {' → '}
+                      <strong>{fmtDate(r.new_date)} {fmtTime(r.new_start_time)}–{fmtTime(r.new_end_time)}</strong>{r.new_location && ` · ${r.new_location}`}
+                    </div>
+                    <div class="text-xs text-slate-500">{r.reason} · {r.users_profiles?.full_name ?? '—'} · {fmtDateTime(r.rescheduled_at)}</div>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )
+        }
+        {
           isOps && canEdit && (
-            <form method="post" class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-6 sm:items-end">
+            <form method="post" class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-7 sm:items-end">
               <input type="hidden" name="_action" value="add_session" />
               <div class="col-span-2 sm:col-span-1">
                 <label class="label">Fecha</label>
@@ -264,6 +439,7 @@ const sessionLabel = (sid: string) => {
               <div><label class="label">Inicio</label><input class="input" name="start_time" type="time" required value={lastAction === 'add_session' ? v.start_time : ''} /></div>
               <div><label class="label">Fin</label><input class="input" name="end_time" type="time" required value={lastAction === 'add_session' ? v.end_time : ''} /></div>
               <div class="col-span-2 sm:col-span-1"><label class="label">Lugar</label><input class="input" name="location_detail" value={lastAction === 'add_session' ? v.location_detail : ''} /></div>
+              <div><label class="label">Capacidad</label><input class="input" name="capacity" type="number" min="1" step="1" placeholder="Opcional" value={lastAction === 'add_session' ? v.capacity : ''} /></div>
               <div class="col-span-2 sm:col-span-1">
                 <label class="label">Responsable</label>
                 <select class="input" name="responsible_user_id">
@@ -405,7 +581,7 @@ const sessionLabel = (sid: string) => {
         <h2>Estado de la jornada</h2>
         <ul class="space-y-1">
           <li class:list={[sessionRows.length ? 'text-green-700' : 'text-amber-700']}>{sessionRows.length ? '✓' : '○'} Al menos una sesión</li>
-          <li class:list={[j.logistics_confirmed ? 'text-green-700' : 'text-amber-700']}>{j.logistics_confirmed ? '✓' : '○'} Logística confirmada</li>
+          <li class:list={[campaign.checklist_complete ? 'text-green-700' : 'text-amber-700']}>{campaign.checklist_complete ? '✓' : '○'} Checklist completo ({checklistDone} de {CHECKLIST.length})</li>
           {
             (status === 'captura_cerrada' || status === 'operacion_cerrada') && (
               <>
@@ -428,7 +604,7 @@ const sessionLabel = (sid: string) => {
         }
         {
           isTeam && status === 'programada' && (
-            <form method="post"><input type="hidden" name="_action" value="start" /><button class="btn btn-primary w-full" disabled={!j.logistics_confirmed || !sessionRows.length}>Iniciar jornada</button></form>
+            <form method="post"><input type="hidden" name="_action" value="start" /><button class="btn btn-primary w-full" disabled={!campaign.checklist_complete || !sessionRows.length}>Iniciar jornada</button></form>
           )
         }
         {
@@ -469,12 +645,39 @@ const sessionLabel = (sid: string) => {
         }
       </section>
 
+      <section class="card text-sm">
+        <div class="mb-2 flex items-center justify-between">
+          <h2>Checklist de preparación</h2>
+          <span class:list={['badge', campaign.checklist_complete ? 'badge-green' : 'badge-amber']}>{checklistDone} / {CHECKLIST.length}</span>
+        </div>
+        <p class="mb-3 text-xs text-slate-500">Todo debe estar marcado para iniciar la jornada.</p>
+        {
+          isTeam && beforeExecution ? (
+            <form method="post" class="space-y-2">
+              <input type="hidden" name="_action" value="update_checklist" />
+              <input type="hidden" name={VERSION_FIELD} value={campaign.updated_at} />
+              {CHECKLIST.map(([key, label]) => (
+                <label class="flex items-center gap-2"><input type="checkbox" name={key} checked={!!campaign[key]} /> {label}</label>
+              ))}
+              <button class="btn btn-primary w-full" type="submit">Guardar checklist</button>
+            </form>
+          ) : (
+            <ul class="space-y-1">
+              {CHECKLIST.map(([key, label]) => (
+                <li class:list={[campaign[key] ? 'text-green-700' : 'text-amber-700']}>{campaign[key] ? '✓' : '○'} {label}</li>
+              ))}
+            </ul>
+          )
+        }
+      </section>
+
       {
         canEdit && (
           <section class="card text-sm">
             <h2 class="mb-3">Datos de la jornada</h2>
             <form method="post" class="space-y-2">
               <input type="hidden" name="_action" value="update" />
+              <input type="hidden" name={VERSION_FIELD} value={campaign.updated_at} />
               <label class="label">Responsable operativo</label>
               <select class="input" name="responsible_user_id">
                 {opsUsers.map((u) => <option value={u.id} selected={u.id === j.responsible_user_id}>{u.full_name}</option>)}
@@ -488,7 +691,6 @@ const sessionLabel = (sid: string) => {
                 <option value="">—</option>
                 {branches.data?.map((b) => <option value={b.id} selected={b.id === j.branch_id}>{b.name}</option>)}
               </select>
-              <label class="flex items-center gap-2"><input type="checkbox" name="logistics_confirmed" checked={!!j.logistics_confirmed} /> Logística confirmada</label>
               <label class="label">Notas</label>
               <textarea class="input" name="notes" rows="3">{j.notes ?? ''}</textarea>
               <button class="btn btn-primary w-full" type="submit">Guardar</button>

@@ -315,7 +315,7 @@ const rows = lastAction === 'create' ? itemRows(v) : [];
             {(rows.length ? rows : []).map((row, i) => (
               <div class="border-b border-slate-100 pb-4" data-item-wrap>
                 <OrderItemFields prefix={`items[${i}]`} values={row}>
-                  <div class="col-span-2 flex justify-end sm:col-span-7">
+                  <div class="col-span-2 flex justify-end sm:col-span-12">
                     <button type="button" class="btn btn-sm btn-danger" data-remove-item>Quitar ítem</button>
                   </div>
                 </OrderItemFields>
@@ -325,7 +325,7 @@ const rows = lastAction === 'create' ? itemRows(v) : [];
           <template id="item-template">
             <div class="border-b border-slate-100 pb-4" data-item-wrap>
               <OrderItemFields prefix="items[__i__]">
-                <div class="col-span-2 flex justify-end sm:col-span-7">
+                <div class="col-span-2 flex justify-end sm:col-span-12">
                   <button type="button" class="btn btn-sm btn-danger" data-remove-item>Quitar ítem</button>
                 </div>
               </OrderItemFields>

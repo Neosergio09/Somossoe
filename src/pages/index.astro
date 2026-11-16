@@ -71,12 +71,12 @@ async function rowsFor(id: string): Promise<Row[]> {
       }));
     }
     case 'jornada': {
-      const { data } = await supabase.from('v_campaigns').select('id, company_name, city_name, status, attended_headcount, first_session_date, logistics_confirmed')
+      const { data } = await supabase.from('v_campaigns').select('id, company_name, city_name, status, attended_headcount, first_session_date, checklist_complete')
         .in('status', ACTIVE_CAMPAIGN_STATUSES).order('first_session_date', { nullsFirst: false }).limit(6);
       return (data ?? []).map((j) => ({
         title: `${j.company_name} · ${j.city_name}`, href: `/jornadas/${j.id}`,
-        meta: `${fmtDate(j.first_session_date)} · ${j.attended_headcount} atendidos${j.status === 'programada' && !j.logistics_confirmed ? ' · logística sin confirmar' : ''}`,
-        tag: CAMPAIGN_STATUS_LABELS[j.status!], tone: j.status === 'programada' && !j.logistics_confirmed ? 'warn' : 'ok',
+        meta: `${fmtDate(j.first_session_date)} · ${j.attended_headcount} atendidos${j.status === 'programada' && !j.checklist_complete ? ' · checklist incompleto' : ''}`,
+        tag: CAMPAIGN_STATUS_LABELS[j.status!], tone: j.status === 'programada' && !j.checklist_complete ? 'warn' : 'ok',
       }));
     }
     case 'orden': {

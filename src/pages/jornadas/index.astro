@@ -26,7 +26,7 @@ if (cityId) sessionsQuery = sessionsQuery.eq('city_id', cityId);
 
 let campaignsQuery = supabase
   .from('v_campaigns')
-  .select('id, company_name, deal_name_branch, city_name, status, first_session_date, sessions_count, attended_headcount, responsible_user_name, logistics_confirmed')
+  .select('id, company_name, deal_name_branch, city_name, status, first_session_date, sessions_count, attended_headcount, responsible_user_name, checklist_complete')
   .in('status', ACTIVE_CAMPAIGN_STATUSES)
   .order('first_session_date', { nullsFirst: true });
 if (cityId) campaignsQuery = campaignsQuery.eq('city_id', cityId);
@@ -119,7 +119,7 @@ const q = (patch: Record<string, string>) => {
               <div class="text-xs text-slate-500">
                 {j.deal_name_branch} · {j.city_name} · {fmtDate(j.first_session_date)} · {j.sessions_count} sesión(es) · {j.attended_headcount} atendidos
               </div>
-              {!j.logistics_confirmed && j.status === 'programada' && <span class="badge badge-amber mt-1">Logística sin confirmar</span>}
+              {!j.checklist_complete && j.status === 'programada' && <span class="badge badge-amber mt-1">Checklist incompleto</span>}
             </li>
           ))
         }

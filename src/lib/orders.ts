@@ -10,15 +10,31 @@ export const money = () =>
     z.coerce.number({ error: 'Valor inválido' }).int({ error: 'Valor sin decimales' }).min(0),
   );
 
-export const itemSchema = z.object({
-  item_type: z.enum(ITEM_TYPES),
-  frame_description: text(200).optional(),
-  lens_type: text(200).optional(),
-  lens_filter: text(200).optional(),
-  description: text(300).optional(),
-  quantity: int().min(1),
-  unit_price: money(),
-});
+export const itemSchema = z
+  .object({
+    item_type: z.enum(ITEM_TYPES),
+    frame_description: text(200).optional(),
+    lens_type: text(200).optional(),
+    lens_filter: text(200).optional(),
+    description: text(300).optional(),
+    quantity: int().min(1),
+    unit_price: money(),
+    discount_amount: money().optional().default(0),
+    discount_reason: text(500).optional(),
+  })
+  // Neto de la línea = cantidad × valor unitario − descuento (doc de Jornadas §4.3)
+  .superRefine((item, ctx) => {
+    if (item.discount_amount > item.quantity * item.unit_price) {
+      ctx.addIssue({ code: 'custom', path: ['discount_amount'], message: 'no puede superar cantidad × valor unitario' });
+    }
+    if (item.discount_amount > 0 && !item.discount_reason?.trim()) {
+      ctx.addIssue({ code: 'custom', path: ['discount_reason'], message: 'indique por qué se descuenta' });
+    }
+  })
+  .transform((item) => ({
+    ...item,
+    discount_reason: item.discount_amount > 0 ? item.discount_reason!.trim() : undefined,
+  }));
 
 export type ItemInput = z.infer<typeof itemSchema>;
 
@@ -30,9 +46,14 @@ const ITEM_FIELD_LABELS: Record<string, string> = {
   description: 'Descripción',
   quantity: 'Cantidad',
   unit_price: 'Valor unitario',
+  discount_amount: 'Descuento',
+  discount_reason: 'Motivo del descuento',
 };
 
-const ITEM_FIELDS =['item_type', 'frame_description', 'lens_type', 'lens_filter', 'description', 'quantity', 'unit_price'] as const;
+const ITEM_FIELDS = ['item_type', 'frame_description', 'lens_type', 'lens_filter', 'description', 'quantity', 'unit_price', 'discount_amount', 'discount_reason'] as const;
+
+/** Base de la línea antes del descuento. */
+export const lineBase = (item: { quantity: number; unit_price: number }) => item.quantity * item.unit_price;
 
 /** Filas `items[i][campo]` del formulario, en orden y sin las filas vacías. */
 export function itemRows(values: Record<string, string>): Record<string, string>[] {

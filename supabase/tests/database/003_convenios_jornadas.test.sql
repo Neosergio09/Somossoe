@@ -196,7 +196,7 @@ select throws_ok($$
   update public.campaigns_jornadas set status = 'en_ejecucion' where notes = 'Jornada 1'
 $$, 'P0001', null, 'no se inicia una jornada sin logística confirmada');
 select lives_ok($$
-  update public.campaigns_jornadas set logistics_confirmed = true, status = 'en_ejecucion'
+  update public.campaigns_jornadas set logistics_confirmed = true, checklist_staff = true, checklist_equipment = true, checklist_materials = true, checklist_notice = true, status = 'en_ejecucion'
   where notes = 'Jornada 1'
 $$, 'con sesión y logística confirmada la jornada inicia');
 select is(

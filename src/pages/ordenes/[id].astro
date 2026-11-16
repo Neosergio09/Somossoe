@@ -10,7 +10,7 @@ import { itemLabel, loadDeliveries } from '../../lib/deliveries';
 import { activeUsers } from '../../lib/options';
 import { hasRole } from '../../lib/auth';
 import { cop, fmtDate, fmtDateTime, pct, todayCo } from '../../lib/format';
-import { checkbox, date, ensure, FormError, int, parseForm, runActions, text, uuid, z } from '../../lib/forms';
+import { checkbox, date, ensure, ensureFresh, FormError, formVersion, int, parseForm, runActions, text, uuid, VERSION_FIELD, z } from '../../lib/forms';
 import {
   ACCOUNTING_STATUS_BADGE,
   ACCOUNTING_STATUS_LABELS,
@@ -45,7 +45,7 @@ import {
   type CostComponent,
   type ReclassificationReason,
 } from '../../lib/labels';
-import { itemSchema, money, orderNumber, requirementChecklist } from '../../lib/orders';
+import { itemSchema, lineBase, money, orderNumber, requirementChecklist } from '../../lib/orders';
 import type { Database } from '../../lib/database.types';
 
 type OrderUpdate = Database['public']['Tables']['orders']['Update'];
@@ -60,6 +60,18 @@ const RECLASS_REASONS = Object.keys(RECLASSIFICATION_REASON_LABELS) as [Reclassi
 async function updateOrder(patch: OrderUpdate) {
   ensure(await supabase.from('orders').update(patch).eq('id', id).select('id').single());
 }
+
+/** Actualiza la orden solo si nadie la cambió desde que se cargó el formulario. */
+async function updateOrderVersioned(patch: OrderUpdate, form: FormData) {
+  const version = formVersion(form);
+  await ensureFresh(
+    await supabase.from('orders').update(patch).eq('id', id).eq('updated_at', version).select('id').single(),
+    () => supabase.from('orders').select('updated_at').eq('id', id).maybeSingle(),
+    version,
+  );
+}
+
+const currentItem = (itemId: string) => () => supabase.from('order_items').select('updated_at').eq('id', itemId).maybeSingle();
 
 const outcome = await runActions(Astro, {
   ...fulfillmentActions(supabase, { orderId: id }),
@@ -83,7 +95,8 @@ const outcome = await runActions(Astro, {
   update_item: async (form) => {
     const itemId = String(form.get('item_id') ?? '');
     const item = parseForm(itemSchema, form);
-    ensure(
+    const version = formVersion(form);
+    await ensureFresh(
       await supabase
         .from('order_items')
         .update({
@@ -92,17 +105,26 @@ const outcome = await runActions(Astro, {
           lens_type: item.lens_type ?? null,
           lens_filter: item.lens_filter ?? null,
           description: item.description ?? null,
+          discount_reason: item.discount_reason ?? null,
         })
         .eq('id', itemId)
         .eq('order_id', id)
+        .eq('updated_at', version)
         .select('id')
         .single(),
+      currentItem(itemId),
+      version,
     );
     return { message: 'Ítem actualizado.' };
   },
   delete_item: async (form) => {
     const itemId = String(form.get('item_id') ?? '');
-    ensure(await supabase.from('order_items').delete().eq('id', itemId).eq('order_id', id).select('id').single());
+    const version = formVersion(form);
+    await ensureFresh(
+      await supabase.from('order_items').delete().eq('id', itemId).eq('order_id', id).eq('updated_at', version).select('id').single(),
+      currentItem(itemId),
+      version,
+    );
     return { message: 'Ítem eliminado.' };
   },
   update_payment: async (form) => {
@@ -127,7 +149,7 @@ const outcome = await runActions(Astro, {
       notes: input.notes ?? null,
     };
     if (form.has('agreement_id')) patch.agreement_id = input.agreement_id ?? null;
-    await updateOrder(patch);
+    await updateOrderVersioned(patch, form);
     return { message: 'Condiciones de pago actualizadas.' };
   },
   update_supports: async (form) => {
@@ -135,11 +157,14 @@ const outcome = await runActions(Astro, {
     const authFile = supportPathFrom(form, 'employee_auth_file_path', 'ordenes');
     const hrFile = supportPathFrom(form, 'hr_approval_file_path', 'ordenes');
     // Adjuntar marca el soporte como recibido (lo hace la BD); sin archivo nuevo se conserva el anterior
-    await updateOrder({
-      ...input,
-      ...(authFile ? { employee_auth_file_path: authFile } : {}),
-      ...(hrFile ? { hr_approval_file_path: hrFile } : {}),
-    });
+    await updateOrderVersioned(
+      {
+        ...input,
+        ...(authFile ? { employee_auth_file_path: authFile } : {}),
+        ...(hrFile ? { hr_approval_file_path: hrFile } : {}),
+      },
+      form,
+    );
     return { message: 'Soportes actualizados.' };
   },
   verify: async () => {
@@ -498,7 +523,7 @@ const collectedWithholding = activeAllocations.reduce((s2, a) => s2 + Number(a.w
         <div class="overflow-x-auto">
           <table class="table">
             <thead>
-              <tr><th>Tipo</th><th>Montura</th><th>Lente / filtro</th><th>Descripción</th><th class="text-right">Cant.</th><th class="text-right">Unitario</th><th class="text-right">Total</th></tr>
+              <tr><th>Tipo</th><th>Montura</th><th>Lente / filtro</th><th>Descripción</th><th class="text-right">Cant.</th><th class="text-right">Unitario</th><th class="text-right">Descuento</th><th class="text-right">Neto</th></tr>
             </thead>
             <tbody>
               {itemList.map((i) => (
@@ -509,13 +534,21 @@ const collectedWithholding = activeAllocations.reduce((s2, a) => s2 + Number(a.w
                   <td>{i.description ?? '—'}</td>
                   <td class="text-right">{i.quantity}</td>
                   <td class="text-right whitespace-nowrap">{cop(i.unit_price)}</td>
+                  <td class="text-right whitespace-nowrap">
+                    {Number(i.discount_amount) > 0 ? (
+                      <>
+                        −{cop(i.discount_amount)}
+                        <div class="text-xs text-slate-500" title={`Base ${cop(lineBase(i))}`}>{i.discount_reason}</div>
+                      </>
+                    ) : '—'}
+                  </td>
                   <td class="text-right whitespace-nowrap">{cop(i.line_total)}</td>
                 </tr>
               ))}
-              {!itemList.length && <tr><td colspan="7" class="text-slate-500">Sin ítems.</td></tr>}
+              {!itemList.length && <tr><td colspan="8" class="text-slate-500">Sin ítems.</td></tr>}
             </tbody>
             <tfoot>
-              <tr><td colspan="6" class="px-2 py-2 text-right font-medium">Valor total</td><td class="px-2 py-2 text-right font-semibold whitespace-nowrap">{cop(o.total_amount)}</td></tr>
+              <tr><td colspan="7" class="px-2 py-2 text-right font-medium">Valor total</td><td class="px-2 py-2 text-right font-semibold whitespace-nowrap">{cop(o.total_amount)}</td></tr>
             </tfoot>
           </table>
         </div>
@@ -528,8 +561,9 @@ const collectedWithholding = activeAllocations.reduce((s2, a) => s2 + Number(a.w
                   <summary class="cursor-pointer text-sm">Editar: {ITEM_TYPE_LABELS[i.item_type]} {i.frame_description ?? i.lens_type ?? i.description}</summary>
                   <form method="post" class="mt-2">
                     <input type="hidden" name="item_id" value={i.id} />
+                    <input type="hidden" name={VERSION_FIELD} value={i.updated_at} />
                     <OrderItemFields values={lastAction === 'update_item' && v.item_id === i.id ? v : i}>
-                      <div class="col-span-2 flex items-end justify-end gap-2 sm:col-span-7">
+                      <div class="col-span-2 flex items-end justify-end gap-2 sm:col-span-12">
                         <button class="btn btn-primary btn-sm" type="submit" name="_action" value="update_item">Guardar ítem</button>
                         <button class="btn btn-danger btn-sm" type="submit" name="_action" value="delete_item" formnovalidate>Eliminar ítem</button>
                       </div>
@@ -542,7 +576,7 @@ const collectedWithholding = activeAllocations.reduce((s2, a) => s2 + Number(a.w
                 <form method="post" class="mt-2">
                   <input type="hidden" name="_action" value="add_item" />
                   <OrderItemFields values={lastAction === 'add_item' ? v : {}}>
-                    <div class="col-span-2 flex items-end justify-end sm:col-span-7">
+                    <div class="col-span-2 flex items-end justify-end sm:col-span-12">
                       <button class="btn btn-primary btn-sm" type="submit">Agregar</button>
                     </div>
                   </OrderItemFields>
@@ -594,6 +628,7 @@ const collectedWithholding = activeAllocations.reduce((s2, a) => s2 + Number(a.w
             <h2 class="mb-3">Condiciones de pago</h2>
             <form method="post" class="space-y-3">
               <input type="hidden" name="_action" value="update_payment" />
+              <input type="hidden" name={VERSION_FIELD} value={o.updated_at ?? ''} />
               <div class="grid-form">
                 <div>
                   <label class="label" for="payment_modality">Modalidad</label>
@@ -868,6 +903,7 @@ const collectedWithholding = activeAllocations.reduce((s2, a) => s2 + Number(a.w
           canEdit && isPayroll && (
             <form method="post" class="space-y-2 border-t border-slate-100 pt-3">
               <input type="hidden" name="_action" value="update_supports" />
+              <input type="hidden" name={VERSION_FIELD} value={o.updated_at ?? ''} />
               <label class="flex items-center gap-2"><input type="checkbox" name="employee_auth_received" checked={!!o.employee_auth_received} /> Autorización firmada del empleado recibida</label>
               <SupportFile kind="ordenes" name="employee_auth_file_path" label="Archivo de la autorización" current={o.employee_auth_file_path} required={requireFiles} compact />
               {o.hr_approval_required !== false && (

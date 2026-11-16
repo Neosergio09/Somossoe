@@ -43,5 +43,13 @@ const val = (field: string) => (values[field] == null ? '' : String(values[field
     <label class="label">Valor unitario (COP)</label>
     <input class="input" name={name('unit_price')} type="number" min="0" step="1" required value={val('unit_price')} data-price />
   </div>
+  <div class="sm:col-span-2">
+    <label class="label">Descuento (COP)</label>
+    <input class="input" name={name('discount_amount')} type="number" min="0" step="1" value={val('discount_amount') === '0' ? '' : val('discount_amount')} placeholder="0" data-discount />
+  </div>
+  <div class="col-span-2 sm:col-span-5">
+    <label class="label">Motivo del descuento</label>
+    <input class="input" name={name('discount_reason')} maxlength="500" value={val('discount_reason')} placeholder="Obligatorio si hay descuento" />
+  </div>
   <slot />
 </div>
