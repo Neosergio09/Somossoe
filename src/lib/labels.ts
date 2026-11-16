@@ -356,3 +356,50 @@ export const HISTORICAL_STAGE_HINTS: Record<HistoricalStage, string> = {
   produccion: 'ya en el laboratorio, falta entregar',
   entregada: 'entregada, solo queda cobrar',
 };
+
+// ---------------------------------------------------------------------
+// Importador del Excel histórico
+// ---------------------------------------------------------------------
+export const IMPORT_STATUS_LABELS: Record<Enums['excel_import_status'], string> = {
+  en_revision: 'En revisión',
+  cargada: 'Cargada',
+  descartada: 'Descartada',
+};
+export const IMPORT_STATUS_BADGE: Record<Enums['excel_import_status'], string> = {
+  en_revision: 'badge badge-amber',
+  cargada: 'badge badge-green',
+  descartada: 'badge',
+};
+export const SHEET_STATUS_LABELS: Record<Enums['excel_sheet_status'], string> = {
+  pendiente: 'Por cargar',
+  omitida: 'Omitida',
+  cargada: 'Cargada',
+};
+export const SHEET_STATUS_BADGE: Record<Enums['excel_sheet_status'], string> = {
+  pendiente: 'badge badge-amber',
+  omitida: 'badge',
+  cargada: 'badge badge-green',
+};
+export const ROW_STATUS_LABELS: Record<Enums['excel_row_status'], string> = {
+  lista: 'Lista',
+  con_error: 'Con error',
+  duplicada: 'Duplicada',
+  omitida: 'Omitida',
+  cargada: 'Cargada',
+};
+export const ROW_STATUS_BADGE: Record<Enums['excel_row_status'], string> = {
+  lista: 'badge badge-blue',
+  con_error: 'badge badge-red',
+  duplicada: 'badge',
+  omitida: 'badge',
+  cargada: 'badge badge-green',
+};
+export const MODALITY_RULE_LABELS: Record<Enums['excel_modality_rule'], string> = {
+  segun_cuotas: 'Según CUOTAS: con empresa y más de 1 cuota = nómina; si no, contado',
+  contado: 'Todas de contado',
+  nomina: 'Todas por nómina',
+};
+export const BALANCE_RULE_LABELS: Record<Enums['excel_balance_rule'], string> = {
+  total_pendiente: 'Todo el valor queda por cobrar',
+  pagado: 'Ya están pagadas',
+};

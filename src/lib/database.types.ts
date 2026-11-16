@@ -757,6 +757,144 @@ isOneToOne: false
       referencedColumns: ["code"]
     }
                   ]
+                },"excel_import_rows": {
+                  Row: {
+                    "block_number": number,"buyer_id": string | null,"company_id": string | null,"company_name": string | null,"cost_frame": number | null,"cost_kit": number | null,"cost_lens": number | null,"document_id": string | null,"document_type": Database["public"]['Enums']["buyer_document_type"],"errors": (string)[],"event_date": string | null,"fingerprint": string,"frame": string | null,"full_name": string | null,"id": string,"import_id": string,"installments": number | null,"lab_name": string | null,"lab_reference": string | null,"legacy_marks": NonNullable<Json>,"lens_type": string | null,"loaded_at": string | null,"omit": boolean,"omit_reason": string | null,"order_id": string | null,"paid_declared": number | null,"phone": string | null,"row_number": number,"sale_value": number | null,"sheet_id": string,"status": Database["public"]['Enums']["excel_row_status"],"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "block_number"?: number,"buyer_id"?: string | null,"company_id"?: string | null,"company_name"?: string | null,"cost_frame"?: number | null,"cost_kit"?: number | null,"cost_lens"?: number | null,"document_id"?: string | null,"document_type"?: Database["public"]['Enums']["buyer_document_type"],"errors"?: (string)[],"event_date"?: string | null,"fingerprint": string,"frame"?: string | null,"full_name"?: string | null,"id"?: string,"import_id": string,"installments"?: number | null,"lab_name"?: string | null,"lab_reference"?: string | null,"legacy_marks"?: NonNullable<Json>,"lens_type"?: string | null,"loaded_at"?: string | null,"omit"?: boolean,"omit_reason"?: string | null,"order_id"?: string | null,"paid_declared"?: number | null,"phone"?: string | null,"row_number": number,"sale_value"?: number | null,"sheet_id": string,"status"?: Database["public"]['Enums']["excel_row_status"],"updated_at"?: string
+                  }
+                  Update: {
+                    "block_number"?: number,"buyer_id"?: string | null,"company_id"?: string | null,"company_name"?: string | null,"cost_frame"?: number | null,"cost_kit"?: number | null,"cost_lens"?: number | null,"document_id"?: string | null,"document_type"?: Database["public"]['Enums']["buyer_document_type"],"errors"?: (string)[],"event_date"?: string | null,"fingerprint"?: string,"frame"?: string | null,"full_name"?: string | null,"id"?: string,"import_id"?: string,"installments"?: number | null,"lab_name"?: string | null,"lab_reference"?: string | null,"legacy_marks"?: NonNullable<Json>,"lens_type"?: string | null,"loaded_at"?: string | null,"omit"?: boolean,"omit_reason"?: string | null,"order_id"?: string | null,"paid_declared"?: number | null,"phone"?: string | null,"row_number"?: number,"sale_value"?: number | null,"sheet_id"?: string,"status"?: Database["public"]['Enums']["excel_row_status"],"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "excel_import_rows_buyer_id_fkey"
+      columns: ["buyer_id"]
+isOneToOne: false
+      referencedRelation: "buyers"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "excel_import_rows_company_id_fkey"
+      columns: ["company_id"]
+isOneToOne: false
+      referencedRelation: "companies"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "excel_import_rows_import_id_fkey"
+      columns: ["import_id"]
+isOneToOne: false
+      referencedRelation: "excel_imports"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "excel_import_rows_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "excel_import_rows_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_finance_by_order"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "excel_import_rows_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_order_margins"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "excel_import_rows_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "excel_import_rows_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders_to_invoice"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "excel_import_rows_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_receivables"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "excel_import_rows_sheet_id_fkey"
+      columns: ["sheet_id"]
+isOneToOne: false
+      referencedRelation: "excel_import_sheets"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"excel_import_sheets": {
+                  Row: {
+                    "agreement_id": string | null,"balance_rule": Database["public"]['Enums']["excel_balance_rule"],"collection_responsible": Database["public"]['Enums']["collection_responsible"],"company_id": string | null,"detected_columns": (string)[],"first_due_date": string | null,"historical_stage": Database["public"]['Enums']["historical_stage"],"id": string,"import_id": string,"installment_periodicity": Database["public"]['Enums']["payroll_frequency"] | null,"loaded_at": string | null,"loaded_by": string | null,"map_code": string | null,"modality_rule": Database["public"]['Enums']["excel_modality_rule"],"sheet_index": number,"sheet_name": string,"skip_reason": string | null,"status": Database["public"]['Enums']["excel_sheet_status"],"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "agreement_id"?: string | null,"balance_rule"?: Database["public"]['Enums']["excel_balance_rule"],"collection_responsible"?: Database["public"]['Enums']["collection_responsible"],"company_id"?: string | null,"detected_columns"?: (string)[],"first_due_date"?: string | null,"historical_stage"?: Database["public"]['Enums']["historical_stage"],"id"?: string,"import_id": string,"installment_periodicity"?: Database["public"]['Enums']["payroll_frequency"] | null,"loaded_at"?: string | null,"loaded_by"?: string | null,"map_code"?: string | null,"modality_rule"?: Database["public"]['Enums']["excel_modality_rule"],"sheet_index": number,"sheet_name": string,"skip_reason"?: string | null,"status"?: Database["public"]['Enums']["excel_sheet_status"],"updated_at"?: string
+                  }
+                  Update: {
+                    "agreement_id"?: string | null,"balance_rule"?: Database["public"]['Enums']["excel_balance_rule"],"collection_responsible"?: Database["public"]['Enums']["collection_responsible"],"company_id"?: string | null,"detected_columns"?: (string)[],"first_due_date"?: string | null,"historical_stage"?: Database["public"]['Enums']["historical_stage"],"id"?: string,"import_id"?: string,"installment_periodicity"?: Database["public"]['Enums']["payroll_frequency"] | null,"loaded_at"?: string | null,"loaded_by"?: string | null,"map_code"?: string | null,"modality_rule"?: Database["public"]['Enums']["excel_modality_rule"],"sheet_index"?: number,"sheet_name"?: string,"skip_reason"?: string | null,"status"?: Database["public"]['Enums']["excel_sheet_status"],"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "excel_import_sheets_agreement_same_company"
+      columns: ["agreement_id","company_id"]
+isOneToOne: false
+      referencedRelation: "agreements_convenios"
+      referencedColumns: ["id","company_id"]
+    },{
+      foreignKeyName: "excel_import_sheets_agreement_same_company"
+      columns: ["agreement_id","company_id"]
+isOneToOne: false
+      referencedRelation: "v_agreements"
+      referencedColumns: ["id","company_id"]
+    },{
+      foreignKeyName: "excel_import_sheets_company_id_fkey"
+      columns: ["company_id"]
+isOneToOne: false
+      referencedRelation: "companies"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "excel_import_sheets_import_id_fkey"
+      columns: ["import_id"]
+isOneToOne: false
+      referencedRelation: "excel_imports"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "excel_import_sheets_loaded_by_fkey"
+      columns: ["loaded_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"excel_imports": {
+                  Row: {
+                    "file_name": string,"file_sha256": string,"id": string,"notes": string | null,"status": Database["public"]['Enums']["excel_import_status"],"updated_at": string,"uploaded_at": string,"uploaded_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "file_name": string,"file_sha256": string,"id"?: string,"notes"?: string | null,"status"?: Database["public"]['Enums']["excel_import_status"],"updated_at"?: string,"uploaded_at"?: string,"uploaded_by"?: string | null
+                  }
+                  Update: {
+                    "file_name"?: string,"file_sha256"?: string,"id"?: string,"notes"?: string | null,"status"?: Database["public"]['Enums']["excel_import_status"],"updated_at"?: string,"uploaded_at"?: string,"uploaded_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "excel_imports_uploaded_by_fkey"
+      columns: ["uploaded_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"lab_providers": {
                   Row: {
                     "active": boolean,"contact_info": string | null,"created_at": string,"id": string,"name": string,"updated_at": string
@@ -2591,6 +2729,15 @@ isOneToOne: false
 "create_order":
 { Args: { "p_items": Json,"p_order": Json }; Returns: string
                            },
+"excel_import_create":
+{ Args: { "p_file_name": string,"p_file_sha256": string,"p_sheets": Json }; Returns: string
+                           },
+"excel_import_load_sheet":
+{ Args: { "p_sheet_id": string }; Returns: number
+                           },
+"excel_import_validate_sheet":
+{ Args: { "p_sheet_id": string }; Returns: undefined
+                           },
 "find_company_duplicates":
 { Args: { "p_name": string,"p_nit"?: string }; Returns: {
               "id": string,"is_nit_provisional": boolean,"match_reason": string,"name": string,"nit": string,"similarity": number
@@ -2613,7 +2760,7 @@ isOneToOne: false
                            }
           }
           Enums: {
-            "agreement_document_type": "convenio_firmado"|"camara_comercio"|"rut"|"formato_rrhh"|"otro","agreement_status": "borrador"|"pendiente_aprobacion"|"aprobado"|"cancelado","app_role": "comercial"|"operacion"|"administracion_cartera"|"direccion"|"proveedor_lab"|"socio","attendance_status": "agendado"|"presente"|"atendido"|"no_asistio"|"cancelado","buyer_document_type": "cc"|"ce"|"ti"|"pasaporte"|"otro","campaign_status": "borrador"|"programada"|"en_ejecucion"|"captura_cerrada"|"operacion_cerrada"|"cancelada","collection_responsible": "empresa"|"empleado","contact_area": "rrhh"|"sst"|"gerencia"|"compras"|"otra","cost_basis": "estimado"|"verificado","cost_component": "lente"|"montura"|"kit"|"otro","deal_stage": "prospecto"|"reunion_exploratoria"|"propuesta_enviada"|"negociacion"|"convenio_firmado"|"jornada_en_ejecucion"|"facturacion_cerrada"|"cierre_perdido","historical_stage": "venta"|"produccion"|"entregada","interaction_type": "reunion"|"llamada"|"whatsapp"|"correo","invoice_radication_status": "pendiente"|"radicada"|"rechazada","lost_substatus": "nurturing"|"no_contactar","order_accounting_status": "pendiente_vincular"|"factura_vinculada"|"factura_con_diferencia","order_collection_status": "con_saldo"|"parcialmente_recaudado"|"recaudado_total","order_doc_status": "pendiente_soportes"|"requisitos_verificados","order_item_type": "gafas_completas"|"montura"|"lentes"|"otro","order_ops_status": "pendiente_liberar"|"en_produccion"|"listo_para_entregar"|"entrega_parcial"|"entrega_completa","payment_modality": "contado"|"nomina_empresa","payroll_frequency": "mensual"|"quincenal","production_status": "en_produccion"|"listo_para_entregar"|"cancelada","reclassification_reason": "retiro"|"incapacidad"|"otro","reclassification_status": "pendiente"|"autorizada"|"rechazada"|"anulada","warranty_incident_type": "garantia"|"reclamo"|"ajuste"|"otro","warranty_status": "abierta"|"en_reposicion"|"cerrada"
+            "agreement_document_type": "convenio_firmado"|"camara_comercio"|"rut"|"formato_rrhh"|"otro","agreement_status": "borrador"|"pendiente_aprobacion"|"aprobado"|"cancelado","app_role": "comercial"|"operacion"|"administracion_cartera"|"direccion"|"proveedor_lab"|"socio","attendance_status": "agendado"|"presente"|"atendido"|"no_asistio"|"cancelado","buyer_document_type": "cc"|"ce"|"ti"|"pasaporte"|"otro","campaign_status": "borrador"|"programada"|"en_ejecucion"|"captura_cerrada"|"operacion_cerrada"|"cancelada","collection_responsible": "empresa"|"empleado","contact_area": "rrhh"|"sst"|"gerencia"|"compras"|"otra","cost_basis": "estimado"|"verificado","cost_component": "lente"|"montura"|"kit"|"otro","deal_stage": "prospecto"|"reunion_exploratoria"|"propuesta_enviada"|"negociacion"|"convenio_firmado"|"jornada_en_ejecucion"|"facturacion_cerrada"|"cierre_perdido","excel_balance_rule": "total_pendiente"|"pagado","excel_import_status": "en_revision"|"cargada"|"descartada","excel_modality_rule": "segun_cuotas"|"contado"|"nomina","excel_row_status": "lista"|"con_error"|"duplicada"|"omitida"|"cargada","excel_sheet_status": "pendiente"|"omitida"|"cargada","historical_stage": "venta"|"produccion"|"entregada","interaction_type": "reunion"|"llamada"|"whatsapp"|"correo","invoice_radication_status": "pendiente"|"radicada"|"rechazada","lost_substatus": "nurturing"|"no_contactar","order_accounting_status": "pendiente_vincular"|"factura_vinculada"|"factura_con_diferencia","order_collection_status": "con_saldo"|"parcialmente_recaudado"|"recaudado_total","order_doc_status": "pendiente_soportes"|"requisitos_verificados","order_item_type": "gafas_completas"|"montura"|"lentes"|"otro","order_ops_status": "pendiente_liberar"|"en_produccion"|"listo_para_entregar"|"entrega_parcial"|"entrega_completa","payment_modality": "contado"|"nomina_empresa","payroll_frequency": "mensual"|"quincenal","production_status": "en_produccion"|"listo_para_entregar"|"cancelada","reclassification_reason": "retiro"|"incapacidad"|"otro","reclassification_status": "pendiente"|"autorizada"|"rechazada"|"anulada","warranty_incident_type": "garantia"|"reclamo"|"ajuste"|"otro","warranty_status": "abierta"|"en_reposicion"|"cerrada"
           }
           CompositeTypes: {
             [_ in never]: never
@@ -2733,7 +2880,7 @@ export const Constants = {
           }
         },"public": {
           Enums: {
-            "agreement_document_type": ["convenio_firmado", "camara_comercio", "rut", "formato_rrhh", "otro"],"agreement_status": ["borrador", "pendiente_aprobacion", "aprobado", "cancelado"],"app_role": ["comercial", "operacion", "administracion_cartera", "direccion", "proveedor_lab", "socio"],"attendance_status": ["agendado", "presente", "atendido", "no_asistio", "cancelado"],"buyer_document_type": ["cc", "ce", "ti", "pasaporte", "otro"],"campaign_status": ["borrador", "programada", "en_ejecucion", "captura_cerrada", "operacion_cerrada", "cancelada"],"collection_responsible": ["empresa", "empleado"],"contact_area": ["rrhh", "sst", "gerencia", "compras", "otra"],"cost_basis": ["estimado", "verificado"],"cost_component": ["lente", "montura", "kit", "otro"],"deal_stage": ["prospecto", "reunion_exploratoria", "propuesta_enviada", "negociacion", "convenio_firmado", "jornada_en_ejecucion", "facturacion_cerrada", "cierre_perdido"],"historical_stage": ["venta", "produccion", "entregada"],"interaction_type": ["reunion", "llamada", "whatsapp", "correo"],"invoice_radication_status": ["pendiente", "radicada", "rechazada"],"lost_substatus": ["nurturing", "no_contactar"],"order_accounting_status": ["pendiente_vincular", "factura_vinculada", "factura_con_diferencia"],"order_collection_status": ["con_saldo", "parcialmente_recaudado", "recaudado_total"],"order_doc_status": ["pendiente_soportes", "requisitos_verificados"],"order_item_type": ["gafas_completas", "montura", "lentes", "otro"],"order_ops_status": ["pendiente_liberar", "en_produccion", "listo_para_entregar", "entrega_parcial", "entrega_completa"],"payment_modality": ["contado", "nomina_empresa"],"payroll_frequency": ["mensual", "quincenal"],"production_status": ["en_produccion", "listo_para_entregar", "cancelada"],"reclassification_reason": ["retiro", "incapacidad", "otro"],"reclassification_status": ["pendiente", "autorizada", "rechazada", "anulada"],"warranty_incident_type": ["garantia", "reclamo", "ajuste", "otro"],"warranty_status": ["abierta", "en_reposicion", "cerrada"]
+            "agreement_document_type": ["convenio_firmado", "camara_comercio", "rut", "formato_rrhh", "otro"],"agreement_status": ["borrador", "pendiente_aprobacion", "aprobado", "cancelado"],"app_role": ["comercial", "operacion", "administracion_cartera", "direccion", "proveedor_lab", "socio"],"attendance_status": ["agendado", "presente", "atendido", "no_asistio", "cancelado"],"buyer_document_type": ["cc", "ce", "ti", "pasaporte", "otro"],"campaign_status": ["borrador", "programada", "en_ejecucion", "captura_cerrada", "operacion_cerrada", "cancelada"],"collection_responsible": ["empresa", "empleado"],"contact_area": ["rrhh", "sst", "gerencia", "compras", "otra"],"cost_basis": ["estimado", "verificado"],"cost_component": ["lente", "montura", "kit", "otro"],"deal_stage": ["prospecto", "reunion_exploratoria", "propuesta_enviada", "negociacion", "convenio_firmado", "jornada_en_ejecucion", "facturacion_cerrada", "cierre_perdido"],"excel_balance_rule": ["total_pendiente", "pagado"],"excel_import_status": ["en_revision", "cargada", "descartada"],"excel_modality_rule": ["segun_cuotas", "contado", "nomina"],"excel_row_status": ["lista", "con_error", "duplicada", "omitida", "cargada"],"excel_sheet_status": ["pendiente", "omitida", "cargada"],"historical_stage": ["venta", "produccion", "entregada"],"interaction_type": ["reunion", "llamada", "whatsapp", "correo"],"invoice_radication_status": ["pendiente", "radicada", "rechazada"],"lost_substatus": ["nurturing", "no_contactar"],"order_accounting_status": ["pendiente_vincular", "factura_vinculada", "factura_con_diferencia"],"order_collection_status": ["con_saldo", "parcialmente_recaudado", "recaudado_total"],"order_doc_status": ["pendiente_soportes", "requisitos_verificados"],"order_item_type": ["gafas_completas", "montura", "lentes", "otro"],"order_ops_status": ["pendiente_liberar", "en_produccion", "listo_para_entregar", "entrega_parcial", "entrega_completa"],"payment_modality": ["contado", "nomina_empresa"],"payroll_frequency": ["mensual", "quincenal"],"production_status": ["en_produccion", "listo_para_entregar", "cancelada"],"reclassification_reason": ["retiro", "incapacidad", "otro"],"reclassification_status": ["pendiente", "autorizada", "rechazada", "anulada"],"warranty_incident_type": ["garantia", "reclamo", "ajuste", "otro"],"warranty_status": ["abierta", "en_reposicion", "cerrada"]
           }
         }
 } as const
