@@ -105,7 +105,7 @@ select throws_ok($$ select pg_temp.new_order('bbbbbbbb-0000-0000-0000-0000000000
 
 -- ================= En ejecución: asistencia =================
 select pg_temp.login('00000000-0000-0000-0000-0000000000b1');
-update public.campaigns_jornadas set logistics_confirmed = true, status = 'en_ejecucion' where notes = 'J1';
+update public.campaigns_jornadas set logistics_confirmed = true, checklist_staff = true, checklist_equipment = true, checklist_materials = true, checklist_notice = true, status = 'en_ejecucion' where notes = 'J1';
 select is(pg_temp.jstatus(), 'en_ejecucion', 'la jornada inicia');
 insert into public.campaign_sessions (campaign_id, session_date, start_time, end_time, responsible_user_id)
 values (pg_temp.jid(), current_date, '13:00', '17:00', '00000000-0000-0000-0000-0000000000b1');

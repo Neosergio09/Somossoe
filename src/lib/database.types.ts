@@ -351,16 +351,66 @@ isOneToOne: false
       referencedColumns: ["session_id","campaign_id"]
     }
                   ]
-                },"campaign_sessions": {
+                },"campaign_session_reschedules": {
                   Row: {
-                    "campaign_id": string,"created_at": string,"end_time": string,"id": string,"location_detail": string | null,"responsible_user_id": string,"session_date": string,"start_time": string,"updated_at": string
+                    "campaign_id": string,"id": string,"new_date": string,"new_end_time": string,"new_location": string | null,"new_start_time": string,"previous_date": string,"previous_end_time": string,"previous_location": string | null,"previous_start_time": string,"reason": string,"rescheduled_at": string,"rescheduled_by": string | null,"session_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "campaign_id": string,"created_at"?: string,"end_time": string,"id"?: string,"location_detail"?: string | null,"responsible_user_id": string,"session_date": string,"start_time": string,"updated_at"?: string
+                    "campaign_id": string,"id"?: string,"new_date": string,"new_end_time": string,"new_location"?: string | null,"new_start_time": string,"previous_date": string,"previous_end_time": string,"previous_location"?: string | null,"previous_start_time": string,"reason": string,"rescheduled_at"?: string,"rescheduled_by"?: string | null,"session_id": string
                   }
                   Update: {
-                    "campaign_id"?: string,"created_at"?: string,"end_time"?: string,"id"?: string,"location_detail"?: string | null,"responsible_user_id"?: string,"session_date"?: string,"start_time"?: string,"updated_at"?: string
+                    "campaign_id"?: string,"id"?: string,"new_date"?: string,"new_end_time"?: string,"new_location"?: string | null,"new_start_time"?: string,"previous_date"?: string,"previous_end_time"?: string,"previous_location"?: string | null,"previous_start_time"?: string,"reason"?: string,"rescheduled_at"?: string,"rescheduled_by"?: string | null,"session_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "campaign_session_reschedules_campaign_id_fkey"
+      columns: ["campaign_id"]
+isOneToOne: false
+      referencedRelation: "campaigns_jornadas"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "campaign_session_reschedules_campaign_id_fkey"
+      columns: ["campaign_id"]
+isOneToOne: false
+      referencedRelation: "v_campaign_margins"
+      referencedColumns: ["campaign_id"]
+    },{
+      foreignKeyName: "campaign_session_reschedules_campaign_id_fkey"
+      columns: ["campaign_id"]
+isOneToOne: false
+      referencedRelation: "v_campaigns"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "campaign_session_reschedules_rescheduled_by_fkey"
+      columns: ["rescheduled_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "campaign_session_reschedules_session_same_campaign"
+      columns: ["session_id","campaign_id"]
+isOneToOne: false
+      referencedRelation: "campaign_sessions"
+      referencedColumns: ["id","campaign_id"]
+    },{
+      foreignKeyName: "campaign_session_reschedules_session_same_campaign"
+      columns: ["session_id","campaign_id"]
+isOneToOne: false
+      referencedRelation: "v_campaign_calendar"
+      referencedColumns: ["session_id","campaign_id"]
+    }
+                  ]
+                },"campaign_sessions": {
+                  Row: {
+                    "campaign_id": string,"capacity": number | null,"created_at": string,"end_time": string,"id": string,"location_detail": string | null,"responsible_user_id": string,"session_date": string,"start_time": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "campaign_id": string,"capacity"?: number | null,"created_at"?: string,"end_time": string,"id"?: string,"location_detail"?: string | null,"responsible_user_id": string,"session_date": string,"start_time": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "campaign_id"?: string,"capacity"?: number | null,"created_at"?: string,"end_time"?: string,"id"?: string,"location_detail"?: string | null,"responsible_user_id"?: string,"session_date"?: string,"start_time"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -391,14 +441,14 @@ isOneToOne: false
                   ]
                 },"campaigns_jornadas": {
                   Row: {
-                    "agreement_id": string,"branch_id": string | null,"cancel_reason": string | null,"cancelled_at": string | null,"capture_closed_at": string | null,"capture_reopened_at": string | null,"city_id": string,"closed_at": string | null,"company_id": string,"created_at": string,"created_by": string | null,"deal_id": string,"id": string,"logistics_confirmed": boolean,"notes": string | null,"reopen_reason": string | null,"responsible_user_id": string,"scheduled_at": string | null,"started_at": string | null,"status": Database["public"]['Enums']["campaign_status"],"updated_at": string
+                    "agreement_id": string,"branch_id": string | null,"cancel_reason": string | null,"cancelled_at": string | null,"capture_closed_at": string | null,"capture_reopened_at": string | null,"checklist_complete": boolean | null,"checklist_equipment": boolean,"checklist_materials": boolean,"checklist_notice": boolean,"checklist_staff": boolean,"city_id": string,"closed_at": string | null,"company_id": string,"created_at": string,"created_by": string | null,"deal_id": string,"id": string,"logistics_confirmed": boolean,"notes": string | null,"reopen_reason": string | null,"responsible_user_id": string,"scheduled_at": string | null,"started_at": string | null,"status": Database["public"]['Enums']["campaign_status"],"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "agreement_id": string,"branch_id"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"capture_closed_at"?: string | null,"capture_reopened_at"?: string | null,"city_id": string,"closed_at"?: string | null,"company_id": string,"created_at"?: string,"created_by"?: string | null,"deal_id": string,"id"?: string,"logistics_confirmed"?: boolean,"notes"?: string | null,"reopen_reason"?: string | null,"responsible_user_id": string,"scheduled_at"?: string | null,"started_at"?: string | null,"status"?: Database["public"]['Enums']["campaign_status"],"updated_at"?: string
+                    "agreement_id": string,"branch_id"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"capture_closed_at"?: string | null,"capture_reopened_at"?: string | null,"checklist_complete"?: never,"checklist_equipment"?: boolean,"checklist_materials"?: boolean,"checklist_notice"?: boolean,"checklist_staff"?: boolean,"city_id": string,"closed_at"?: string | null,"company_id": string,"created_at"?: string,"created_by"?: string | null,"deal_id": string,"id"?: string,"logistics_confirmed"?: boolean,"notes"?: string | null,"reopen_reason"?: string | null,"responsible_user_id": string,"scheduled_at"?: string | null,"started_at"?: string | null,"status"?: Database["public"]['Enums']["campaign_status"],"updated_at"?: string
                   }
                   Update: {
-                    "agreement_id"?: string,"branch_id"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"capture_closed_at"?: string | null,"capture_reopened_at"?: string | null,"city_id"?: string,"closed_at"?: string | null,"company_id"?: string,"created_at"?: string,"created_by"?: string | null,"deal_id"?: string,"id"?: string,"logistics_confirmed"?: boolean,"notes"?: string | null,"reopen_reason"?: string | null,"responsible_user_id"?: string,"scheduled_at"?: string | null,"started_at"?: string | null,"status"?: Database["public"]['Enums']["campaign_status"],"updated_at"?: string
+                    "agreement_id"?: string,"branch_id"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"capture_closed_at"?: string | null,"capture_reopened_at"?: string | null,"checklist_complete"?: never,"checklist_equipment"?: boolean,"checklist_materials"?: boolean,"checklist_notice"?: boolean,"checklist_staff"?: boolean,"city_id"?: string,"closed_at"?: string | null,"company_id"?: string,"created_at"?: string,"created_by"?: string | null,"deal_id"?: string,"id"?: string,"logistics_confirmed"?: boolean,"notes"?: string | null,"reopen_reason"?: string | null,"responsible_user_id"?: string,"scheduled_at"?: string | null,"started_at"?: string | null,"status"?: Database["public"]['Enums']["campaign_status"],"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -989,14 +1039,14 @@ isOneToOne: false
                   ]
                 },"order_items": {
                   Row: {
-                    "created_at": string,"description": string | null,"frame_description": string | null,"id": string,"item_type": Database["public"]['Enums']["order_item_type"],"lens_filter": string | null,"lens_type": string | null,"line_total": number | null,"order_id": string,"quantity": number,"unit_price": number,"updated_at": string
+                    "created_at": string,"description": string | null,"discount_amount": number,"discount_reason": string | null,"frame_description": string | null,"id": string,"item_type": Database["public"]['Enums']["order_item_type"],"lens_filter": string | null,"lens_type": string | null,"line_total": number | null,"order_id": string,"quantity": number,"unit_price": number,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"description"?: string | null,"frame_description"?: string | null,"id"?: string,"item_type": Database["public"]['Enums']["order_item_type"],"lens_filter"?: string | null,"lens_type"?: string | null,"line_total"?: never,"order_id": string,"quantity": number,"unit_price": number,"updated_at"?: string
+                    "created_at"?: string,"description"?: string | null,"discount_amount"?: number,"discount_reason"?: string | null,"frame_description"?: string | null,"id"?: string,"item_type": Database["public"]['Enums']["order_item_type"],"lens_filter"?: string | null,"lens_type"?: string | null,"line_total"?: never,"order_id": string,"quantity": number,"unit_price": number,"updated_at"?: string
                   }
                   Update: {
-                    "created_at"?: string,"description"?: string | null,"frame_description"?: string | null,"id"?: string,"item_type"?: Database["public"]['Enums']["order_item_type"],"lens_filter"?: string | null,"lens_type"?: string | null,"line_total"?: never,"order_id"?: string,"quantity"?: number,"unit_price"?: number,"updated_at"?: string
+                    "created_at"?: string,"description"?: string | null,"discount_amount"?: number,"discount_reason"?: string | null,"frame_description"?: string | null,"id"?: string,"item_type"?: Database["public"]['Enums']["order_item_type"],"lens_filter"?: string | null,"lens_type"?: string | null,"line_total"?: never,"order_id"?: string,"quantity"?: number,"unit_price"?: number,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -1588,7 +1638,7 @@ isOneToOne: false
                   ]
                 },"v_campaigns": {
                   Row: {
-                    "agreement_id": string,"attended_headcount": number | null,"branch_id": string | null,"branch_name": string | null,"cancel_reason": string | null,"cancelled_at": string | null,"capture_closed_at": string | null,"capture_reopened_at": string | null,"city_id": string,"city_name": string,"closed_at": string | null,"company_id": string,"company_name": string,"created_at": string,"deal_id": string,"deal_name_branch": string,"estimated_billing_amount": number | null,"first_session_date": string | null,"id": string,"last_session_date": string | null,"logistics_confirmed": boolean,"no_show_count": number | null,"notes": string | null,"reopen_reason": string | null,"responsible_user_id": string,"responsible_user_name": string,"scheduled_at": string | null,"scheduled_count": number | null,"sessions_count": number | null,"started_at": string | null,"status": Database["public"]['Enums']["campaign_status"],"target_employees_n": number | null,"updated_at": string
+                    "agreement_id": string,"attended_headcount": number | null,"branch_id": string | null,"branch_name": string | null,"cancel_reason": string | null,"cancelled_at": string | null,"capture_closed_at": string | null,"capture_reopened_at": string | null,"checklist_complete": boolean | null,"city_id": string,"city_name": string,"closed_at": string | null,"company_id": string,"company_name": string,"created_at": string,"deal_id": string,"deal_name_branch": string,"estimated_billing_amount": number | null,"first_session_date": string | null,"id": string,"last_session_date": string | null,"logistics_confirmed": boolean,"no_show_count": number | null,"notes": string | null,"reopen_reason": string | null,"responsible_user_id": string,"responsible_user_name": string,"scheduled_at": string | null,"scheduled_count": number | null,"sessions_count": number | null,"started_at": string | null,"status": Database["public"]['Enums']["campaign_status"],"target_employees_n": number | null,"updated_at": string
                   }
                   ComputedFields: never
                   Relationships: [
@@ -2557,6 +2607,9 @@ isOneToOne: false
                            },
 "register_historical_delivery":
 { Args: { "p_delivered_at": string,"p_order_id": string,"p_receiver": string }; Returns: undefined
+                           },
+"reschedule_campaign_session":
+{ Args: { "p_end_time": string,"p_expected_updated_at"?: string,"p_location_detail": string,"p_reason": string,"p_session_date": string,"p_session_id": string,"p_start_time": string }; Returns: undefined
                            }
           }
           Enums: {

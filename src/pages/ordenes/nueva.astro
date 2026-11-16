@@ -257,7 +257,7 @@ const backHref = campaign ? `/jornadas/${campaign.id}` : '/ordenes';
             {initialRows.map((row, i) => (
               <div class="border-b border-slate-100 pb-4" data-item-wrap>
                 <OrderItemFields prefix={`items[${i}]`} values={row}>
-                  <div class="col-span-2 flex justify-end sm:col-span-7">
+                  <div class="col-span-2 flex justify-end sm:col-span-12">
                     <button type="button" class="btn btn-sm btn-danger" data-remove-item>Quitar ítem</button>
                   </div>
                 </OrderItemFields>
@@ -267,7 +267,7 @@ const backHref = campaign ? `/jornadas/${campaign.id}` : '/ordenes';
           <template id="item-template">
             <div class="border-b border-slate-100 pb-4" data-item-wrap>
               <OrderItemFields prefix="items[__i__]">
-                <div class="col-span-2 flex justify-end sm:col-span-7">
+                <div class="col-span-2 flex justify-end sm:col-span-12">
                   <button type="button" class="btn btn-sm btn-danger" data-remove-item>Quitar ítem</button>
                 </div>
               </OrderItemFields>
@@ -392,7 +392,8 @@ const backHref = campaign ? `/jornadas/${campaign.id}` : '/ordenes';
       [...items.querySelectorAll<HTMLElement>('[data-item-row]')].reduce((sum, row) => {
         const q = Number(row.querySelector<HTMLInputElement>('[data-qty]')?.value || 0);
         const p = Number(row.querySelector<HTMLInputElement>('[data-price]')?.value || 0);
-        return sum + q * p;
+        const d = Number(row.querySelector<HTMLInputElement>('[data-discount]')?.value || 0);
+        return sum + q * p - d;
       }, 0);
 
     const refresh = () => {
