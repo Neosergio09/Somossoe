@@ -17,6 +17,10 @@ declare global {
         role: AppRole | null;
         active: boolean;
       } | null;
+      /** Rol con el que Dirección previsualiza la interfaz ("Ver como"); profile.role ya lo refleja */
+      viewAs?: AppRole | null;
+      /** Rol real de la cuenta cuando "Ver como" está activo */
+      realRole?: AppRole | null;
       /** Resumen del circuito ya cargado por la página (lo reutiliza el layout) */
       summary?: CircuitSummary;
     }

@@ -9,6 +9,7 @@ import { takeFlash } from '../lib/flash';
 import { hasRole } from '../lib/auth';
 import { ROLE_LABELS } from '../lib/labels';
 import { loadSummary, MONEY_ROLES } from '../lib/circuit';
+import { VIEW_AS_ROLES } from '../lib/viewAs';
 import type { IconName } from '../lib/icons';
 
 interface Props {
@@ -76,6 +77,10 @@ const groups: { phase: string; items: NavItem[] }[] = s
       },
     ]
   : [];
+// "Ver como" (solo Dirección): previsualizar la interfaz de otro rol
+const viewAs = Astro.locals.viewAs ?? null;
+const canViewAs = (Astro.locals.realRole ?? profile?.role) === 'direccion';
+const backPath = path + Astro.url.search;
 const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWith(href));
 const initial = (profile?.full_name ?? '?').trim().charAt(0).toUpperCase();
 ---
@@ -161,7 +166,9 @@ const initial = (profile?.full_name ?? '?').trim().charAt(0).toUpperCase();
               <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-700 text-[13px] font-semibold text-slate-50">{initial}</span>
               <span class="flex min-w-0 flex-1 flex-col leading-tight lg:group-data-[collapsed=true]:hidden">
                 <span class="truncate text-[13px] font-medium text-slate-50">{profile!.full_name}</span>
-                <span class="truncate text-xs text-slate-400">{profile!.role ? ROLE_LABELS[profile!.role] : ''}</span>
+                <span class="truncate text-xs text-slate-400">
+                  {viewAs ? `Dirección · como ${ROLE_LABELS[viewAs]}` : profile!.role ? ROLE_LABELS[profile!.role] : ''}
+                </span>
               </span>
               <form method="post" action="/logout" class="lg:group-data-[collapsed=true]:hidden">
                 <button type="submit" class="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 hover:bg-slate-800" aria-label="Salir" title="Salir">
@@ -185,7 +192,48 @@ const initial = (profile?.full_name ?? '?').trim().charAt(0).toUpperCase();
                 <span class="flex-1 truncate">Buscar comprador, orden, empresa o acción…</span>
                 <kbd class="hidden rounded-md border border-slate-300 bg-white px-1.5 py-0.5 font-sans text-xs font-semibold text-slate-600 sm:inline">Ctrl K</kbd>
               </button>
+              {canViewAs && (
+                <form method="post" action="/ver-como" class="ml-auto flex items-center gap-2" data-view-as>
+                  <input type="hidden" name="back" value={backPath} />
+                  <label for="view-as" class="hidden text-sm font-medium text-slate-600 sm:inline">
+                    Ver como
+                  </label>
+                  <select
+                    id="view-as"
+                    name="role"
+                    aria-label="Ver el CRM como otro rol"
+                    class:list={[
+                      'h-11 rounded-xl border px-3 text-sm font-medium',
+                      viewAs ? 'border-amber-400 bg-amber-50 text-amber-900' : 'border-slate-300 bg-white text-slate-700',
+                    ]}
+                  >
+                    <option value="" selected={!viewAs}>Dirección (yo)</option>
+                    {VIEW_AS_ROLES.map((r) => (
+                      <option value={r} selected={viewAs === r}>
+                        {ROLE_LABELS[r]}
+                      </option>
+                    ))}
+                  </select>
+                  <noscript>
+                    <button type="submit" class="btn">Ver</button>
+                  </noscript>
+                </form>
+              )}
             </header>
+            {viewAs && (
+              <div role="status" class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900 lg:px-8">
+                <Icon name="eye" size={16} class="shrink-0" />
+                <span class="flex-1">
+                  Estás viendo el CRM como <strong>{ROLE_LABELS[viewAs]}</strong>. Es una vista previa: los datos son los de Dirección y no se guardan cambios.
+                </span>
+                <form method="post" action="/ver-como">
+                  <input type="hidden" name="back" value={backPath} />
+                  <button type="submit" class="font-semibold underline underline-offset-2 hover:no-underline">
+                    Volver a Dirección
+                  </button>
+                </form>
+              </div>
+            )}
 
             <main class="mx-auto w-full max-w-7xl px-4 py-6 lg:px-8">
               {flash && (
@@ -237,6 +285,11 @@ const initial = (profile?.full_name ?? '?').trim().charAt(0).toUpperCase();
     collapseBtn.setAttribute('aria-expanded', String(!next));
     collapseBtn.setAttribute('aria-label', next ? 'Expandir la barra lateral' : 'Contraer la barra lateral');
     document.cookie = `nav_collapsed=${next ? '1' : '0'}; path=/; max-age=31536000; samesite=lax`;
+  });
+
+  // "Ver como": cambiar de vista al elegir un rol
+  document.querySelector<HTMLFormElement>('form[data-view-as]')?.addEventListener('change', (e) => {
+    (e.currentTarget as HTMLFormElement).requestSubmit();
   });
 
   // Menú en el celular

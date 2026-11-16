@@ -13,3 +13,5 @@ dist/
 *.log
 .DS_Store
 .idea/
+
+.claude/settings.local.json
