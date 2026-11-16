@@ -23,6 +23,7 @@ export const ICONS = {
   chevronRight: 'M9 6l6 6-6 6',
   menu: 'M4 6h16M4 12h16M4 18h16',
   logout: 'M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10',
+  upload: 'M12 16V4M7 9l5-5 5 5M4 16v4h16v-4',
   history: 'M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2',
 } as const;
 

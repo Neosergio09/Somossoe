@@ -1,0 +1,96 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro';
+import { hasRole } from '../../../lib/auth';
+import { fmtDateTime } from '../../../lib/format';
+import { ensure, FormError, runActions } from '../../../lib/forms';
+import { readWorkbook } from '../../../lib/xlsx';
+import { interpretWorkbook } from '../../../lib/excelImport';
+import { IMPORT_STATUS_BADGE, IMPORT_STATUS_LABELS } from '../../../lib/labels';
+
+if (!hasRole(Astro.locals, 'direccion')) return Astro.redirect('/');
+
+const { supabase } = Astro.locals;
+// Límite de cuerpo de las funciones en Vercel: 4,5 MB
+const MAX_BYTES = 4 * 1024 * 1024;
+
+const outcome = await runActions(Astro, {
+  upload: async (form) => {
+    const file = form.get('file');
+    if (!(file instanceof File) || file.size === 0) throw new FormError('Seleccione el archivo .xlsx.');
+    if (!/\.xlsx$/i.test(file.name)) throw new FormError('El archivo debe ser .xlsx (Excel). Si es .xls, ábralo y guárdelo como .xlsx.');
+    if (file.size > MAX_BYTES) throw new FormError('El archivo supera 4 MB. Elimine imágenes o pestañas que no sean de ventas y vuelva a intentar.');
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const sha = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((b) => b.toString(16).padStart(2, '0')).join('');
+    let sheets;
+    try {
+      sheets = await interpretWorkbook(readWorkbook(bytes));
+    } catch (e) {
+      throw new FormError(e instanceof Error ? e.message : 'No se pudo leer el archivo.');
+    }
+    if (!sheets.some((s) => s.rows.length)) throw new FormError('No se encontraron filas de ventas: ninguna hoja tiene encabezados NOMBRE y CÉDULA/DOCUMENTO.');
+
+    // El archivo no se guarda: solo su huella y las filas ya interpretadas
+    const id = ensure(await supabase.rpc('excel_import_create', { p_file_name: file.name, p_file_sha256: sha, p_sheets: sheets }));
+    const total = sheets.reduce((n, s) => n + s.rows.length, 0);
+    return { message: `Archivo leído: ${total} filas en ${sheets.filter((s) => s.rows.length).length} hojas. Revise y clasifique cada hoja.`, redirect: `/admin/importar-excel/${id}` };
+  },
+});
+if (outcome?.kind === 'redirect') return outcome.response;
+const error = outcome?.kind === 'error' ? outcome.error : null;
+
+const { data: imports } = await supabase
+  .from('excel_imports')
+  .select('id, file_name, status, uploaded_at, users_profiles(full_name), excel_import_sheets(status), excel_import_rows(status)')
+  .order('uploaded_at', { ascending: false });
+
+const countBy = <T extends { status: string }>(list: T[] | null | undefined, status: string) => (list ?? []).filter((x) => x.status === status).length;
+---
+
+<AppLayout title="Importar Excel histórico" error={error}>
+  <h1 class="mb-1">Importar Excel histórico</h1>
+  <p class="mb-4 max-w-3xl text-sm text-slate-600">
+    Carga las ventas del libro «INFORME JORNADAS SOE» como órdenes históricas. El archivo se lee por encabezados, cada hoja se
+    revisa antes de cargar y una venta ya cargada no se duplica aunque se suba otra copia. Solo Dirección.
+  </p>
+
+  <section class="card mb-4 max-w-3xl">
+    <h2 class="mb-2">Subir archivo</h2>
+    <form method="post" enctype="multipart/form-data" class="flex flex-wrap items-end gap-3">
+      <input type="hidden" name="_action" value="upload" />
+      <div class="min-w-64 flex-1">
+        <label class="label" for="file">Archivo .xlsx (máx. 4 MB)</label>
+        <input class="input" id="file" name="file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required />
+      </div>
+      <button class="btn btn-primary" type="submit">Leer archivo</button>
+    </form>
+    <ul class="mt-3 list-disc space-y-1 pl-5 text-xs text-slate-500">
+      <li>No se leen RX, ADD ni ningún dato clínico; las columnas sin encabezado reconocido se ignoran.</li>
+      <li>La hoja GARANTIAS se omite: sus bloques no tienen encabezado fiable.</li>
+      <li>Costos del bloque COSTO LENTE / MONTURA / KIT entran como estimados; UTILIDAD no se importa (el CRM la recalcula).</li>
+      <li>El archivo original no se guarda: solo su huella y las filas interpretadas.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2 class="mb-3">Importaciones</h2>
+    <div class="overflow-x-auto">
+      <table class="table">
+        <thead><tr><th>Archivo</th><th>Subido</th><th>Estado</th><th class="text-right">Hojas cargadas</th><th class="text-right">Filas cargadas</th><th class="text-right">Con error</th></tr></thead>
+        <tbody>
+          {(imports ?? []).map((i) => (
+            <tr>
+              <td><a href={`/admin/importar-excel/${i.id}`}>{i.file_name}</a></td>
+              <td class="text-sm">{fmtDateTime(i.uploaded_at)} · {i.users_profiles?.full_name ?? '—'}</td>
+              <td><span class={IMPORT_STATUS_BADGE[i.status]}>{IMPORT_STATUS_LABELS[i.status]}</span></td>
+              <td class="text-right">{countBy(i.excel_import_sheets, 'cargada')} / {(i.excel_import_sheets ?? []).filter((s) => s.status !== 'omitida').length}</td>
+              <td class="text-right">{countBy(i.excel_import_rows, 'cargada')} / {(i.excel_import_rows ?? []).length}</td>
+              <td class="text-right">{countBy(i.excel_import_rows, 'con_error') || '—'}</td>
+            </tr>
+          ))}
+          {!imports?.length && <tr><td colspan="6" class="text-slate-500">Aún no hay importaciones.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</AppLayout>

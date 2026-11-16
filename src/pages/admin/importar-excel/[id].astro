@@ -1,0 +1,421 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro';
+import { hasRole } from '../../../lib/auth';
+import { cop, fmtDate, fmtDateTime } from '../../../lib/format';
+import { checkbox, date, ensure, FormError, parseForm, runActions, text, uuid, z } from '../../../lib/forms';
+import {
+  BALANCE_RULE_LABELS,
+  BUYER_DOCUMENT_LABELS,
+  COLLECTION_RESPONSIBLE_LABELS,
+  HISTORICAL_STAGE_HINTS,
+  HISTORICAL_STAGE_LABELS,
+  IMPORT_STATUS_BADGE,
+  IMPORT_STATUS_LABELS,
+  MODALITY_RULE_LABELS,
+  PAYROLL_LABELS,
+  ROW_STATUS_BADGE,
+  ROW_STATUS_LABELS,
+  SHEET_STATUS_BADGE,
+  SHEET_STATUS_LABELS,
+} from '../../../lib/labels';
+import type { Database } from '../../../lib/database.types';
+
+if (!hasRole(Astro.locals, 'direccion')) return Astro.redirect('/');
+
+type Enums = Database['public']['Enums'];
+const { supabase } = Astro.locals;
+const id = Astro.params.id!;
+const keys = <T extends string>(o: Record<T, string>) => Object.keys(o) as [T, ...T[]];
+
+const validate = async (sheetId: string) => ensure(await supabase.rpc('excel_import_validate_sheet', { p_sheet_id: sheetId }));
+
+const outcome = await runActions(Astro, {
+  update_sheet: async (form) => {
+    const input = parseForm(
+      z.object({
+        sheet_id: uuid(),
+        company_id: uuid().optional(),
+        agreement_id: uuid().optional(),
+        modality_rule: z.enum(keys(MODALITY_RULE_LABELS)),
+        historical_stage: z.enum(keys(HISTORICAL_STAGE_LABELS)),
+        balance_rule: z.enum(keys(BALANCE_RULE_LABELS)),
+        collection_responsible: z.enum(keys(COLLECTION_RESPONSIBLE_LABELS)),
+        installment_periodicity: z.enum(keys(PAYROLL_LABELS)).optional(),
+        first_due_date: date().optional(),
+      }),
+      form,
+    );
+    const { sheet_id, ...patch } = input;
+    ensure(
+      await supabase
+        .from('excel_import_sheets')
+        .update({
+          ...patch,
+          company_id: patch.company_id ?? null,
+          // El convenio debe ser de la misma empresa
+          agreement_id: patch.company_id ? (patch.agreement_id ?? null) : null,
+          installment_periodicity: patch.installment_periodicity ?? null,
+          first_due_date: patch.first_due_date ?? null,
+        })
+        .eq('id', sheet_id)
+        .eq('import_id', id)
+        .select('id')
+        .single(),
+    );
+    await validate(sheet_id);
+    return { message: 'Clasificación guardada y filas revalidadas.' };
+  },
+  toggle_sheet: async (form) => {
+    const input = parseForm(z.object({ sheet_id: uuid(), status: z.enum(['pendiente', 'omitida']) }), form);
+    ensure(await supabase.from('excel_import_sheets').update({ status: input.status }).eq('id', input.sheet_id).eq('import_id', id).select('id').single());
+    if (input.status === 'pendiente') await validate(input.sheet_id);
+    return { message: input.status === 'omitida' ? 'Hoja omitida: no se cargará.' : 'Hoja incluida de nuevo.' };
+  },
+  update_row: async (form) => {
+    const input = parseForm(
+      z.object({
+        row_id: uuid(),
+        sheet_id: uuid(),
+        full_name: text(150).optional(),
+        document_type: z.enum(keys(BUYER_DOCUMENT_LABELS)),
+        document_id: text(30).optional(),
+        company_id: uuid().optional(),
+        omit: checkbox(),
+        omit_reason: text(300).optional(),
+      }),
+      form,
+    );
+    if (input.omit && !input.omit_reason?.trim()) throw new FormError('Indique por qué se omite la fila.');
+    ensure(
+      await supabase
+        .from('excel_import_rows')
+        .update({
+          full_name: input.full_name?.trim() || null,
+          document_type: input.document_type,
+          document_id: input.document_id?.trim() || null,
+          company_id: input.company_id ?? null,
+          omit: input.omit,
+          omit_reason: input.omit ? input.omit_reason!.trim() : null,
+        })
+        .eq('id', input.row_id)
+        .eq('sheet_id', input.sheet_id)
+        .select('id')
+        .single(),
+    );
+    await validate(input.sheet_id);
+    return { message: input.omit ? 'Fila omitida.' : 'Fila corregida y revalidada.' };
+  },
+  validate: async (form) => {
+    await validate(parseForm(z.object({ sheet_id: uuid() }), form).sheet_id);
+    return { message: 'Filas revalidadas.' };
+  },
+  load: async (form) => {
+    const { sheet_id } = parseForm(z.object({ sheet_id: uuid() }), form);
+    const loaded = ensure(await supabase.rpc('excel_import_load_sheet', { p_sheet_id: sheet_id }));
+    return { message: `Hoja cargada: ${loaded} orden(es) histórica(s) creada(s).` };
+  },
+  discard: async () => {
+    ensure(await supabase.from('excel_imports').update({ status: 'descartada' }).eq('id', id).select('id').single());
+    return { message: 'Importación descartada. Puede volver a subir el archivo.', redirect: '/admin/importar-excel' };
+  },
+});
+if (outcome?.kind === 'redirect') return outcome.response;
+const error = outcome?.kind === 'error' ? outcome.error : null;
+const v = outcome?.kind === 'error' ? outcome.values : {};
+const lastAction = outcome?.kind === 'error' ? outcome.action : '';
+
+const { data: imp } = await supabase
+  .from('excel_imports')
+  .select('id, file_name, file_sha256, status, uploaded_at, users_profiles(full_name)')
+  .eq('id', id)
+  .maybeSingle();
+if (!imp) return new Response('Importación no encontrada', { status: 404 });
+
+const { data: sheetData } = await supabase
+  .from('excel_import_sheets')
+  .select('*, excel_import_rows(status)')
+  .eq('import_id', id)
+  .order('sheet_index');
+const sheets = sheetData ?? [];
+const withRows = sheets.filter((s) => s.excel_import_rows.length);
+const requested = Astro.url.searchParams.get('hoja');
+const sheet =
+  sheets.find((s) => s.id === requested) ??
+  withRows.find((s) => s.status === 'pendiente') ??
+  withRows[0] ??
+  sheets[0];
+
+const ROW_FILTERS = ['todas', ...keys(ROW_STATUS_LABELS)] as const;
+const filter = (ROW_FILTERS as readonly string[]).includes(Astro.url.searchParams.get('estado') ?? '') ? Astro.url.searchParams.get('estado')! : 'todas';
+
+const [rowsRes, companiesRes, agreementsRes] = await Promise.all([
+  sheet
+    ? (() => {
+        let q = supabase.from('excel_import_rows').select('*, companies(name), orders(order_number)').eq('sheet_id', sheet.id).order('row_number');
+        if (filter !== 'todas') q = q.eq('status', filter as Enums['excel_row_status']);
+        return q;
+      })()
+    : Promise.resolve({ data: [] }),
+  supabase.from('companies').select('id, name').order('name'),
+  sheet?.company_id
+    ? supabase.from('agreements_convenios').select('id, status, max_installments, payroll_frequency, valid_until').eq('company_id', sheet.company_id).order('created_at', { ascending: false })
+    : Promise.resolve({ data: [] }),
+]);
+const rows = rowsRes.data ?? [];
+const companies = companiesRes.data ?? [];
+const agreements = agreementsRes.data ?? [];
+
+const counts = (s: (typeof sheets)[number]) =>
+  Object.fromEntries(keys(ROW_STATUS_LABELS).map((k) => [k, s.excel_import_rows.filter((r) => r.status === k).length])) as Record<Enums['excel_row_status'], number>;
+const sheetCounts = sheet ? counts(sheet) : null;
+const editable = imp.status === 'en_revision' && sheet?.status === 'pendiente';
+const sheetHref = (sid: string, estado = 'todas') => `?hoja=${sid}${estado !== 'todas' ? `&estado=${estado}` : ''}`;
+const marks = (m: unknown) => Object.entries((m ?? {}) as Record<string, string>);
+---
+
+<AppLayout title={`Importación · ${imp.file_name}`} error={error}>
+  <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <a href="/admin/importar-excel" class="text-sm">← Importaciones</a>
+      <h1>{imp.file_name}</h1>
+      <p class="text-sm text-slate-600">
+        Subido {fmtDateTime(imp.uploaded_at)} por {imp.users_profiles?.full_name ?? '—'} · huella <code class="text-xs">{imp.file_sha256.slice(0, 12)}</code>
+      </p>
+    </div>
+    <div class="flex items-center gap-2">
+      <span class={IMPORT_STATUS_BADGE[imp.status]}>{IMPORT_STATUS_LABELS[imp.status]}</span>
+      {
+        imp.status === 'en_revision' && !sheets.some((s) => s.status === 'cargada') && (
+          <form method="post" onsubmit="return confirm('¿Descartar esta importación? No se carga nada.')">
+            <input type="hidden" name="_action" value="discard" />
+            <button class="btn btn-sm btn-danger" type="submit">Descartar</button>
+          </form>
+        )
+      }
+    </div>
+  </div>
+
+  <div class="grid gap-4 lg:grid-cols-4">
+    <nav class="card h-fit p-2 lg:col-span-1" aria-label="Hojas del archivo">
+      <ul class="space-y-1 text-sm">
+        {sheets.map((s) => (
+          <li>
+            <a href={sheetHref(s.id)} class:list={['flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 no-underline hover:bg-slate-100', s.id === sheet?.id && 'bg-slate-100 font-semibold']}>
+              <span class="truncate">{s.sheet_name}</span>
+              <span class="flex shrink-0 items-center gap-1">
+                {s.map_code && <span class="text-xs text-slate-500">{s.map_code}</span>}
+                <span class={SHEET_STATUS_BADGE[s.status]}>{s.status === 'pendiente' ? s.excel_import_rows.length : SHEET_STATUS_LABELS[s.status]}</span>
+              </span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+
+    {
+      sheet && (
+        <div class="space-y-4 lg:col-span-3">
+          <section class="card">
+            <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <h2>
+                {sheet.sheet_name} {sheet.map_code && <span class="text-sm font-normal text-slate-500">· mapa {sheet.map_code}</span>}
+              </h2>
+              <span class={SHEET_STATUS_BADGE[sheet.status]}>{SHEET_STATUS_LABELS[sheet.status]}</span>
+            </div>
+            {sheet.skip_reason && <p class="text-sm text-slate-600">{sheet.skip_reason}</p>}
+            {sheet.detected_columns.length > 0 && <p class="text-xs text-slate-500">Columnas reconocidas: {sheet.detected_columns.join(' · ')}</p>}
+            {sheet.loaded_at && <p class="mt-1 text-sm text-green-700">Cargada {fmtDateTime(sheet.loaded_at)}.</p>}
+
+            {
+              editable && (
+                <form method="post" class="mt-4 space-y-3">
+                  <input type="hidden" name="_action" value="update_sheet" />
+                  <input type="hidden" name="sheet_id" value={sheet.id} />
+                  <div class="grid-form">
+                    <div>
+                      <label class="label">Empresa de la hoja</label>
+                      <select class="input" name="company_id">
+                        <option value="">— Particulares / sin empresa —</option>
+                        {companies.map((c) => <option value={c.id} selected={c.id === sheet.company_id}>{c.name}</option>)}
+                      </select>
+                      <p class="mt-1 text-xs text-slate-500">Si la fila trae su propia EMPRESA (hoja de empresas clientes), se usa esa.</p>
+                    </div>
+                    <div>
+                      <label class="label">Convenio</label>
+                      <select class="input" name="agreement_id" disabled={!sheet.company_id}>
+                        <option value="">— Sin convenio —</option>
+                        {agreements.map((a) => (
+                          <option value={a.id} selected={a.id === sheet.agreement_id}>
+                            {a.max_installments} cuotas {a.payroll_frequency} · {a.status}{a.valid_until ? ` · hasta ${fmtDate(a.valid_until)}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      {!sheet.company_id && <p class="mt-1 text-xs text-slate-500">Guarde primero la empresa para elegir su convenio.</p>}
+                    </div>
+                    <div>
+                      <label class="label">Modalidad</label>
+                      <select class="input" name="modality_rule">
+                        {keys(MODALITY_RULE_LABELS).map((k) => <option value={k} selected={k === sheet.modality_rule}>{MODALITY_RULE_LABELS[k]}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label class="label">Etapa en que quedan</label>
+                      <select class="input" name="historical_stage">
+                        {keys(HISTORICAL_STAGE_LABELS).map((k) => <option value={k} selected={k === sheet.historical_stage}>{HISTORICAL_STAGE_LABELS[k]} — {HISTORICAL_STAGE_HINTS[k]}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label class="label">Saldo cuando no hay ABONO</label>
+                      <select class="input" name="balance_rule">
+                        {keys(BALANCE_RULE_LABELS).map((k) => <option value={k} selected={k === sheet.balance_rule}>{BALANCE_RULE_LABELS[k]}</option>)}
+                      </select>
+                      <p class="mt-1 text-xs text-slate-500">Con ABONO en la fila: saldo = valor − abono (recaudo declarado).</p>
+                    </div>
+                    <div>
+                      <label class="label">Cobro de nómina a cargo de</label>
+                      <select class="input" name="collection_responsible">
+                        {keys(COLLECTION_RESPONSIBLE_LABELS).map((k) => <option value={k} selected={k === sheet.collection_responsible}>{COLLECTION_RESPONSIBLE_LABELS[k]}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label class="label">Periodicidad de cuotas (nómina con saldo)</label>
+                      <select class="input" name="installment_periodicity">
+                        <option value="">—</option>
+                        {keys(PAYROLL_LABELS).map((k) => <option value={k} selected={k === sheet.installment_periodicity}>{PAYROLL_LABELS[k]}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label class="label">Próxima cuota (nómina con saldo)</label>
+                      <input class="input" name="first_due_date" type="date" value={sheet.first_due_date ?? ''} />
+                    </div>
+                  </div>
+                  <p class="text-xs text-slate-500">
+                    Las cuotas pendientes de nómina se toman de la columna CUOTAS. Cada hoja es una clasificación humana: no se crea una jornada por pestaña.
+                  </p>
+                  <div class="flex flex-wrap gap-2">
+                    <button class="btn btn-primary" type="submit">Guardar clasificación</button>
+                  </div>
+                </form>
+              )
+            }
+
+            {
+              imp.status === 'en_revision' && sheet.status !== 'cargada' && !sheet.skip_reason && (
+                <div class="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+                  {sheet.status === 'pendiente' && sheetCounts && (
+                    <form method="post" onsubmit={`return confirm('¿Cargar ${sheetCounts.lista} orden(es) histórica(s)? Esta acción no se deshace desde aquí.')`}>
+                      <input type="hidden" name="_action" value="load" />
+                      <input type="hidden" name="sheet_id" value={sheet.id} />
+                      <button class="btn btn-primary" type="submit" disabled={sheetCounts.con_error > 0 || sheetCounts.lista === 0}>
+                        Cargar {sheetCounts.lista} fila(s)
+                      </button>
+                    </form>
+                  )}
+                  <form method="post">
+                    <input type="hidden" name="_action" value="toggle_sheet" />
+                    <input type="hidden" name="sheet_id" value={sheet.id} />
+                    <input type="hidden" name="status" value={sheet.status === 'omitida' ? 'pendiente' : 'omitida'} />
+                    <button class="btn" type="submit">{sheet.status === 'omitida' ? 'Incluir hoja' : 'Omitir hoja'}</button>
+                  </form>
+                  {sheetCounts && sheetCounts.con_error > 0 && <span class="text-sm text-red-700">Corrija u omita las {sheetCounts.con_error} fila(s) con error para cargar.</span>}
+                </div>
+              )
+            }
+          </section>
+
+          {
+            sheet.excel_import_rows.length > 0 && sheetCounts && (
+              <section class="card">
+                <div class="mb-3 flex flex-wrap gap-1 text-sm">
+                  {ROW_FILTERS.map((f) => {
+                    const n = f === 'todas' ? sheet.excel_import_rows.length : sheetCounts[f as Enums['excel_row_status']];
+                    return (n > 0 || f === 'todas') && (
+                      <a href={sheetHref(sheet.id, f)} class:list={['rounded-full border px-3 py-1 no-underline', f === filter ? 'border-slate-800 bg-slate-800 text-white' : 'border-slate-300 text-slate-700 hover:bg-slate-100']}>
+                        {f === 'todas' ? 'Todas' : ROW_STATUS_LABELS[f as Enums['excel_row_status']]} ({n})
+                      </a>
+                    );
+                  })}
+                </div>
+                <div class="overflow-x-auto">
+                  <table class="table text-sm">
+                    <thead>
+                      <tr>
+                        <th>Fila</th><th>Estado</th><th>Persona</th><th>Empresa</th><th>Fecha</th><th class="text-right">Venta</th>
+                        <th class="text-right">Abono</th><th class="text-right">Cuotas</th><th>Laboratorio</th><th class="text-right">Costos</th><th>Marcas</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((r) => (
+                        <>
+                          <tr class:list={[r.status === 'con_error' && 'bg-red-50']}>
+                            <td>{r.row_number}{r.block_number > 1 && <span class="text-xs text-slate-500"> · b{r.block_number}</span>}</td>
+                            <td class="whitespace-nowrap">
+                              <span class={ROW_STATUS_BADGE[r.status]}>{ROW_STATUS_LABELS[r.status]}</span>
+                              {r.order_id && <a class="ml-1 text-xs" href={`/ordenes/${r.order_id}`}>orden</a>}
+                            </td>
+                            <td>
+                              {r.full_name ?? <span class="text-slate-400">sin nombre</span>}
+                              <div class="text-xs text-slate-500">{r.document_id ?? 'sin documento'}{r.phone && ` · ${r.phone}`}</div>
+                            </td>
+                            <td class="text-xs">{r.companies?.name ?? r.company_name ?? (sheet.company_id ? 'de la hoja' : '—')}</td>
+                            <td class="whitespace-nowrap text-xs">{fmtDate(r.event_date)}</td>
+                            <td class="text-right whitespace-nowrap">{cop(r.sale_value)}</td>
+                            <td class="text-right whitespace-nowrap">{r.paid_declared != null ? cop(r.paid_declared) : '—'}</td>
+                            <td class="text-right">{r.installments ?? '—'}</td>
+                            <td class="text-xs">{[r.lab_name, r.lab_reference].filter(Boolean).join(' · ') || '—'}</td>
+                            <td class="text-right whitespace-nowrap text-xs">
+                              {[r.cost_lens, r.cost_frame, r.cost_kit].some((c) => c != null) ? cop((r.cost_lens ?? 0) + (r.cost_frame ?? 0) + (r.cost_kit ?? 0)) : '—'}
+                            </td>
+                            <td class="text-xs">{marks(r.legacy_marks).map(([k, val]) => <div title={val}>{k}: {val.length > 30 ? `${val.slice(0, 30)}…` : val}</div>)}</td>
+                          </tr>
+                          {(r.errors.length > 0 || r.omit || (editable && r.status !== 'cargada')) && (
+                            <tr class="border-t-0">
+                              <td></td>
+                              <td colspan="10" class="pt-0">
+                                {r.errors.length > 0 && <ul class="text-xs text-red-700">{r.errors.map((e) => <li>• {e}</li>)}</ul>}
+                                {r.omit && <p class="text-xs text-slate-500">Omitida: {r.omit_reason}</p>}
+                                {editable && r.status !== 'cargada' && (
+                                  <details open={lastAction === 'update_row' && v.row_id === r.id}>
+                                    <summary class="cursor-pointer text-xs text-brand-700">Corregir u omitir</summary>
+                                    <form method="post" class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-6 sm:items-end">
+                                      <input type="hidden" name="_action" value="update_row" />
+                                      <input type="hidden" name="row_id" value={r.id} />
+                                      <input type="hidden" name="sheet_id" value={sheet.id} />
+                                      <div class="col-span-2"><label class="label">Nombre</label><input class="input" name="full_name" value={r.full_name ?? ''} /></div>
+                                      <div>
+                                        <label class="label">Tipo doc.</label>
+                                        <select class="input" name="document_type">
+                                          {keys(BUYER_DOCUMENT_LABELS).map((k) => <option value={k} selected={k === r.document_type}>{BUYER_DOCUMENT_LABELS[k]}</option>)}
+                                        </select>
+                                      </div>
+                                      <div><label class="label">Documento</label><input class="input" name="document_id" value={r.document_id ?? ''} /></div>
+                                      <div class="col-span-2">
+                                        <label class="label">Empresa de la fila</label>
+                                        <select class="input" name="company_id">
+                                          <option value="">{r.company_name ? `Buscar «${r.company_name}»` : 'La de la hoja'}</option>
+                                          {companies.map((c) => <option value={c.id} selected={c.id === r.company_id}>{c.name}</option>)}
+                                        </select>
+                                      </div>
+                                      <label class="col-span-2 flex items-center gap-2 text-sm sm:col-span-1"><input type="checkbox" name="omit" checked={r.omit} /> Omitir</label>
+                                      <div class="col-span-2 sm:col-span-4"><label class="label">Motivo para omitir</label><input class="input" name="omit_reason" value={r.omit_reason ?? ''} placeholder="Obligatorio si se omite (p. ej. fila de prueba, venta anulada)" /></div>
+                                      <button class="btn btn-primary btn-sm" type="submit">Guardar</button>
+                                    </form>
+                                  </details>
+                                )}
+                              </td>
+                            </tr>
+                          )}
+                        </>
+                      ))}
+                      {!rows.length && <tr><td colspan="11" class="text-slate-500">Sin filas con este filtro.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )
+          }
+        </div>
+      )
+    }
+  </div>
+</AppLayout>
