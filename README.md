@@ -83,3 +83,16 @@ Hoy las facturas se registran a mano (RF-M06-01 F1). La consulta automática (F2
 
 1. Validar contra la documentación vigente de Alegra la autenticación (Basic con correo y token), la ruta `GET /invoices/{id}` y los campos leídos (`total`, `status`, `date`, `numberTemplate.fullNumber`).
 2. Registrar en cada factura su **ID en Alegra** y usar **Consultar en Alegra**: el resultado se guarda en la factura y en `alegra_sync_events`, y se marca si el total difiere.
+
+## Marca
+
+Fuente: *SOE — Mini Manual de Marca V1 LOCKED* (fuera del repo, en `manual de marca/`). El logo es un arte maestro bloqueado: no se redibuja, recolorea, deforma ni se le agregan efectos.
+
+| Archivo (`public/`) | Uso |
+| :--- | :--- |
+| `brand/SOE_*_locked.svg` | Masters del manual (logo principal, wordmark, franja de íconos, composición institucional). |
+| `brand/soe-logo.png` / `soe-logo-blanco.png` | Logo principal con descriptor, a color y versión blanca (solo sobre fondos oscuros). Usado en el login. |
+| `brand/soe-wordmark.png` / `soe-wordmark-blanco.png` | Wordmark para espacios reducidos. El blanco va en la barra lateral. |
+| `favicon.ico`, `favicon.png`, `apple-touch-icon.png` | Íconos generados desde el wordmark. |
+
+Paleta (tokens en `src/styles/global.css`): azul profundo `#0A1D4D` (`ink`), teal médico `#06A6A6` (`accent`, `brand-600`), gris claro `#E6E9ED` (`soe-gray`). Tipografías: Manrope (títulos, `font-display`) e Inter (texto).

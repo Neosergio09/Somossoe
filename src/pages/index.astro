@@ -205,7 +205,7 @@ const dot: Record<Tone, string> = { ok: 'bg-teal-500', warn: 'bg-amber-500', dan
       class="relative grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:[grid-template-columns:repeat(var(--steps),minmax(0,1fr))]"
       style={`--steps: ${steps.length}`}
     >
-      <li aria-hidden="true" class="pointer-events-none absolute top-7 right-[7%] left-[7%] hidden h-0.5 bg-slate-700 lg:block"></li>
+      <li aria-hidden="true" class="pointer-events-none absolute top-7 right-[7%] left-[7%] hidden h-0.5 bg-white/15 lg:block"></li>
       {steps.map((st) => {
         const on = st.id === current.id;
         return (
@@ -215,13 +215,13 @@ const dot: Record<Tone, string> = { ok: 'bg-teal-500', warn: 'bg-amber-500', dan
               aria-current={on ? 'step' : undefined}
               class:list={[
                 'flex h-full flex-col items-center gap-1 rounded-2xl border px-1.5 pb-3.5 text-center hover:no-underline',
-                on ? 'border-accent bg-slate-800' : 'border-transparent hover:bg-slate-800/60',
+                on ? 'border-accent bg-white/10' : 'border-transparent hover:bg-white/5',
               ]}
             >
               <span
                 class:list={[
                   'mb-2 flex h-14 w-14 items-center justify-center rounded-full border-[3px] border-ink',
-                  on ? 'bg-accent text-ink shadow-[0_0_0_3px_var(--color-accent)]' : 'bg-slate-800 text-slate-200 shadow-[0_0_0_2px_#334155]',
+                  on ? 'bg-accent text-ink shadow-[0_0_0_3px_var(--color-accent)]' : 'bg-ink-soft text-slate-200 shadow-[0_0_0_2px_#2c4280]',
                 ]}
               >
                 <Icon name={st.icon} size={22} />

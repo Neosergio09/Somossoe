@@ -330,7 +330,7 @@ const marks = (m: unknown) => Object.entries((m ?? {}) as Record<string, string>
                   {ROW_FILTERS.map((f) => {
                     const n = f === 'todas' ? sheet.excel_import_rows.length : sheetCounts[f as Enums['excel_row_status']];
                     return (n > 0 || f === 'todas') && (
-                      <a href={sheetHref(sheet.id, f)} class:list={['rounded-full border px-3 py-1 no-underline', f === filter ? 'border-slate-800 bg-slate-800 text-white' : 'border-slate-300 text-slate-700 hover:bg-slate-100']}>
+                      <a href={sheetHref(sheet.id, f)} class:list={['rounded-full border px-3 py-1 no-underline', f === filter ? 'border-ink bg-ink text-white' : 'border-slate-300 text-slate-700 hover:bg-slate-100']}>
                         {f === 'todas' ? 'Todas' : ROW_STATUS_LABELS[f as Enums['excel_row_status']]} ({n})
                       </a>
                     );

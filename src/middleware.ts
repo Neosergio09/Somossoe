@@ -19,7 +19,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   context.locals.profile = null;
 
   const path = context.url.pathname;
-  const isAsset = path.startsWith('/_astro') || path.startsWith('/favicon');
+  const isAsset = path.startsWith('/_astro') || path.startsWith('/favicon') || path.startsWith('/brand/') || path === '/apple-touch-icon.png';
 
   if (isAsset) {
     return next();

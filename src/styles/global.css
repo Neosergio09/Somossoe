@@ -1,17 +1,24 @@
 @import "tailwindcss";
 
-/* Disposición "Circuito SOE" (anterior: etiqueta git v1-antes-rediseno) */
+/* Disposición "Circuito SOE" (anterior: etiqueta git v1-antes-rediseno).
+   Paleta y tipografías: Mini Manual de Marca SOE V1 LOCKED.
+   - Azul profundo SOE #0A1D4D → ink (logo, títulos, fondos premium)
+   - Teal médico SOE  #06A6A6 → accent / brand-600 (acentos, íconos, destacados)
+   - Gris claro SOE   #E6E9ED → soe-gray (fondos suaves, divisores)
+   Los tonos brand-700/800 son variantes oscuras del teal para texto sobre blanco (contraste AA). */
 @theme {
-  --color-brand-50: #f0fdfa;
-  --color-brand-100: #ccfbf1;
-  --color-brand-600: #0d9488;
-  --color-brand-700: #0f766e;
-  --color-brand-800: #115e59;
-  --color-ink: #0f172a;
-  --color-accent: #2dd4bf;
-  --color-canvas: #eef2f7;
+  --color-brand-50: #ebfafa;
+  --color-brand-100: #c9f1f1;
+  --color-brand-600: #06a6a6;
+  --color-brand-700: #057f80;
+  --color-brand-800: #076465;
+  --color-ink: #0a1d4d;
+  --color-ink-soft: #14295f;
+  --color-accent: #06a6a6;
+  --color-soe-gray: #e6e9ed;
+  --color-canvas: #eef0f3;
   --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-display: "Space Grotesk", Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-display: Manrope, Inter, ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer base {
@@ -19,10 +26,10 @@
     @apply bg-canvas text-slate-800 antialiased;
   }
   h1 {
-    @apply font-display text-2xl font-bold tracking-tight text-slate-900;
+    @apply font-display text-2xl font-bold tracking-tight text-ink;
   }
   h2 {
-    @apply font-display text-base font-semibold text-slate-900;
+    @apply font-display text-base font-semibold text-ink;
   }
   a {
     @apply text-brand-700 hover:underline;
@@ -43,7 +50,7 @@
     @apply inline-flex items-center justify-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:no-underline disabled:opacity-50;
   }
   .btn-primary {
-    @apply border-ink bg-ink text-white hover:bg-slate-800;
+    @apply border-ink bg-ink text-white hover:bg-ink-soft;
   }
   .btn-danger {
     @apply border-red-600 bg-white text-red-700 hover:bg-red-50;

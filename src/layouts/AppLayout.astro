@@ -91,10 +91,13 @@ const initial = (profile?.full_name ?? '?').trim().charAt(0).toUpperCase();
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#0A1D4D" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" />
     <title>{title} · CRM SOE</title>
   </head>
   <body>
@@ -110,16 +113,13 @@ const initial = (profile?.full_name ?? '?').trim().charAt(0).toUpperCase();
           >
             <div class="mb-4 flex items-center justify-between gap-2 px-1 lg:group-data-[collapsed=true]:flex-col lg:group-data-[collapsed=true]:gap-3">
               <a href="/" class="flex items-center gap-3 hover:no-underline">
-                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-accent font-display text-[14px] font-bold text-ink">SOE</span>
-                <span class="flex flex-col leading-tight lg:group-data-[collapsed=true]:hidden">
-                  <span class="font-display text-[16px] font-semibold text-slate-50">Somos SOE</span>
-                  <span class="text-xs text-slate-400">CRM · Piloto</span>
-                </span>
+                <img src="/brand/soe-wordmark-blanco.png" alt="SOE" width="88" height="20" class="h-5 w-auto shrink-0 lg:group-data-[collapsed=true]:h-2.5" />
+                <span class="border-l border-white/20 pl-3 text-xs leading-tight text-slate-300 lg:group-data-[collapsed=true]:hidden">CRM<br />Piloto</span>
               </a>
               <button
                 type="button"
                 id="nav-collapse"
-                class="hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 lg:flex"
+                class="hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10 text-slate-300 hover:bg-white/15 lg:flex"
                 aria-label={collapsed ? 'Expandir la barra lateral' : 'Contraer la barra lateral'}
                 aria-expanded={collapsed ? 'false' : 'true'}
               >
@@ -139,8 +139,8 @@ const initial = (profile?.full_name ?? '?').trim().charAt(0).toUpperCase();
                           title={item.label}
                           aria-current={isActive(item.href) ? 'page' : undefined}
                           class:list={[
-                            'relative flex min-h-10 items-center gap-3 rounded-[10px] px-2.5 text-sm font-medium hover:bg-slate-800 hover:no-underline lg:group-data-[collapsed=true]:justify-center',
-                            isActive(item.href) ? 'bg-slate-800 text-white shadow-[inset_3px_0_0_var(--color-accent)]' : 'text-slate-300',
+                            'relative flex min-h-10 items-center gap-3 rounded-[10px] px-2.5 text-sm font-medium hover:bg-white/10 hover:no-underline lg:group-data-[collapsed=true]:justify-center',
+                            isActive(item.href) ? 'bg-white/10 text-white shadow-[inset_3px_0_0_var(--color-accent)]' : 'text-slate-300',
                           ]}
                         >
                           <Icon name={item.icon} class="shrink-0" />
@@ -149,7 +149,7 @@ const initial = (profile?.full_name ?? '?').trim().charAt(0).toUpperCase();
                             <span
                               class:list={[
                                 'flex h-5 min-w-[22px] items-center justify-center rounded-full px-1.5 text-xs font-semibold lg:group-data-[collapsed=true]:absolute lg:group-data-[collapsed=true]:top-1 lg:group-data-[collapsed=true]:right-1.5 lg:group-data-[collapsed=true]:h-2 lg:group-data-[collapsed=true]:min-w-2 lg:group-data-[collapsed=true]:p-0 lg:group-data-[collapsed=true]:text-[0px]',
-                                item.hot ? 'bg-amber-400 text-stone-900' : 'bg-slate-700 text-slate-200',
+                                item.hot ? 'bg-amber-400 text-stone-900' : 'bg-white/15 text-slate-100',
                               ]}
                             >
                               {item.count}
@@ -163,8 +163,8 @@ const initial = (profile?.full_name ?? '?').trim().charAt(0).toUpperCase();
               ))}
             </nav>
 
-            <div class="mt-2 flex items-center gap-3 border-t border-slate-800 px-1.5 pt-3">
-              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-700 text-[13px] font-semibold text-slate-50">{initial}</span>
+            <div class="mt-2 flex items-center gap-3 border-t border-white/10 px-1.5 pt-3">
+              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-[13px] font-semibold text-ink">{initial}</span>
               <span class="flex min-w-0 flex-1 flex-col leading-tight lg:group-data-[collapsed=true]:hidden">
                 <span class="truncate text-[13px] font-medium text-slate-50">{profile!.full_name}</span>
                 <span class="truncate text-xs text-slate-400">
@@ -172,7 +172,7 @@ const initial = (profile?.full_name ?? '?').trim().charAt(0).toUpperCase();
                 </span>
               </span>
               <form method="post" action="/logout" class="lg:group-data-[collapsed=true]:hidden">
-                <button type="submit" class="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 hover:bg-slate-800" aria-label="Salir" title="Salir">
+                <button type="submit" class="flex h-8 w-8 items-center justify-center rounded-lg text-slate-300 hover:bg-white/10" aria-label="Salir" title="Salir">
                   <Icon name="logout" size={17} />
                 </button>
               </form>
