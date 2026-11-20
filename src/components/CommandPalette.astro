@@ -4,9 +4,10 @@
 import Icon from './Icon.astro';
 import { hasRole } from '../lib/auth';
 import { MONEY_ROLES } from '../lib/circuit';
+import { canSeeModule, type ModuleKey } from '../lib/modules';
 
 const L = Astro.locals;
-type Item = { type: string; label: string; sub: string; href: string };
+type Item = { type: string; label: string; sub: string; href: string; module?: ModuleKey };
 const actions: Item[] = [
   ...(hasRole(L, 'comercial')
     ? [
@@ -26,18 +27,18 @@ const actions: Item[] = [
 const pages: Item[] = [
   { type: 'Ir a', label: 'Circuito', sub: 'Inicio', href: '/' },
   { type: 'Ir a', label: 'Tablero', sub: 'Qué atender primero', href: '/tablero' },
-  { type: 'Ir a', label: 'Empresas', sub: 'Vender', href: '/empresas' },
-  { type: 'Ir a', label: 'Oportunidades', sub: 'Vender', href: '/oportunidades' },
-  { type: 'Ir a', label: 'Convenios', sub: 'Vender', href: '/convenios' },
-  { type: 'Ir a', label: 'Jornadas', sub: 'Operar', href: '/jornadas' },
-  { type: 'Ir a', label: 'Órdenes', sub: 'Operar', href: '/ordenes' },
-  { type: 'Ir a', label: 'Producción y entregas', sub: 'Operar', href: '/produccion' },
-  { type: 'Ir a', label: 'Posventa', sub: 'Operar', href: '/garantias' },
-  { type: 'Ir a', label: 'Facturación', sub: 'Cobrar', href: '/facturas' },
+  { type: 'Ir a', label: 'Empresas', sub: 'Vender', href: '/empresas', module: 'empresas' as ModuleKey },
+  { type: 'Ir a', label: 'Oportunidades', sub: 'Vender', href: '/oportunidades', module: 'oportunidades' as ModuleKey },
+  { type: 'Ir a', label: 'Convenios', sub: 'Vender', href: '/convenios', module: 'convenios' as ModuleKey },
+  { type: 'Ir a', label: 'Jornadas', sub: 'Operar', href: '/jornadas', module: 'jornadas' as ModuleKey },
+  { type: 'Ir a', label: 'Órdenes', sub: 'Operar', href: '/ordenes', module: 'ordenes' as ModuleKey },
+  { type: 'Ir a', label: 'Producción y entregas', sub: 'Operar', href: '/produccion', module: 'produccion' as ModuleKey },
+  { type: 'Ir a', label: 'Posventa', sub: 'Operar', href: '/garantias', module: 'posventa' as ModuleKey },
+  { type: 'Ir a', label: 'Facturación', sub: 'Cobrar', href: '/facturas', module: 'facturas' as ModuleKey },
   ...(hasRole(L, ...MONEY_ROLES)
     ? [
-        { type: 'Ir a', label: 'Recaudo y cartera', sub: 'Cobrar', href: '/recaudo' },
-        { type: 'Ir a', label: 'Cuotas vencidas y por cobrar', sub: 'Cobrar', href: '/recaudo?vista=cartera' },
+        { type: 'Ir a', label: 'Recaudo y cartera', sub: 'Cobrar', href: '/recaudo', module: 'recaudo' as ModuleKey },
+        { type: 'Ir a', label: 'Cuotas vencidas y por cobrar', sub: 'Cobrar', href: '/recaudo?vista=cartera', module: 'recaudo' as ModuleKey },
       ]
     : []),
   { type: 'Ir a', label: 'Compradores', sub: 'Control', href: '/compradores' },
@@ -48,7 +49,7 @@ const pages: Item[] = [
   id="palette"
   aria-label="Buscar o ir a"
   class="m-0 mx-auto mt-[10vh] w-[calc(100%-2rem)] max-w-xl overflow-hidden rounded-2xl border-0 p-0 shadow-2xl backdrop:bg-slate-900/55"
-  data-items={JSON.stringify([...actions, ...pages])}
+  data-items={JSON.stringify([...actions, ...pages.filter((p) => !p.module || canSeeModule(L, p.module))])}
 >
   <form method="dialog">
     <label class="flex h-14 items-center gap-3 border-b border-slate-200 px-4">

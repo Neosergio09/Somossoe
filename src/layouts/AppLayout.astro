@@ -10,6 +10,7 @@ import { hasRole } from '../lib/auth';
 import { ROLE_LABELS } from '../lib/labels';
 import { loadSummary, MONEY_ROLES } from '../lib/circuit';
 import { VIEW_AS_ROLES } from '../lib/viewAs';
+import { canSeeModule, type ModuleKey } from '../lib/modules';
 import type { IconName } from '../lib/icons';
 
 interface Props {
@@ -29,7 +30,7 @@ const s = showChrome ? (Astro.locals.summary ?? (await loadSummary(Astro.locals.
 const canSeeMoney = hasRole(Astro.locals, ...MONEY_ROLES);
 const isDireccion = hasRole(Astro.locals, 'direccion');
 
-type NavItem = { href: string; label: string; icon: IconName; count?: number; hot?: boolean };
+type NavItem = { href: string; label: string; icon: IconName; count?: number; hot?: boolean; module?: ModuleKey };
 const groups: { phase: string; items: NavItem[] }[] = s
   ? [
       {
@@ -42,25 +43,25 @@ const groups: { phase: string; items: NavItem[] }[] = s
       {
         phase: 'Vender',
         items: [
-          { href: '/empresas', label: 'Empresas', icon: 'building' },
-          { href: '/oportunidades', label: 'Oportunidades', icon: 'target', count: s.vender.quietas, hot: s.vender.quietas > 0 },
-          { href: '/convenios', label: 'Convenios', icon: 'pen', count: s.convenios_por_aprobar },
+          { href: '/empresas', label: 'Empresas', icon: 'building', module: 'empresas' },
+          { href: '/oportunidades', label: 'Oportunidades', icon: 'target', module: 'oportunidades', count: s.vender.quietas, hot: s.vender.quietas > 0 },
+          { href: '/convenios', label: 'Convenios', icon: 'pen', module: 'convenios', count: s.convenios_por_aprobar },
         ],
       },
       {
         phase: 'Operar',
         items: [
-          { href: '/jornadas', label: 'Jornadas', icon: 'calendar', count: s.jornada.en_ejecucion },
-          { href: '/ordenes', label: 'Órdenes', icon: 'file', count: s.orden.por_verificar },
-          { href: '/produccion', label: 'Producción', icon: 'flask', count: s.producir.en_lab, hot: s.producir.atrasadas > 0 },
-          { href: '/garantias', label: 'Posventa', icon: 'shield', count: s.posventa },
+          { href: '/jornadas', label: 'Jornadas', icon: 'calendar', module: 'jornadas', count: s.jornada.en_ejecucion },
+          { href: '/ordenes', label: 'Órdenes', icon: 'file', module: 'ordenes', count: s.orden.por_verificar },
+          { href: '/produccion', label: 'Producción', icon: 'flask', module: 'produccion', count: s.producir.en_lab, hot: s.producir.atrasadas > 0 },
+          { href: '/garantias', label: 'Posventa', icon: 'shield', module: 'posventa', count: s.posventa },
         ],
       },
       {
         phase: 'Cobrar',
         items: [
-          { href: '/facturas', label: 'Facturación', icon: 'invoice', count: canSeeMoney ? s.facturar.sin_factura : 0, hot: s.facturar.diferencias > 0 },
-          ...(canSeeMoney ? [{ href: '/recaudo', label: 'Recaudo', icon: 'coin' as IconName, count: s.cobrar.vencidas, hot: s.cobrar.vencidas > 0 }] : []),
+          { href: '/facturas', label: 'Facturación', icon: 'invoice', module: 'facturas', count: canSeeMoney ? s.facturar.sin_factura : 0, hot: s.facturar.diferencias > 0 },
+          ...(canSeeMoney ? [{ href: '/recaudo', label: 'Recaudo', icon: 'coin' as IconName, module: 'recaudo' as ModuleKey, count: s.cobrar.vencidas, hot: s.cobrar.vencidas > 0 }] : []),
         ],
       },
       {
@@ -78,6 +79,10 @@ const groups: { phase: string; items: NavItem[] }[] = s
       },
     ]
   : [];
+// Cada rol ve en el menú solo los módulos de su trabajo (src/lib/modules.ts)
+const visibleGroups = groups
+  .map((g) => ({ ...g, items: g.items.filter((it) => !it.module || canSeeModule(Astro.locals, it.module)) }))
+  .filter((g) => g.items.length > 0);
 // "Ver como" (solo Dirección): previsualizar la interfaz de otro rol
 const viewAs = Astro.locals.viewAs ?? null;
 const canViewAs = (Astro.locals.realRole ?? profile?.role) === 'direccion';
@@ -128,7 +133,7 @@ const initial = (profile?.full_name ?? '?').trim().charAt(0).toUpperCase();
             </div>
 
             <nav class="flex-1 overflow-y-auto">
-              {groups.map((g) => (
+              {visibleGroups.map((g) => (
                 <div class="pb-4">
                   <div class="px-2.5 pb-1.5 text-[11px] font-semibold tracking-[0.08em] text-slate-400 uppercase lg:group-data-[collapsed=true]:sr-only">{g.phase}</div>
                   <ul class="space-y-0.5">
