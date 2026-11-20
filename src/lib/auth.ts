@@ -1,4 +1,6 @@
-import type { AppRole } from './labels';
+import type { AstroGlobal } from 'astro';
+import { setFlash } from './flash';
+import { ROLE_LABELS, type AppRole } from './labels';
 
 /** Para mostrar u ocultar controles; la autorización real la hace la BD (RLS). */
 export function hasRole(locals: App.Locals, ...roles: AppRole[]): boolean {
@@ -18,4 +20,15 @@ export function isOwnerComercial(
   if (!hasRole(locals, 'comercial')) return false;
   if (assignedUserId == null) return allowUnassigned;
   return assignedUserId === locals.userId;
+}
+
+/**
+ * Guarda de pantallas de creación: si el rol no corresponde, vuelve a `back`
+ * con un aviso. Solo es interfaz; la BD (RLS) sigue siendo la que autoriza.
+ */
+export function denyUnless(Astro: AstroGlobal, back: string, ...roles: AppRole[]): Response | null {
+  if (hasRole(Astro.locals, ...roles)) return null;
+  const who = roles.map((r) => ROLE_LABELS[r]).join(' o ');
+  setFlash(Astro.cookies, { type: 'error', message: `Esta acción le corresponde a ${who}.` });
+  return Astro.redirect(back);
 }

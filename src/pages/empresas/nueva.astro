@@ -3,6 +3,10 @@ import AppLayout from '../../layouts/AppLayout.astro';
 import { checkbox, ensure, FormError, int, parseForm, runActions, text, uuid, z } from '../../lib/forms';
 import { PAYROLL_LABELS } from '../../lib/labels';
 import { activeUsers, allActiveCities } from '../../lib/options';
+import { denyUnless } from '../../lib/auth';
+
+const denied = denyUnless(Astro, '/empresas', 'comercial');
+if (denied) return denied;
 
 const { supabase, userId } = Astro.locals;
 
