@@ -4,6 +4,10 @@ import { fmtDate, todayCo } from '../../lib/format';
 import { checkbox, date, ensure, parseForm, runActions, text, time, uuid, z } from '../../lib/forms';
 import { activeUsers, operationalCities } from '../../lib/options';
 import type { TablesInsert } from '../../lib/database.types';
+import { denyUnless } from '../../lib/auth';
+
+const denied = denyUnless(Astro, '/jornadas', 'operacion');
+if (denied) return denied;
 
 const { supabase } = Astro.locals;
 const dealId = Astro.url.searchParams.get('deal_id');

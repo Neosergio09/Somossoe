@@ -3,11 +3,14 @@ import AppLayout from '../../layouts/AppLayout.astro';
 import OrderItemFields from '../../components/OrderItemFields.astro';
 import SupportFile from '../../components/SupportFile.astro';
 import { filesRequired, supportPathFrom } from '../../lib/supports';
-import { hasRole } from '../../lib/auth';
+import { denyUnless, hasRole } from '../../lib/auth';
 import { fmtDate, fmtDateTime } from '../../lib/format';
 import { checkbox, date, ensure, FormError, int, parseForm, runActions, text, uuid, z } from '../../lib/forms';
 import { BUYER_DOCUMENT_LABELS, PAYMENT_MODALITY_LABELS, PAYROLL_LABELS } from '../../lib/labels';
 import { itemRows, parseItems } from '../../lib/orders';
+
+const denied = denyUnless(Astro, '/ordenes', 'comercial', 'administracion_cartera');
+if (denied) return denied;
 
 const { supabase } = Astro.locals;
 const params = Astro.url.searchParams;
