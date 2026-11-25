@@ -2,10 +2,21 @@ import type { AstroGlobal } from 'astro';
 import { setFlash } from './flash';
 import { ROLE_LABELS, type AppRole } from './labels';
 
+/** Super administrador: pasa todas las guardas de rol y de propiedad (igual que en la BD). */
+export function isSuperadmin(locals: App.Locals): boolean {
+  return !!locals.profile?.active && locals.profile.role === 'superadmin';
+}
+
+/** Roles que pueden usar "Ver como" (previsualizar la interfaz de otro rol). */
+export function canUseViewAs(role: AppRole | null | undefined): boolean {
+  return role === 'direccion' || role === 'superadmin';
+}
+
 /** Para mostrar u ocultar controles; la autorización real la hace la BD (RLS). */
 export function hasRole(locals: App.Locals, ...roles: AppRole[]): boolean {
   const role = locals.profile?.role;
-  return !!role && !!locals.profile?.active && roles.includes(role);
+  if (!role || !locals.profile?.active) return false;
+  return role === 'superadmin' || roles.includes(role);
 }
 
 /**
@@ -18,6 +29,7 @@ export function isOwnerComercial(
   { allowUnassigned = false } = {},
 ): boolean {
   if (!hasRole(locals, 'comercial')) return false;
+  if (isSuperadmin(locals)) return true;
   if (assignedUserId == null) return allowUnassigned;
   return assignedUserId === locals.userId;
 }

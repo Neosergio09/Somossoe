@@ -158,7 +158,7 @@ const [branches, contacts, deals, agreements, campaigns, users, cities] = await 
   supabase.from('v_deals_board').select('id, deal_name_branch, city_name, stage, estimated_billing_amount, assigned_user_name, days_inactive').eq('company_id', id).order('created_at', { ascending: false }),
   supabase.from('v_agreements').select('id, deal_name_branch, effective_status, max_installments, payroll_frequency, valid_until').eq('company_id', id).order('created_at', { ascending: false }),
   supabase.from('v_campaigns').select('id, deal_name_branch, city_name, status, first_session_date, attended_headcount').eq('company_id', id).order('created_at', { ascending: false }),
-  activeUsers(supabase, ['comercial', 'direccion']),
+  activeUsers(supabase, ['comercial', 'direccion', 'superadmin']),
   allActiveCities(supabase),
 ]);
 

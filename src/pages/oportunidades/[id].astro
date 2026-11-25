@@ -91,7 +91,7 @@ const [board, logs, agreements, campaigns, branches, contacts, cities, users, or
   supabase.from('company_branches').select('id, name').eq('company_id', deal.company_id).order('name'),
   supabase.from('contacts').select('id, full_name, role_title').eq('company_id', deal.company_id).eq('active', true).order('full_name'),
   operationalCities(supabase),
-  activeUsers(supabase, ['comercial', 'direccion']),
+  activeUsers(supabase, ['comercial', 'direccion', 'superadmin']),
   activeOrigins(supabase),
 ]);
 

@@ -22,6 +22,7 @@ export const ROLE_MODULES: Record<AppRole, ModuleKey[]> = {
   administracion_cartera: ['empresas', 'convenios', 'ordenes', 'facturas', 'recaudo'],
   direccion: ALL,
   socio: ALL,
+  superadmin: ALL,
   proveedor_lab: [],
 };
 
