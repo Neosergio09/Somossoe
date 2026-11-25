@@ -19,7 +19,7 @@ else if (owner) query = query.eq('assigned_user_id', owner);
 const [{ data: deals }, cities, users] = await Promise.all([
   query,
   operationalCities(supabase),
-  activeUsers(supabase, ['comercial', 'direccion']),
+  activeUsers(supabase, ['comercial', 'direccion', 'superadmin']),
 ]);
 
 const canMove = hasRole(Astro.locals, 'comercial', 'direccion');

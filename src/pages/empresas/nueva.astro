@@ -91,7 +91,7 @@ const error = outcome?.kind === 'error' ? outcome.error : null;
 const v = outcome?.kind === 'error' ? outcome.values : {};
 
 const [users, cities] = await Promise.all([
-  activeUsers(supabase, ['comercial', 'direccion']),
+  activeUsers(supabase, ['comercial', 'direccion', 'superadmin']),
   allActiveCities(supabase),
 ]);
 ---

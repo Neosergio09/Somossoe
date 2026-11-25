@@ -1,10 +1,11 @@
 import type { APIRoute } from 'astro';
+import { canUseViewAs } from '../lib/auth';
 import { isViewAsRole, safeBackPath, VIEW_AS_COOKIE } from '../lib/viewAs';
 
-/** Activa o quita la vista "Ver como" (solo Dirección). */
+/** Activa o quita la vista "Ver como" (Dirección y superadmin). */
 export const POST: APIRoute = async ({ locals, request, cookies, redirect }) => {
   const realRole = locals.realRole ?? locals.profile?.role;
-  if (!locals.profile?.active || realRole !== 'direccion') {
+  if (!locals.profile?.active || !canUseViewAs(realRole)) {
     return new Response('No autorizado', { status: 403 });
   }
 

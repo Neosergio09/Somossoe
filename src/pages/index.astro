@@ -175,6 +175,7 @@ const tasksByRole: Record<string, Task[]> = {
     t(s.producir.atrasadas, plural(s.producir.atrasadas, 'producción atrasada', 'producciones atrasadas'), 'Laboratorio fuera de la fecha prometida', '/?paso=producir', 'danger'),
   ],
 };
+tasksByRole.superadmin = tasksByRole.direccion;
 const tasks = (role ? (tasksByRole[role] ?? []) : []).filter((x) => x.n > 0);
 
 const alerts = [

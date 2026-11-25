@@ -1,5 +1,6 @@
 import { defineMiddleware } from 'astro:middleware';
 import { createSupabaseServerClient } from './lib/supabase';
+import { canUseViewAs } from './lib/auth';
 import { isViewAsRole, VIEW_AS_COOKIE } from './lib/viewAs';
 
 const PUBLIC_PATHS = new Set(['/login']);
@@ -37,9 +38,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
       .maybeSingle();
     context.locals.profile = profile;
 
-    // "Ver como": Dirección ve la interfaz de otro rol (la RLS no cambia)
+    // "Ver como": Dirección (o el superadmin) ve la interfaz de otro rol (la RLS no cambia)
     const viewAs = context.cookies.get(VIEW_AS_COOKIE)?.value;
-    if (profile?.active && profile.role === 'direccion' && isViewAsRole(viewAs)) {
+    if (profile?.active && canUseViewAs(profile.role) && isViewAsRole(viewAs)) {
       context.locals.realRole = profile.role;
       context.locals.viewAs = viewAs;
       context.locals.profile = { ...profile, role: viewAs };

@@ -62,8 +62,8 @@ const outcome = await runActions(Astro, {
       }),
       form,
     );
-    if (input.user_id === Astro.locals.userId && (!input.active || input.role !== 'direccion')) {
-      throw new FormError('No puede desactivarse ni quitarse el rol de Dirección a sí mismo.');
+    if (input.user_id === Astro.locals.userId && (!input.active || (input.role !== 'direccion' && input.role !== 'superadmin'))) {
+      throw new FormError('No puede desactivarse ni quitarse a sí mismo el rol de Dirección o Super administrador.');
     }
     ensure(
       await supabase
