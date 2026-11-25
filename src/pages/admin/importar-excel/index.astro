@@ -66,7 +66,9 @@ const countBy = <T extends { status: string }>(list: T[] | null | undefined, sta
     </form>
     <ul class="mt-3 list-disc space-y-1 pl-5 text-xs text-slate-500">
       <li>No se leen RX, ADD ni ningún dato clínico; las columnas sin encabezado reconocido se ignoran.</li>
-      <li>La hoja GARANTIAS se omite: sus bloques no tienen encabezado fiable.</li>
+      <li>Las hojas de garantías se omiten: las garantías se registran en Posventa sobre la orden cargada.</li>
+      <li>Plantilla 2026: se omiten las hojas de consulta (INICIO, LABORATORIOS, POR ENTREGAR, BUSCAR) y las ocultas (BASE, CONFIG); el estado del lente define la etapa de cada orden.</li>
+      <li>Quienes no compraron (p. ej. «pendientes por llamar» y «desistieron» en MAGNETRON) no se cargan como ventas: pasan a Seguimiento de la jornada que se asigne a la hoja.</li>
       <li>Costos del bloque COSTO LENTE / MONTURA / KIT entran como estimados; UTILIDAD no se importa (el CRM la recalcula).</li>
       <li>El archivo original no se guarda: solo su huella y las filas interpretadas.</li>
     </ul>

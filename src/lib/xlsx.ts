@@ -6,7 +6,7 @@ export type CellValue = string | number | boolean | Date;
 export type Cell = { value: CellValue; formula?: string };
 /** Fila → columna (0 = A) → celda */
 export type SheetCells = Map<number, Map<number, Cell>>;
-export type WorkbookSheet = { name: string; index: number; cells: SheetCells };
+export type WorkbookSheet = { name: string; index: number; cells: SheetCells; hidden?: boolean };
 
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
 const decode = (s: string) =>
@@ -78,7 +78,8 @@ export function readWorkbook(data: Uint8Array): WorkbookSheet[] {
     const rid = /r:id="([^"]+)"|\bid="([^"]+)"/.exec(attrs);
     const path = rels.get(rid?.[1] ?? rid?.[2] ?? '') ?? `xl/worksheets/sheet${i + 1}.xml`;
     const xml = files[path] ? strFromU8(files[path]) : '';
-    sheets.push({ name, index: i + 1, cells: parseSheet(xml, shared, dates) });
+    const hidden = /\bstate="(hidden|veryHidden)"/.test(attrs);
+    sheets.push({ name, index: i + 1, cells: parseSheet(xml, shared, dates), hidden });
   });
   return sheets;
 }

@@ -5,11 +5,11 @@ import DeliveriesPanel from '../../components/DeliveriesPanel.astro';
 import SupportFile from '../../components/SupportFile.astro';
 import { filesRequired, supportHref, supportPathFrom } from '../../lib/supports';
 import { hasRole } from '../../lib/auth';
-import { fmtDateTime } from '../../lib/format';
-import { checkbox, ensure, FormError, parseForm, runActions, text, uuid, z } from '../../lib/forms';
+import { cop, fmtDateTime } from '../../lib/format';
+import { checkbox, ensure, FormError, int, parseForm, runActions, text, uuid, z } from '../../lib/forms';
 import { activeLabs, fulfillmentActions } from '../../lib/fulfillment';
 import { itemLabel, loadDeliveries } from '../../lib/deliveries';
-import { WARRANTY_STATUS_BADGE, WARRANTY_STATUS_LABELS, WARRANTY_TYPE_LABELS } from '../../lib/labels';
+import { CREDIT_NOTE_STATUS_BADGE, CREDIT_NOTE_STATUS_LABELS, WARRANTY_STATUS_BADGE, WARRANTY_STATUS_LABELS, WARRANTY_TYPE_LABELS } from '../../lib/labels';
 import { activeUsers } from '../../lib/options';
 import { orderNumber } from '../../lib/orders';
 
@@ -52,6 +52,37 @@ const outcome = await runActions(Astro, {
     );
     return { message: 'Caso actualizado.' };
   },
+  credit_note: async (form) => {
+    const input = parseForm(
+      z.object({
+        credit_note_status: z.enum(['no_aplica', 'por_solicitar', 'solicitada', 'recibida']),
+        credit_note_lab_provider_id: uuid().optional(),
+        credit_note_amount: int().min(0, { error: 'No puede ser negativo' }).optional(),
+        credit_note_reference: text(60).optional(),
+      }),
+      form,
+    );
+    if (input.credit_note_status !== 'no_aplica' && !input.credit_note_lab_provider_id) {
+      throw new FormError('Indique a qué laboratorio se le cobra la nota crédito.');
+    }
+    if (input.credit_note_status === 'recibida' && (input.credit_note_amount == null || !input.credit_note_reference)) {
+      throw new FormError('Para marcarla recibida registre el número y el valor de la nota crédito.');
+    }
+    ensure(
+      await supabase
+        .from('post_sale_warranties')
+        .update({
+          credit_note_status: input.credit_note_status,
+          credit_note_lab_provider_id: input.credit_note_lab_provider_id ?? null,
+          credit_note_amount: input.credit_note_amount ?? null,
+          credit_note_reference: input.credit_note_reference ?? null,
+        })
+        .eq('id', id)
+        .select('id')
+        .single(),
+    );
+    return { message: `Nota crédito: ${CREDIT_NOTE_STATUS_LABELS[input.credit_note_status].toLowerCase()}.` };
+  },
   close: async (form) => {
     const input = parseForm(z.object({ resolution: text(2000).optional(), evidence_received: checkbox() }), form);
     if (!input.resolution) throw new FormError('Registre la solución aplicada.');
@@ -88,6 +119,9 @@ const closed = w.status === 'cerrada';
 const isOps = hasRole(Astro.locals, 'operacion');
 const isDireccion = hasRole(Astro.locals, 'direccion');
 const canEdit = !closed && (isOps || isDireccion);
+// La nota crédito suele llegar después: se actualiza aunque el caso esté cerrado
+const canEditCredit = isOps || isDireccion;
+const creditStatus = w.credit_note_status ?? 'no_aplica';
 const production = productions.data?.find((p) => p.status !== 'cancelada') ?? null;
 const cancelled = productions.data?.filter((p) => p.status === 'cancelada') ?? [];
 const hasDeliveries = deliveries.records.length > 0;
@@ -165,6 +199,47 @@ const pendingReplacement = !!production && !hasDeliveries;
     </div>
 
     <div class="space-y-4">
+      <section class="card space-y-2 text-sm">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h2>Nota crédito del laboratorio</h2>
+          <span class={CREDIT_NOTE_STATUS_BADGE[creditStatus]}>{CREDIT_NOTE_STATUS_LABELS[creditStatus]}</span>
+        </div>
+        <p class="text-xs text-slate-500">Lo que SOE le cobra al laboratorio responsable de la falla (puede ser distinto al que hace la reposición).</p>
+        {creditStatus !== 'no_aplica' && (
+          <dl class="grid grid-cols-2 gap-2">
+            <div><dt class="label">Laboratorio</dt><dd>{w.credit_note_lab_name ?? '—'}</dd></div>
+            <div><dt class="label">Valor</dt><dd>{cop(w.credit_note_amount)}</dd></div>
+            <div><dt class="label">N.º de nota</dt><dd>{w.credit_note_reference ?? '—'}</dd></div>
+            <div><dt class="label">Actualizada</dt><dd class="text-xs">{fmtDateTime(w.credit_note_updated_at)}</dd></div>
+          </dl>
+        )}
+        {canEditCredit && (
+          <details open={lastAction === 'credit_note'}>
+            <summary class="cursor-pointer text-brand-700">Actualizar nota crédito</summary>
+            <form method="post" class="mt-2 space-y-2">
+              <input type="hidden" name="_action" value="credit_note" />
+              <label class="label">Estado</label>
+              <select class="input" name="credit_note_status">
+                {Object.entries(CREDIT_NOTE_STATUS_LABELS).map(([value, label]) => (
+                  <option value={value} selected={(v.credit_note_status ?? creditStatus) === value}>{label}</option>
+                ))}
+              </select>
+              <label class="label">Laboratorio al que se le cobra</label>
+              <select class="input" name="credit_note_lab_provider_id">
+                <option value="">Seleccione…</option>
+                {labs.map((l) => <option value={l.id} selected={(v.credit_note_lab_provider_id ?? w.credit_note_lab_provider_id) === l.id}>{l.name}</option>)}
+              </select>
+              <label class="label">Valor</label>
+              <input class="input" name="credit_note_amount" type="number" min="0" step="1" value={v.credit_note_amount ?? w.credit_note_amount ?? ''} />
+              <label class="label">N.º de la nota crédito</label>
+              <input class="input" name="credit_note_reference" maxlength="60" value={v.credit_note_reference ?? w.credit_note_reference ?? ''} />
+              <p class="text-xs text-slate-500">Para marcarla recibida se exigen el número y el valor.</p>
+              <button class="btn w-full" type="submit">Guardar nota crédito</button>
+            </form>
+          </details>
+        )}
+      </section>
+
       {
         canEdit && (
           <section class="card text-sm">

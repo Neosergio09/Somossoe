@@ -93,8 +93,8 @@ $$, '42501', null, 'Comercial no libera a producción');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000b1');
 select lives_ok($$
-  insert into public.order_productions (order_id, lab_provider_id, promised_date)
-  values (pg_temp.ord('Nómina'), '11111111-0000-0000-0000-000000000001', private.today_co() + 7)
+  insert into public.order_productions (order_id, lab_provider_id, promised_date, lab_order_reference)
+  values (pg_temp.ord('Nómina'), '11111111-0000-0000-0000-000000000001', private.today_co() + 7, 'P-100')
 $$, 'Operación libera la orden de nómina verificada');
 select is(pg_temp.ops('Nómina'), 'en_produccion', 'la orden pasa a En producción');
 select throws_ok($$
@@ -203,8 +203,8 @@ select lives_ok($$
   values (pg_temp.ord('Nómina'), 'garantia', 'Lente rayado de fábrica', '00000000-0000-0000-0000-0000000000b1')
 $$, 'Operación registra la garantía');
 select lives_ok($$
-  insert into public.order_productions (order_id, warranty_id, lab_provider_id, promised_date)
-  values (pg_temp.ord('Nómina'), pg_temp.warranty(), '11111111-0000-0000-0000-000000000001', private.today_co() + 5)
+  insert into public.order_productions (order_id, warranty_id, lab_provider_id, promised_date, lab_order_reference)
+  values (pg_temp.ord('Nómina'), pg_temp.warranty(), '11111111-0000-0000-0000-000000000001', private.today_co() + 5, 'P-101')
 $$, 'se envía la reposición al laboratorio');
 select is((select status::text from public.post_sale_warranties), 'en_reposicion', 'la garantía pasa a En reposición');
 select is(

@@ -54,7 +54,10 @@ const q = (patch: Record<string, string>) => {
 <AppLayout title="Jornadas">
   <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
     <h1>Jornadas</h1>
-    <p class="text-sm text-slate-500">Las jornadas se programan desde una oportunidad en Convenio Firmado.</p>
+    <div class="flex flex-wrap items-center gap-3">
+      <p class="text-sm text-slate-500">Las jornadas se programan desde una oportunidad en Convenio Firmado.</p>
+      <a class="btn btn-sm" href="/jornadas/seguimiento">Seguimiento de quienes no compraron</a>
+    </div>
   </div>
 
   <div class="grid gap-4 lg:grid-cols-3">

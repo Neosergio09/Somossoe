@@ -49,14 +49,16 @@ const isOpen = (action: string) => lastAction === action;
         <div class="flex flex-wrap items-center gap-2">
           <span class={p.status ? PRODUCTION_STATUS_BADGE[p.status] : 'badge'}>{p.status ? PRODUCTION_STATUS_LABELS[p.status] : ''}</span>
           {p.is_overdue && <span class="badge badge-red">Atrasada: prometida para {fmtDate(p.promised_date)}</span>}
+          {p.days_in_lab != null && <span class="badge">{p.days_in_lab} día(s) en laboratorio</span>}
+          {p.days_since_received != null && <span class="badge badge-amber">{p.days_since_received} día(s) en SOE sin entregar</span>}
         </div>
         <dl class="grid grid-cols-2 gap-2">
           <div><dt class="label">Laboratorio</dt><dd>{p.lab_name}</dd></div>
           <div><dt class="label">Liberada por</dt><dd>{p.released_by_name ?? '—'}<div class="text-xs text-slate-500">{fmtDateTime(p.released_at)}</div></dd></div>
-          <div><dt class="label">Envío al laboratorio</dt><dd>{fmtDate(p.sent_to_lab_at)}</dd></div>
+          <div><dt class="label">Fecha de la orden al laboratorio</dt><dd>{fmtDate(p.sent_to_lab_at)}</dd></div>
           <div><dt class="label">Fecha prometida</dt><dd>{fmtDate(p.promised_date)}</dd></div>
-          <div><dt class="label">Pedido en el laboratorio</dt><dd>{p.lab_order_reference ?? '—'}</dd></div>
-          <div><dt class="label">Lista (fecha real)</dt><dd>{fmtDate(p.ready_at)}</dd></div>
+          <div><dt class="label">N.º de pedido del laboratorio</dt><dd>{p.lab_order_reference ?? '—'}</dd></div>
+          <div><dt class="label">Recibido en SOE</dt><dd>{fmtDate(p.ready_at)}</dd></div>
           {p.notes && <div class="col-span-2"><dt class="label">Notas</dt><dd class="whitespace-pre-line">{p.notes}</dd></div>}
         </dl>
 
@@ -64,11 +66,18 @@ const isOpen = (action: string) => lastAction === action;
           <form method="post" class="flex flex-wrap items-end gap-2 border-t border-slate-100 pt-3">
             <input type="hidden" name="_action" value="production_ready" />
             <input type="hidden" name="production_id" value={p.id} />
+            {!p.lab_order_reference && (
+              <div>
+                <label class="label">N.º de pedido del laboratorio *</label>
+                <input class="input" name="lab_order_reference" required maxlength="60" value={v.lab_order_reference ?? ''} />
+              </div>
+            )}
             <div>
-              <label class="label">Fecha real de listo</label>
+              <label class="label">Fecha de recibido en SOE</label>
               <input class="input" type="date" name="ready_at" required max={today} min={p.sent_to_lab_at ?? undefined} value={v.ready_at ?? today} />
             </div>
-            <button class="btn btn-primary" type="submit">Marcar lista para entregar</button>
+            <button class="btn btn-primary" type="submit">Marcar recibido en SOE</button>
+            {!p.lab_order_reference && <p class="w-full text-xs text-slate-500">Sin el n.º de pedido del laboratorio el lente no se puede marcar como recibido.</p>}
           </form>
         )}
 
@@ -93,7 +102,7 @@ const isOpen = (action: string) => lastAction === action;
                 </select>
               </div>
               <div>
-                <label class="label">Envío al laboratorio</label>
+                <label class="label">Fecha de la orden al laboratorio</label>
                 <input class="input" type="date" name="sent_to_lab_at" required value={p.sent_to_lab_at ?? ''} />
               </div>
               <div>
@@ -146,7 +155,7 @@ const isOpen = (action: string) => lastAction === action;
               {!labs.length && <p class="mt-1 text-xs text-amber-700">No hay laboratorios activos: Dirección los crea en Parámetros.</p>}
             </div>
             <div>
-              <label class="label">Envío al laboratorio *</label>
+              <label class="label">Fecha de la orden al laboratorio *</label>
               <input class="input" type="date" name="sent_to_lab_at" required value={v.sent_to_lab_at ?? today} />
             </div>
             <div>
@@ -156,6 +165,7 @@ const isOpen = (action: string) => lastAction === action;
             <div class="sm:col-span-2">
               <label class="label">N.º de pedido del laboratorio</label>
               <input class="input" name="lab_order_reference" maxlength="60" placeholder="Referencia que entrega el laboratorio (columna ORDEN del Excel)" value={v.lab_order_reference ?? ''} />
+              <p class="mt-1 text-xs text-slate-500">Obligatorio para marcar el lente como recibido. No se puede repetir en el mismo laboratorio.</p>
             </div>
             <div class="sm:col-span-2">
               <label class="label">Notas</label>

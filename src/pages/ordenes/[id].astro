@@ -759,8 +759,13 @@ const collectedWithholding = activeAllocations.reduce((s2, a) => s2 + Number(a.w
               {margin.data && <span class={MARGIN_BASIS_BADGE[margin.data.cost_basis ?? 'sin_costos']}>{MARGIN_BASIS_LABELS[margin.data.cost_basis ?? 'sin_costos']}</span>}
             </div>
             <p class="text-xs text-slate-500">
-              Solo Dirección y Socio. Un costo no se edita: se corrige con una versión nueva o se anula con motivo. Sin costos, la diferencia queda «no disponible», nunca en cero.
+              Solo Dirección y Socio. Un costo no se edita: se corrige con una versión nueva o se anula con motivo. Mientras falte algún costo, la diferencia queda «no disponible», nunca en cero.
             </p>
+            {margin.data?.missing_cost_components?.length ? (
+              <p class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
+                Faltan costos de: {margin.data.missing_cost_components.map((c) => COST_COMPONENT_LABELS[c]).join(', ')}.
+              </p>
+            ) : null}
             {
               margin.data && (
                 <dl class="grid grid-cols-2 gap-2 sm:grid-cols-4">

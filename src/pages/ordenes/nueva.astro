@@ -4,10 +4,10 @@ import OrderItemFields from '../../components/OrderItemFields.astro';
 import SupportFile from '../../components/SupportFile.astro';
 import { filesRequired, supportPathFrom } from '../../lib/supports';
 import { denyUnless, hasRole } from '../../lib/auth';
-import { fmtDate, fmtDateTime } from '../../lib/format';
+import { cop, fmtDate, fmtDateTime } from '../../lib/format';
 import { checkbox, date, ensure, FormError, int, parseForm, runActions, text, uuid, z } from '../../lib/forms';
 import { BUYER_DOCUMENT_LABELS, PAYMENT_MODALITY_LABELS, PAYROLL_LABELS } from '../../lib/labels';
-import { itemRows, parseItems } from '../../lib/orders';
+import { itemRows, orderNumber, parseItems } from '../../lib/orders';
 
 const denied = denyUnless(Astro, '/ordenes', 'comercial', 'administracion_cartera');
 if (denied) return denied;
@@ -131,6 +131,19 @@ const [buyerRes, companies, branches, agreements, settings] = await Promise.all(
   supabase.from('system_settings').select('key, value').in('key', ['max_installments_monthly', 'max_installments_biweekly']),
 ]);
 const buyer = buyerRes.data;
+// Alerta de posible venta duplicada: otras órdenes vigentes del mismo comprador
+const otherOrders = buyer
+  ? ((
+      await supabase
+        .from('v_orders')
+        .select('id, order_number, campaign_id, company_name, total_amount, created_at')
+        .eq('buyer_id', buyer.id)
+        .eq('is_cancelled', false)
+        .order('created_at', { ascending: false })
+        .limit(5)
+    ).data ?? [])
+  : [];
+const sameCampaignOrders = campaign ? otherOrders.filter((o) => o.campaign_id === campaign.id) : [];
 const requireFiles = await filesRequired(supabase);
 // En jornada, el convenio es el de la jornada (debe seguir aprobado); en venta directa, aprobado y vigente
 const payrollAgreements = (agreements.data ?? []).filter((a) => (campaign ? a.status === 'aprobado' : a.effective_status === 'aprobado'));
@@ -241,6 +254,24 @@ const backHref = campaign ? `/jornadas/${campaign.id}` : '/ordenes';
             <div class="text-xs text-green-700">✓ Autorización de datos registrada el {fmtDateTime(buyer!.data_consent_at)}</div>
           </div>
           <a href={selfUrl({ document_id: null })}>Cambiar comprador</a>
+        </div>
+      )
+    }
+    {
+      orderStep && otherOrders.length > 0 && (
+        <div class:list={['mt-3 rounded-md border px-3 py-2', sameCampaignOrders.length ? 'border-red-200 bg-red-50 text-red-800' : 'border-amber-200 bg-amber-50 text-amber-800']}>
+          <p class="font-medium">
+            {sameCampaignOrders.length
+              ? 'Este comprador ya tiene una orden en esta jornada. Verifique que no sea la misma venta antes de registrar otra.'
+              : 'Este comprador ya tiene otras órdenes vigentes. Verifique que no sea la misma venta.'}
+          </p>
+          <ul class="mt-1 text-xs">
+            {otherOrders.map((o) => (
+              <li>
+                <a href={`/ordenes/${o.id}`} target="_blank">{orderNumber(o.order_number)}</a> · {o.company_name ?? 'Particular'} · {cop(o.total_amount)} · {fmtDate(o.created_at?.slice(0, 10))}
+              </li>
+            ))}
+          </ul>
         </div>
       )
     }
