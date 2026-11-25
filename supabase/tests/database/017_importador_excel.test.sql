@@ -110,7 +110,7 @@ select ok((pg_temp.row_('FACIL CREDITOS PEREIRA', 4)).errors[1] like 'Nómina co
 select throws_ok($$ select public.excel_import_load_sheet(pg_temp.sheet('FACIL CREDITOS PEREIRA')) $$,
   'P0001', 'Hay 2 fila(s) con error: corríjalas u omítalas antes de cargar', 'con errores no se carga');
 
-update public.excel_import_sheets set installment_periodicity = 'quincenal', first_due_date = current_date + 15
+update public.excel_import_sheets set installment_periodicity = 'quincenal', first_due_date = private.today_co() + 15
 where sheet_name = 'FACIL CREDITOS PEREIRA';
 update public.excel_import_rows set document_id = '20.304.050' where full_name = 'Persona Dos';
 select public.excel_import_validate_sheet(pg_temp.sheet('FACIL CREDITOS PEREIRA'));

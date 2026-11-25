@@ -20,7 +20,7 @@ insert into public.deals_opportunities (id, company_id, city_id, assigned_user_i
   stage, next_action, next_action_due_date, next_action_owner_id)
 values ('dddddddd-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
         (select id from public.cities where name = 'Pereira'), '00000000-0000-0000-0000-0000000000c1',
-        'Laura - Pereira', 'referido', 'prospecto', 'Llamar', current_date + 3, '00000000-0000-0000-0000-0000000000c1');
+        'Laura - Pereira', 'referido', 'prospecto', 'Llamar', private.today_co() + 3, '00000000-0000-0000-0000-0000000000c1');
 insert into public.agreements_convenios (id, company_id, payroll_frequency, max_installments, status, approved_at)
 values ('cccccccc-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'mensual', 4, 'aprobado', now());
 insert into public.campaigns_jornadas (id, deal_id, agreement_id, responsible_user_id, status) values
@@ -69,7 +69,7 @@ select lives_ok($$
     stage, next_action, next_action_due_date, next_action_owner_id)
   values (pg_temp.luis_company(),
           (select id from public.cities where name = 'Pereira'), '00000000-0000-0000-0000-0000000000f1',
-          'Luis - Pereira', 'referido', 'prospecto', 'Llamar', current_date + 3, '00000000-0000-0000-0000-0000000000f1')
+          'Luis - Pereira', 'referido', 'prospecto', 'Llamar', private.today_co() + 3, '00000000-0000-0000-0000-0000000000f1')
 $$, 'Crea una oportunidad y queda como ejecutivo');
 select lives_ok($$
   insert into public.deal_interaction_logs (deal_id, interaction_type, interaction_note)

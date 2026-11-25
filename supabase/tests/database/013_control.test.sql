@@ -24,7 +24,7 @@ insert into public.deals_opportunities (id, company_id, city_id, assigned_user_i
   stage, target_employees_n, estimated_close_date, tentative_campaign_date)
 values ('dddddddd-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
         (select id from public.cities where name = 'Pereira'), '00000000-0000-0000-0000-0000000000c1',
-        'Marisol - Pereira', 'referido', 'convenio_firmado', 50, current_date + 10, current_date + 5);
+        'Marisol - Pereira', 'referido', 'convenio_firmado', 50, private.today_co() + 10, private.today_co() + 5);
 insert into public.agreements_convenios (id, company_id, payroll_frequency, max_installments, hr_approval_required, status, approved_at)
 values ('cccccccc-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'mensual', 4, false, 'aprobado', now());
 insert into public.campaigns_jornadas (id, deal_id, agreement_id, responsible_user_id, logistics_confirmed, status)
@@ -52,7 +52,7 @@ set local role authenticated;
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
 select public.create_order(
   jsonb_build_object('campaign_id', 'eeeeeeee-0000-0000-0000-000000000001', 'buyer_id', 'bbbbbbbb-0000-0000-0000-000000000001',
-    'payment_modality', 'nomina_empresa', 'installments_count', 3, 'first_due_date', current_date - 5,
+    'payment_modality', 'nomina_empresa', 'installments_count', 3, 'first_due_date', private.today_co() - 5,
     'employee_auth_received', true, 'notes', 'Ana'),
   jsonb_build_array(jsonb_build_object('item_type', 'gafas_completas', 'frame_description', 'A', 'lens_type', 'Monofocal',
     'quantity', 1, 'unit_price', 300000)));
@@ -63,11 +63,11 @@ update public.orders set requirements_verified = true where notes = 'Ana';
 select pg_temp.login('00000000-0000-0000-0000-0000000000b1');
 select throws_ok($$
   insert into public.order_productions (order_id, lab_provider_id, promised_date, lab_order_reference)
-  values (pg_temp.ord(), '11111111-0000-0000-0000-000000000001', current_date + 7, repeat('x', 61))
+  values (pg_temp.ord(), '11111111-0000-0000-0000-000000000001', private.today_co() + 7, repeat('x', 61))
 $$, '23514', null, 'la referencia del laboratorio tiene máximo 60 caracteres');
 select lives_ok($$
   insert into public.order_productions (order_id, lab_provider_id, promised_date, lab_order_reference)
-  values (pg_temp.ord(), '11111111-0000-0000-0000-000000000001', current_date + 7, 'LAB-77812')
+  values (pg_temp.ord(), '11111111-0000-0000-0000-000000000001', private.today_co() + 7, 'LAB-77812')
 $$, 'Operación libera con la referencia del pedido del laboratorio');
 select is((select lab_order_reference from public.v_productions where order_id = pg_temp.ord()), 'LAB-77812',
   'la referencia se ve en el tablero de producción');
@@ -86,12 +86,12 @@ select is(
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000a1');
 insert into public.collections_payments (company_id, payment_date, total_received_bank, bank_reference, support_received)
-values ('aaaaaaaa-0000-0000-0000-000000000001', current_date, 100000, 'T-1', true);
+values ('aaaaaaaa-0000-0000-0000-000000000001', private.today_co(), 100000, 'T-1', true);
 select public.apply_payment((select id from public.collections_payments where bank_reference = 'T-1'), pg_temp.ord(), 100000);
 select is((select count(*) from public.v_installments_due where order_id = pg_temp.ord()), 2::bigint,
   'una cuota pagada sale de la lista');
 insert into public.portfolio_reclassifications (order_id, reason, new_installments_count, new_periodicity, new_first_due_date)
-values (pg_temp.ord(), 'retiro', 1, 'mensual', current_date + 3);
+values (pg_temp.ord(), 'retiro', 1, 'mensual', private.today_co() + 3);
 select pg_temp.login('00000000-0000-0000-0000-0000000000d1');
 update public.portfolio_reclassifications set status = 'autorizada' where order_id = pg_temp.ord();
 select is(

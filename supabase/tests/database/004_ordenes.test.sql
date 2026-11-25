@@ -23,12 +23,12 @@ insert into public.deals_opportunities (id, company_id, city_id, assigned_user_i
 values ('dddddddd-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
         (select id from public.cities where name = 'Medellín'),
         '00000000-0000-0000-0000-0000000000c1', 'Marisol - Medellín', 'referido', 'convenio_firmado', 100,
-        current_date + 10, current_date + 5);
+        private.today_co() + 10, private.today_co() + 5);
 
 insert into public.agreements_convenios (id, company_id, payroll_frequency, max_installments,
   hr_approval_required, valid_from, valid_until, status, approved_at)
 values ('cccccccc-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
-        'quincenal', 6, true, current_date - 30, current_date + 365, 'aprobado', now());
+        'quincenal', 6, true, private.today_co() - 30, private.today_co() + 365, 'aprobado', now());
 
 insert into public.campaigns_jornadas (id, deal_id, agreement_id, responsible_user_id, logistics_confirmed, status)
 values
@@ -39,7 +39,7 @@ values
 
 insert into public.campaign_sessions (id, campaign_id, session_date, start_time, end_time, responsible_user_id)
 values ('ffffffff-0000-0000-0000-000000000001', 'eeeeeeee-0000-0000-0000-000000000001',
-        current_date, '08:00', '12:00', '00000000-0000-0000-0000-0000000000b1');
+        private.today_co(), '08:00', '12:00', '00000000-0000-0000-0000-0000000000b1');
 
 insert into public.campaign_attendance (campaign_id, session_id, full_name, document_id)
 values ('eeeeeeee-0000-0000-0000-000000000001', 'ffffffff-0000-0000-0000-000000000001',

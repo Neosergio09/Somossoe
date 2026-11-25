@@ -21,7 +21,7 @@ insert into public.deals_opportunities (id, company_id, city_id, assigned_user_i
   stage, target_employees_n, estimated_close_date, tentative_campaign_date)
 values ('dddddddd-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
         (select id from public.cities where name = 'Pereira'), '00000000-0000-0000-0000-0000000000c1',
-        'Marisol - Pereira', 'referido', 'convenio_firmado', 50, current_date + 10, current_date + 5);
+        'Marisol - Pereira', 'referido', 'convenio_firmado', 50, private.today_co() + 10, private.today_co() + 5);
 insert into public.agreements_convenios (id, company_id, payroll_frequency, max_installments, hr_approval_required, status, approved_at)
 values ('cccccccc-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'mensual', 4, false, 'aprobado', now());
 insert into public.campaigns_jornadas (id, deal_id, agreement_id, responsible_user_id, logistics_confirmed, status)
@@ -61,7 +61,7 @@ select public.create_order(
   jsonb_build_array(jsonb_build_object('item_type', 'montura', 'frame_description', 'A', 'quantity', 1, 'unit_price', 300000)));
 select public.create_order(
   jsonb_build_object('campaign_id', 'eeeeeeee-0000-0000-0000-000000000001', 'buyer_id', 'bbbbbbbb-0000-0000-0000-000000000002',
-    'payment_modality', 'nomina_empresa', 'installments_count', 2, 'first_due_date', '2026-12-30', 'notes', 'Carlos'),
+    'payment_modality', 'nomina_empresa', 'installments_count', 2, 'first_due_date', private.today_co() + 30, 'notes', 'Carlos'),
   jsonb_build_array(jsonb_build_object('item_type', 'montura', 'frame_description', 'B', 'quantity', 1, 'unit_price', 200000)));
 select public.create_order(
   jsonb_build_object('buyer_id', 'bbbbbbbb-0000-0000-0000-000000000003', 'payment_modality', 'contado', 'notes', 'Pedro'),
@@ -70,21 +70,21 @@ select public.create_order(
 -- ---------------- Registro del pago ----------------
 select throws_ok($$
   insert into public.collections_payments (company_id, payment_date, total_received_bank, bank_reference, support_received)
-  values ('aaaaaaaa-0000-0000-0000-000000000001', current_date, 450000, 'TRX-1', true)
+  values ('aaaaaaaa-0000-0000-0000-000000000001', private.today_co(), 450000, 'TRX-1', true)
 $$, '42501', null, 'Comercial no registra pagos');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000a1');
 select throws_ok($$
   insert into public.collections_payments (company_id, payment_date, total_received_bank, bank_reference)
-  values ('aaaaaaaa-0000-0000-0000-000000000001', current_date, 450000, 'TRX-1')
+  values ('aaaaaaaa-0000-0000-0000-000000000001', private.today_co(), 450000, 'TRX-1')
 $$, 'P0001', null, 'el pago exige soporte bancario');
 select lives_ok($$
   insert into public.collections_payments (company_id, payment_date, total_received_bank, bank_reference, support_received)
-  values ('aaaaaaaa-0000-0000-0000-000000000001', current_date, 450000, 'TRX-1', true)
+  values ('aaaaaaaa-0000-0000-0000-000000000001', private.today_co(), 450000, 'TRX-1', true)
 $$, 'Administración registra el giro corporativo');
 select throws_ok($$
   insert into public.collections_payments (company_id, payment_date, total_received_bank, bank_reference, support_received)
-  values ('aaaaaaaa-0000-0000-0000-000000000001', current_date, 450000, 'trx-1', true)
+  values ('aaaaaaaa-0000-0000-0000-000000000001', private.today_co(), 450000, 'trx-1', true)
 $$, '23505', null, 'no se registra dos veces el mismo movimiento bancario');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000b1');
@@ -130,7 +130,7 @@ select is(pg_temp.coll('Ana'), 'recaudado_total/0', 'Ana queda recaudada');
 
 -- ---------------- Pago de un particular y anticipo en contado ----------------
 insert into public.collections_payments (buyer_id, payment_date, total_received_bank, bank_reference, support_received)
-values ('bbbbbbbb-0000-0000-0000-000000000003', current_date, 100000, 'TRX-2', true);
+values ('bbbbbbbb-0000-0000-0000-000000000003', private.today_co(), 100000, 'TRX-2', true);
 select throws_ok($$
   select public.apply_payment(pg_temp.pay('TRX-2'), pg_temp.ord('Pedro'), 120000)
 $$, 'P0001', null, 'no se asigna más de lo recibido en el pago');

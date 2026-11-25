@@ -22,7 +22,7 @@ insert into public.deals_opportunities (id, company_id, city_id, assigned_user_i
   stage, target_employees_n, estimated_close_date, tentative_campaign_date)
 values ('dddddddd-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
         (select id from public.cities where name = 'Pereira'), '00000000-0000-0000-0000-0000000000c1',
-        'Marisol - Pereira', 'referido', 'convenio_firmado', 50, current_date + 10, current_date + 5);
+        'Marisol - Pereira', 'referido', 'convenio_firmado', 50, private.today_co() + 10, private.today_co() + 5);
 insert into public.agreements_convenios (id, company_id, payroll_frequency, max_installments, hr_approval_required, status, approved_at)
 values ('cccccccc-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'mensual', 4, false, 'aprobado', now());
 insert into public.campaigns_jornadas (id, deal_id, agreement_id, responsible_user_id, logistics_confirmed, status)
@@ -73,21 +73,21 @@ select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
 select throws_ok($$
   select public.create_order(
     jsonb_build_object('campaign_id', 'eeeeeeee-0000-0000-0000-000000000001', 'buyer_id', 'bbbbbbbb-0000-0000-0000-000000000001',
-      'payment_modality', 'nomina_empresa', 'installments_count', 2, 'first_due_date', current_date + 20,
+      'payment_modality', 'nomina_empresa', 'installments_count', 2, 'first_due_date', private.today_co() + 20,
       'employee_auth_file_path', 'ordenes/00000000-0000-0000-0000-0000000000c1/no-existe.pdf', 'notes', 'X'),
     '[{"item_type": "montura", "frame_description": "A", "quantity": 1, "unit_price": 200000}]')
 $$, 'P0001', null, 'no se vincula un archivo inexistente');
 select throws_ok($$
   select public.create_order(
     jsonb_build_object('campaign_id', 'eeeeeeee-0000-0000-0000-000000000001', 'buyer_id', 'bbbbbbbb-0000-0000-0000-000000000001',
-      'payment_modality', 'nomina_empresa', 'installments_count', 2, 'first_due_date', current_date + 20,
+      'payment_modality', 'nomina_empresa', 'installments_count', 2, 'first_due_date', private.today_co() + 20,
       'employee_auth_file_path', 'ordenes/00000000-0000-0000-0000-0000000000a1/admin.pdf', 'notes', 'X'),
     '[{"item_type": "montura", "frame_description": "A", "quantity": 1, "unit_price": 200000}]')
 $$, 'P0001', null, 'no se vincula un archivo subido por otro usuario');
 select lives_ok($$
   select public.create_order(
     jsonb_build_object('campaign_id', 'eeeeeeee-0000-0000-0000-000000000001', 'buyer_id', 'bbbbbbbb-0000-0000-0000-000000000001',
-      'payment_modality', 'nomina_empresa', 'installments_count', 2, 'first_due_date', current_date + 20,
+      'payment_modality', 'nomina_empresa', 'installments_count', 2, 'first_due_date', private.today_co() + 20,
       'employee_auth_file_path', 'ordenes/00000000-0000-0000-0000-0000000000c1/auth.pdf', 'notes', 'Ana'),
     '[{"item_type": "montura", "frame_description": "A", "quantity": 1, "unit_price": 200000}]')
 $$, 'la orden se crea con la autorización escaneada');
@@ -107,11 +107,11 @@ update public.system_settings set value = 1 where key = 'require_document_files'
 select pg_temp.login('00000000-0000-0000-0000-0000000000a1');
 select throws_ok($$
   insert into public.collections_payments (company_id, payment_date, total_received_bank, bank_reference, support_received)
-  values ('aaaaaaaa-0000-0000-0000-000000000001', current_date, 200000, 'T-1', true)
+  values ('aaaaaaaa-0000-0000-0000-000000000001', private.today_co(), 200000, 'T-1', true)
 $$, 'P0001', null, 'con archivos obligatorios, marcar "recibido" no basta');
 select lives_ok($$
   insert into public.collections_payments (company_id, payment_date, total_received_bank, bank_reference, support_file_path)
-  values ('aaaaaaaa-0000-0000-0000-000000000001', current_date, 200000, 'T-1',
+  values ('aaaaaaaa-0000-0000-0000-000000000001', private.today_co(), 200000, 'T-1',
           'pagos/00000000-0000-0000-0000-0000000000a1/banco.pdf')
 $$, 'con el soporte bancario adjunto el pago se registra');
 select is((select support_received from public.collections_payments where bank_reference = 'T-1'), true,

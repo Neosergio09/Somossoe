@@ -22,11 +22,11 @@ insert into public.deals_opportunities (id, company_id, city_id, assigned_user_i
   stage, target_employees_n, estimated_close_date, tentative_campaign_date)
 values ('dddddddd-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
         (select id from public.cities where name = 'Pereira'), '00000000-0000-0000-0000-0000000000c1',
-        'Marisol - Pereira', 'referido', 'convenio_firmado', 50, current_date + 10, current_date + 5);
+        'Marisol - Pereira', 'referido', 'convenio_firmado', 50, private.today_co() + 10, private.today_co() + 5);
 insert into public.agreements_convenios (id, company_id, payroll_frequency, max_installments, hr_approval_required,
   status, approved_at, valid_from, valid_until)
 values ('cccccccc-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'mensual', 4, false,
-        'aprobado', now(), current_date - 30, current_date + 60);
+        'aprobado', now(), private.today_co() - 30, private.today_co() + 60);
 insert into public.buyers (id, document_type, document_id, full_name, data_consent_at) values
   ('bbbbbbbb-0000-0000-0000-000000000001', 'cc', '1088123456', 'Ana Pérez', now());
 
@@ -59,63 +59,63 @@ values ('dddddddd-0000-0000-0000-000000000001', 'cccccccc-0000-0000-0000-0000000
 
 select throws_ok($$
   insert into public.campaign_sessions (campaign_id, session_date, start_time, end_time, responsible_user_id, capacity)
-  values (pg_temp.jid(), current_date + 3, '08:00', '12:00', '00000000-0000-0000-0000-0000000000b1', 0)
+  values (pg_temp.jid(), private.today_co() + 3, '08:00', '12:00', '00000000-0000-0000-0000-0000000000b1', 0)
 $$, '23514', null, 'la capacidad debe ser positiva');
 select lives_ok($$
   insert into public.campaign_sessions (campaign_id, session_date, start_time, end_time, responsible_user_id, capacity, location_detail)
-  values (pg_temp.jid(), current_date + 3, '08:00', '12:00', '00000000-0000-0000-0000-0000000000b1', 30, 'Sala A')
+  values (pg_temp.jid(), private.today_co() + 3, '08:00', '12:00', '00000000-0000-0000-0000-0000000000b1', 30, 'Sala A')
 $$, 'la sesión admite capacidad');
 select lives_ok($$
   update public.campaign_sessions set capacity = 40 where id = pg_temp.sid()
 $$, 'Operación cambia la capacidad');
 select throws_ok($$
-  update public.campaign_sessions set session_date = current_date + 4 where id = pg_temp.sid()
+  update public.campaign_sessions set session_date = private.today_co() + 4 where id = pg_temp.sid()
 $$, '42501', null, 'la fecha no se cambia directamente: se reprograma');
 
 select throws_ok($$
-  select public.reschedule_campaign_session(pg_temp.sid(), current_date + 4, '08:00', '12:00', 'Sala A', '  ')
+  select public.reschedule_campaign_session(pg_temp.sid(), private.today_co() + 4, '08:00', '12:00', 'Sala A', '  ')
 $$, 'P0001', 'Indique el motivo de la reprogramación', 'reprogramar exige motivo');
 select throws_ok($$
-  select public.reschedule_campaign_session(pg_temp.sid(), current_date + 90, '08:00', '12:00', 'Sala A', 'Lluvia')
+  select public.reschedule_campaign_session(pg_temp.sid(), private.today_co() + 90, '08:00', '12:00', 'Sala A', 'Lluvia')
 $$, 'P0001', null, 'la nueva fecha respeta la vigencia del convenio');
 select throws_ok($$
-  select public.reschedule_campaign_session(pg_temp.sid(), current_date + 3, '08:00', '12:00', 'Sala A', 'Nada')
+  select public.reschedule_campaign_session(pg_temp.sid(), private.today_co() + 3, '08:00', '12:00', 'Sala A', 'Nada')
 $$, 'P0001', 'La nueva fecha, horario y lugar son iguales a los actuales', 'reprogramar exige un cambio');
 select throws_ok($$
-  select public.reschedule_campaign_session(pg_temp.sid(), current_date + 4, '08:00', '12:00', 'Sala A', 'Lluvia',
+  select public.reschedule_campaign_session(pg_temp.sid(), private.today_co() + 4, '08:00', '12:00', 'Sala A', 'Lluvia',
     '2000-01-01 00:00:00+00')
 $$, 'P0001', 'Otra persona modificó esta sesión mientras la editaba. Recargue la página y vuelva a intentarlo.',
   'una versión vieja de la sesión se rechaza');
 
 select lives_ok($$
-  select public.reschedule_campaign_session(pg_temp.sid(), current_date + 4, '09:00', '13:00', 'Sala B',
+  select public.reschedule_campaign_session(pg_temp.sid(), private.today_co() + 4, '09:00', '13:00', 'Sala B',
     'La empresa movió el turno', (select updated_at from public.campaign_sessions where id = pg_temp.sid()))
 $$, 'Operación reprograma la sesión con motivo');
 select is(
   (select session_date || ' ' || start_time || ' ' || location_detail from public.campaign_sessions where id = pg_temp.sid()),
-  (current_date + 4) || ' 09:00:00 Sala B', 'la sesión queda con la nueva fecha, hora y lugar');
+  (private.today_co() + 4) || ' 09:00:00 Sala B', 'la sesión queda con la nueva fecha, hora y lugar');
 select is(
   (select previous_date || ' ' || previous_start_time || ' ' || previous_location || ' · ' || reason
    from public.campaign_session_reschedules where session_id = pg_temp.sid()),
-  (current_date + 3) || ' 08:00:00 Sala A · La empresa movió el turno', 'el historial guarda la fecha anterior y el motivo');
+  (private.today_co() + 3) || ' 08:00:00 Sala A · La empresa movió el turno', 'el historial guarda la fecha anterior y el motivo');
 select is(
   (select rescheduled_by from public.campaign_session_reschedules where session_id = pg_temp.sid()),
   '00000000-0000-0000-0000-0000000000b1'::uuid, 'el historial guarda quién reprogramó');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
 select throws_ok($$
-  select public.reschedule_campaign_session(pg_temp.sid(), current_date + 5, '09:00', '13:00', 'Sala B', 'x')
+  select public.reschedule_campaign_session(pg_temp.sid(), private.today_co() + 5, '09:00', '13:00', 'Sala B', 'x')
 $$, '42501', null, 'Comercial no reprograma');
 select is((select count(*)::int from public.campaign_session_reschedules), 1, 'Comercial consulta el historial');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000d1');
 select lives_ok($$
-  select public.reschedule_campaign_session(pg_temp.sid(), current_date + 5, '09:00', '13:00', 'Sala B', 'Pidió Gerencia')
+  select public.reschedule_campaign_session(pg_temp.sid(), private.today_co() + 5, '09:00', '13:00', 'Sala B', 'Pidió Gerencia')
 $$, 'Dirección reprograma');
 select throws_ok($$
   insert into public.campaign_session_reschedules (session_id, campaign_id, previous_date, previous_start_time,
     previous_end_time, new_date, new_start_time, new_end_time, reason)
-  values (pg_temp.sid(), pg_temp.jid(), current_date, '08:00', '09:00', current_date, '08:00', '09:00', 'falso')
+  values (pg_temp.sid(), pg_temp.jid(), private.today_co(), '08:00', '09:00', private.today_co(), '08:00', '09:00', 'falso')
 $$, '42501', null, 'el historial no se escribe directamente');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000b1');
@@ -146,7 +146,7 @@ $$, 'con el checklist completo la jornada inicia');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000b1');
 select throws_ok($$
-  select public.reschedule_campaign_session(pg_temp.sid(), current_date + 6, '09:00', '13:00', 'Sala B', 'Tarde')
+  select public.reschedule_campaign_session(pg_temp.sid(), private.today_co() + 6, '09:00', '13:00', 'Sala B', 'Tarde')
 $$, 'P0001', null, 'en ejecución ya no se reprograma');
 
 -- ================= Descuento por línea =================

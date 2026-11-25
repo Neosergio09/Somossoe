@@ -25,7 +25,7 @@ insert into public.deals_opportunities (id, company_id, city_id, assigned_user_i
   stage, target_employees_n, estimated_close_date, tentative_campaign_date)
 values ('dddddddd-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
         (select id from public.cities where name = 'Pereira'), '00000000-0000-0000-0000-0000000000c1',
-        'Marisol - Pereira', 'referido', 'convenio_firmado', 50, current_date + 10, current_date + 5);
+        'Marisol - Pereira', 'referido', 'convenio_firmado', 50, private.today_co() + 10, private.today_co() + 5);
 insert into public.agreements_convenios (id, company_id, payroll_frequency, max_installments, hr_approval_required, status, approved_at)
 values ('cccccccc-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'mensual', 4, false, 'aprobado', now());
 insert into public.campaigns_jornadas (id, deal_id, agreement_id, responsible_user_id, logistics_confirmed, status)
@@ -79,7 +79,7 @@ select public.create_order(
 select pg_temp.login('00000000-0000-0000-0000-0000000000b1');
 select throws_ok($$
   insert into public.order_productions (order_id, lab_provider_id, promised_date)
-  values (pg_temp.ord('Nómina'), '11111111-0000-0000-0000-000000000001', current_date + 7)
+  values (pg_temp.ord('Nómina'), '11111111-0000-0000-0000-000000000001', private.today_co() + 7)
 $$, 'P0001', null, 'no se libera sin requisitos verificados');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000a1');
@@ -88,23 +88,23 @@ update public.orders set requirements_verified = true where notes in ('Nómina',
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
 select throws_ok($$
   insert into public.order_productions (order_id, lab_provider_id, promised_date)
-  values (pg_temp.ord('Nómina'), '11111111-0000-0000-0000-000000000001', current_date + 7)
+  values (pg_temp.ord('Nómina'), '11111111-0000-0000-0000-000000000001', private.today_co() + 7)
 $$, '42501', null, 'Comercial no libera a producción');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000b1');
 select lives_ok($$
   insert into public.order_productions (order_id, lab_provider_id, promised_date)
-  values (pg_temp.ord('Nómina'), '11111111-0000-0000-0000-000000000001', current_date + 7)
+  values (pg_temp.ord('Nómina'), '11111111-0000-0000-0000-000000000001', private.today_co() + 7)
 $$, 'Operación libera la orden de nómina verificada');
 select is(pg_temp.ops('Nómina'), 'en_produccion', 'la orden pasa a En producción');
 select throws_ok($$
   insert into public.order_productions (order_id, lab_provider_id, promised_date)
-  values (pg_temp.ord('Nómina'), '11111111-0000-0000-0000-000000000001', current_date + 7)
+  values (pg_temp.ord('Nómina'), '11111111-0000-0000-0000-000000000001', private.today_co() + 7)
 $$, 'P0001', null, 'una orden no se libera dos veces');
 
 select throws_ok($$
   insert into public.order_productions (order_id, lab_provider_id, promised_date)
-  values (pg_temp.ord('Contado'), '11111111-0000-0000-0000-000000000001', current_date + 7)
+  values (pg_temp.ord('Contado'), '11111111-0000-0000-0000-000000000001', private.today_co() + 7)
 $$, 'P0001', null, 'contado sin pago verificado ni excepción no se libera');
 select is(
   (select cardinality(release_blockers) from public.v_orders where notes = 'Contado'), 1,
@@ -116,11 +116,11 @@ update public.orders set prepayment_exception_reason = 'Cliente frecuente' where
 select pg_temp.login('00000000-0000-0000-0000-0000000000b1');
 select throws_ok($$
   insert into public.order_productions (order_id, lab_provider_id, promised_date)
-  values (pg_temp.ord('Contado'), '11111111-0000-0000-0000-000000000002', current_date + 7)
+  values (pg_temp.ord('Contado'), '11111111-0000-0000-0000-000000000002', private.today_co() + 7)
 $$, 'P0001', null, 'no se envía a un laboratorio inactivo');
 select lives_ok($$
   insert into public.order_productions (order_id, lab_provider_id, promised_date)
-  values (pg_temp.ord('Contado'), '11111111-0000-0000-0000-000000000001', current_date + 7)
+  values (pg_temp.ord('Contado'), '11111111-0000-0000-0000-000000000001', private.today_co() + 7)
 $$, 'con excepción de Dirección, contado se libera');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
@@ -204,7 +204,7 @@ select lives_ok($$
 $$, 'Operación registra la garantía');
 select lives_ok($$
   insert into public.order_productions (order_id, warranty_id, lab_provider_id, promised_date)
-  values (pg_temp.ord('Nómina'), pg_temp.warranty(), '11111111-0000-0000-0000-000000000001', current_date + 5)
+  values (pg_temp.ord('Nómina'), pg_temp.warranty(), '11111111-0000-0000-0000-000000000001', private.today_co() + 5)
 $$, 'se envía la reposición al laboratorio');
 select is((select status::text from public.post_sale_warranties), 'en_reposicion', 'la garantía pasa a En reposición');
 select is(

@@ -24,11 +24,11 @@ values
   ((select id from public.companies where name = 'Marisol SAS'),
    (select id from public.cities where name = 'Medellín'),
    '00000000-0000-0000-0000-0000000000c1', 'Marisol - Medellín', 'referido', 'negociacion', 100,
-   current_date + 10, 'Cerrar convenio', current_date + 5, '00000000-0000-0000-0000-0000000000c1'),
+   private.today_co() + 10, 'Cerrar convenio', private.today_co() + 5, '00000000-0000-0000-0000-0000000000c1'),
   ((select id from public.companies where name = 'Andina Ejemplo'),
    (select id from public.cities where name = 'Pereira'),
    '00000000-0000-0000-0000-0000000000c1', 'Andina - Pereira', 'referido', 'negociacion', 50,
-   current_date + 10, 'Cerrar convenio', current_date + 5, '00000000-0000-0000-0000-0000000000c1');
+   private.today_co() + 10, 'Cerrar convenio', private.today_co() + 5, '00000000-0000-0000-0000-0000000000c1');
 
 insert into public.deal_interaction_logs (deal_id, user_id, interaction_type, interaction_note)
 select id, '00000000-0000-0000-0000-0000000000c1', 'reunion', 'Reunión con RRHH'
@@ -72,7 +72,7 @@ select lives_ok($$
   insert into public.agreements_convenios (company_id, deal_id, payroll_frequency, max_installments,
     valid_from, valid_until)
   values ((select id from public.companies where name = 'Marisol SAS'), pg_temp.marisol_deal(),
-          'quincenal', 8, current_date - 1, current_date + 365)
+          'quincenal', 8, private.today_co() - 1, private.today_co() + 365)
 $$, 'comercial crea el convenio en Borrador');
 
 select throws_ok($$
@@ -138,7 +138,7 @@ select throws_ok($$
   where id = pg_temp.marisol_deal()
 $$, '23514', null, 'Convenio Firmado exige fecha tentativa de jornada');
 select lives_ok($$
-  update public.deals_opportunities set stage = 'convenio_firmado', tentative_campaign_date = current_date + 7
+  update public.deals_opportunities set stage = 'convenio_firmado', tentative_campaign_date = private.today_co() + 7
   where id = pg_temp.marisol_deal()
 $$, 'con convenio aprobado la oportunidad pasa a Convenio Firmado');
 
@@ -173,12 +173,12 @@ select is(
 select throws_ok($$
   insert into public.campaign_sessions (campaign_id, session_date, start_time, end_time, responsible_user_id)
   values ((select id from public.campaigns_jornadas where notes = 'Jornada 1'),
-          current_date + 7, '10:00', '08:00', '00000000-0000-0000-0000-0000000000b1')
+          private.today_co() + 7, '10:00', '08:00', '00000000-0000-0000-0000-0000000000b1')
 $$, '23514', null, 'la sesión debe terminar después de empezar');
 select throws_ok($$
   insert into public.campaign_sessions (campaign_id, session_date, start_time, end_time, responsible_user_id)
   values ((select id from public.campaigns_jornadas where notes = 'Jornada 1'),
-          current_date + 400, '08:00', '12:00', '00000000-0000-0000-0000-0000000000b1')
+          private.today_co() + 400, '08:00', '12:00', '00000000-0000-0000-0000-0000000000b1')
 $$, 'P0001', null, 'la sesión no puede quedar fuera de la vigencia del convenio');
 
 select is((select status::text from public.campaigns_jornadas where notes = 'Jornada 1'), 'borrador',
@@ -189,7 +189,7 @@ $$, 'P0001', null, 'no se programa una jornada sin sesiones');
 
 insert into public.campaign_sessions (campaign_id, session_date, start_time, end_time, location_detail, responsible_user_id)
 values ((select id from public.campaigns_jornadas where notes = 'Jornada 1'),
-        current_date + 7, '08:00', '12:00', 'Auditorio piso 2', '00000000-0000-0000-0000-0000000000b1');
+        private.today_co() + 7, '08:00', '12:00', 'Auditorio piso 2', '00000000-0000-0000-0000-0000000000b1');
 update public.campaigns_jornadas set status = 'programada' where notes = 'Jornada 1';
 
 select throws_ok($$
@@ -232,7 +232,7 @@ insert into public.campaigns_jornadas (deal_id, agreement_id, responsible_user_i
 values (pg_temp.marisol_deal(), pg_temp.marisol_agreement(), '00000000-0000-0000-0000-0000000000b1', 'Jornada 2');
 insert into public.campaign_sessions (campaign_id, session_date, start_time, end_time, responsible_user_id)
 values ((select id from public.campaigns_jornadas where notes = 'Jornada 2'),
-        current_date + 7, '11:00', '14:00', '00000000-0000-0000-0000-0000000000b1');
+        private.today_co() + 7, '11:00', '14:00', '00000000-0000-0000-0000-0000000000b1');
 select is(
   (select count(*) from public.v_campaign_calendar where has_conflict),
   2::bigint,
