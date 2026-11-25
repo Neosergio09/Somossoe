@@ -24,7 +24,7 @@ insert into public.deals_opportunities (id, company_id, city_id, assigned_user_i
   stage, next_action, next_action_due_date, next_action_owner_id)
 values ('dddddddd-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
         (select id from public.cities where name = 'Pereira'), '00000000-0000-0000-0000-0000000000c1',
-        'Laura - Pereira', 'referido', 'prospecto', 'Llamar', current_date + 3, '00000000-0000-0000-0000-0000000000c1');
+        'Laura - Pereira', 'referido', 'prospecto', 'Llamar', private.today_co() + 3, '00000000-0000-0000-0000-0000000000c1');
 
 insert into public.agreements_convenios (id, company_id, payroll_frequency, max_installments, status, approved_at)
 values ('cccccccc-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'mensual', 4, 'aprobado', now());
@@ -108,7 +108,7 @@ select throws_ok($$
     next_action, next_action_due_date, next_action_owner_id)
   values ('aaaaaaaa-0000-0000-0000-000000000001', (select id from public.cities where name = 'Pereira'),
           '00000000-0000-0000-0000-0000000000c2', 'Pablo en empresa de Laura', 'referido',
-          'Llamar', current_date + 3, '00000000-0000-0000-0000-0000000000c2')
+          'Llamar', private.today_co() + 3, '00000000-0000-0000-0000-0000000000c2')
 $$, '42501', null, 'Pablo no abre oportunidades en la empresa de Laura');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000d1');

@@ -22,14 +22,14 @@ insert into public.deals_opportunities (id, company_id, city_id, assigned_user_i
   stage, target_employees_n, estimated_close_date, tentative_campaign_date)
 values ('dddddddd-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
         (select id from public.cities where name = 'Pereira'), '00000000-0000-0000-0000-0000000000c1',
-        'Marisol - Pereira', 'referido', 'convenio_firmado', 50, current_date + 10, current_date + 5);
+        'Marisol - Pereira', 'referido', 'convenio_firmado', 50, private.today_co() + 10, private.today_co() + 5);
 insert into public.agreements_convenios (id, company_id, payroll_frequency, max_installments, hr_approval_required, status, approved_at)
 values ('cccccccc-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'mensual', 4, false, 'aprobado', now());
 insert into public.campaigns_jornadas (id, deal_id, agreement_id, responsible_user_id, logistics_confirmed, status)
 values ('eeeeeeee-0000-0000-0000-000000000001', 'dddddddd-0000-0000-0000-000000000001',
         'cccccccc-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000b1', true, 'en_ejecucion');
 insert into public.campaign_sessions (campaign_id, session_date, start_time, end_time, responsible_user_id)
-values ('eeeeeeee-0000-0000-0000-000000000001', current_date, '08:00', '12:00', '00000000-0000-0000-0000-0000000000b1');
+values ('eeeeeeee-0000-0000-0000-000000000001', private.today_co(), '08:00', '12:00', '00000000-0000-0000-0000-0000000000b1');
 update public.deals_opportunities set stage = 'jornada_en_ejecucion' where id = 'dddddddd-0000-0000-0000-000000000001';
 insert into public.buyers (id, document_type, document_id, full_name, data_consent_at) values
   ('bbbbbbbb-0000-0000-0000-000000000001', 'cc', '1088123456', 'Ana Pérez', now()),
@@ -64,11 +64,11 @@ set local role authenticated;
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
 select public.create_order(
   jsonb_build_object('campaign_id', 'eeeeeeee-0000-0000-0000-000000000001', 'buyer_id', 'bbbbbbbb-0000-0000-0000-000000000001',
-    'payment_modality', 'nomina_empresa', 'installments_count', 2, 'first_due_date', '2026-12-30', 'notes', 'Ana'),
+    'payment_modality', 'nomina_empresa', 'installments_count', 2, 'first_due_date', private.today_co() + 30, 'notes', 'Ana'),
   jsonb_build_array(jsonb_build_object('item_type', 'montura', 'frame_description', 'A', 'quantity', 1, 'unit_price', 300000)));
 select public.create_order(
   jsonb_build_object('campaign_id', 'eeeeeeee-0000-0000-0000-000000000001', 'buyer_id', 'bbbbbbbb-0000-0000-0000-000000000002',
-    'payment_modality', 'nomina_empresa', 'installments_count', 2, 'first_due_date', '2026-12-30', 'notes', 'Carlos'),
+    'payment_modality', 'nomina_empresa', 'installments_count', 2, 'first_due_date', private.today_co() + 30, 'notes', 'Carlos'),
   jsonb_build_array(jsonb_build_object('item_type', 'montura', 'frame_description', 'B', 'quantity', 1, 'unit_price', 200000)));
 select public.create_order(
   jsonb_build_object('buyer_id', 'bbbbbbbb-0000-0000-0000-000000000003', 'payment_modality', 'contado', 'notes', 'Pedro'),
@@ -77,30 +77,30 @@ select public.create_order(
 -- ---------------- Registro de facturas ----------------
 select throws_ok($$
   insert into public.alegra_invoices (alegra_invoice_number, invoice_date, invoiced_amount, company_id)
-  values ('FE-1', current_date, 1000, 'aaaaaaaa-0000-0000-0000-000000000001')
+  values ('FE-1', private.today_co(), 1000, 'aaaaaaaa-0000-0000-0000-000000000001')
 $$, '42501', null, 'Comercial no registra facturas');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000a1');
 select throws_ok($$
   insert into public.alegra_invoices (alegra_invoice_number, invoice_date, invoiced_amount, company_id)
-  values ('FE-1', current_date, 1000, 'aaaaaaaa-0000-0000-0000-000000000002')
+  values ('FE-1', private.today_co(), 1000, 'aaaaaaaa-0000-0000-0000-000000000002')
 $$, 'P0001', null, 'no se factura a una empresa con NIT provisional');
 select throws_ok($$
   insert into public.alegra_invoices (alegra_invoice_number, invoice_date, invoiced_amount, company_id)
-  values ('FE-1', current_date + 1, 1000, 'aaaaaaaa-0000-0000-0000-000000000001')
+  values ('FE-1', private.today_co() + 1, 1000, 'aaaaaaaa-0000-0000-0000-000000000001')
 $$, 'P0001', null, 'la fecha de la factura no puede ser futura');
 select throws_ok($$
   insert into public.alegra_invoices (alegra_invoice_number, invoice_date, invoiced_amount,
     company_id, buyer_id)
-  values ('FE-1', current_date, 1000, 'aaaaaaaa-0000-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-000000000001')
+  values ('FE-1', private.today_co(), 1000, 'aaaaaaaa-0000-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-000000000001')
 $$, '23514', null, 'la factura tiene un solo sujeto: empresa o comprador');
 select lives_ok($$
   insert into public.alegra_invoices (alegra_invoice_number, invoice_date, invoiced_amount, company_id)
-  values (' fe-100 ', current_date, 500000, 'aaaaaaaa-0000-0000-0000-000000000001')
+  values (' fe-100 ', private.today_co(), 500000, 'aaaaaaaa-0000-0000-0000-000000000001')
 $$, 'Administración registra la factura de la empresa');
 select throws_ok($$
   insert into public.alegra_invoices (alegra_invoice_number, invoice_date, invoiced_amount, company_id)
-  values ('FE-100', current_date, 1000, 'aaaaaaaa-0000-0000-0000-000000000001')
+  values ('FE-100', private.today_co(), 1000, 'aaaaaaaa-0000-0000-0000-000000000001')
 $$, '23505', null, 'el número de factura no se repite');
 
 -- ---------------- Vínculo con órdenes ----------------
@@ -159,7 +159,7 @@ $$, 'P0001', null, 'una factura anulada no se modifica');
 
 -- ---------------- Venta a particular ----------------
 insert into public.alegra_invoices (alegra_invoice_number, invoice_date, invoiced_amount, buyer_id)
-values ('FE-200', current_date, 150000, 'bbbbbbbb-0000-0000-0000-000000000003');
+values ('FE-200', private.today_co(), 150000, 'bbbbbbbb-0000-0000-0000-000000000003');
 insert into public.alegra_invoice_orders (invoice_id, order_id, amount_assigned)
 values (pg_temp.inv('FE-200'), pg_temp.ord('Pedro'), 150000);
 select is(pg_temp.acc('Pedro'), 'factura_vinculada', 'factura al comprador particular');

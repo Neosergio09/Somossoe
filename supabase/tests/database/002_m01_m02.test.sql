@@ -135,7 +135,7 @@ select throws_ok($$
   values ((select id from public.companies where name = 'Marisol SAS'),
           (select id from public.cities where name = 'Medellín'),
           '00000000-0000-0000-0000-0000000000c1', 'Marisol - Sede Medellín', 'referido',
-          'negociacion', 'Llamar', current_date + 3, '00000000-0000-0000-0000-0000000000c1')
+          'negociacion', 'Llamar', private.today_co() + 3, '00000000-0000-0000-0000-0000000000c1')
 $$, 'P0001', null, 'una oportunidad no puede nacer en Negociación');
 
 select throws_ok($$
@@ -144,7 +144,7 @@ select throws_ok($$
   values ((select id from public.companies where name = 'Marisol SAS'),
           (select id from public.cities where name = 'Cali'),
           '00000000-0000-0000-0000-0000000000c1', 'Marisol - Cali', 'referido',
-          'Llamar', current_date + 3, '00000000-0000-0000-0000-0000000000c1')
+          'Llamar', private.today_co() + 3, '00000000-0000-0000-0000-0000000000c1')
 $$, 'P0001', null, 'la ciudad debe ser operativa');
 
 select lives_ok($$
@@ -156,7 +156,7 @@ select lives_ok($$
           (select id from public.cities where name = 'Medellín'),
           (select id from public.contacts where email = 'laura@marisol.co'),
           '00000000-0000-0000-0000-0000000000c1', 'Marisol SAS - Sede Medellín', 'referido', 100,
-          'Agendar reunión', current_date + 2, '00000000-0000-0000-0000-0000000000c1')
+          'Agendar reunión', private.today_co() + 2, '00000000-0000-0000-0000-0000000000c1')
 $$, 'comercial crea una oportunidad en Prospecto');
 
 select is(
@@ -203,8 +203,8 @@ select throws_ok($$
 $$, '42501', null, 'no se puede registrar bitácora a nombre de otro usuario');
 
 select throws_ok($$
-  update public.deals_opportunities set stage = 'convenio_firmado', tentative_campaign_date = current_date + 30,
-    estimated_close_date = current_date + 10
+  update public.deals_opportunities set stage = 'convenio_firmado', tentative_campaign_date = private.today_co() + 30,
+    estimated_close_date = private.today_co() + 10
   where deal_name_branch = 'Marisol SAS - Sede Medellín'
 $$, 'P0001', null, 'Convenio Firmado bloqueado hasta tener convenio aprobado');
 select throws_ok($$
@@ -263,7 +263,7 @@ select throws_ok($$
   values ((select id from public.companies where name = 'Marisol SAS'),
           (select id from public.cities where name = 'Pereira'),
           '00000000-0000-0000-0000-0000000000c1', 'Marisol - Pereira', 'referido',
-          'Llamar', current_date + 3, '00000000-0000-0000-0000-0000000000c1')
+          'Llamar', private.today_co() + 3, '00000000-0000-0000-0000-0000000000c1')
 $$, '42501', null, 'administración no crea oportunidades');
 
 select * from finish();

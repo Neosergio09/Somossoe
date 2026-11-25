@@ -24,7 +24,7 @@ insert into public.deals_opportunities (id, company_id, city_id, assigned_user_i
   stage, target_employees_n, estimated_close_date, tentative_campaign_date)
 values ('dddddddd-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
         (select id from public.cities where name = 'Pereira'), '00000000-0000-0000-0000-0000000000c1',
-        'Marisol - Pereira', 'referido', 'convenio_firmado', 50, current_date + 10, current_date + 5);
+        'Marisol - Pereira', 'referido', 'convenio_firmado', 50, private.today_co() + 10, private.today_co() + 5);
 insert into public.agreements_convenios (id, company_id, payroll_frequency, max_installments, hr_approval_required, status, approved_at)
 values ('cccccccc-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'mensual', 4, false, 'aprobado', now());
 insert into public.buyers (id, document_type, document_id, full_name, data_consent_at) values
@@ -77,7 +77,7 @@ select throws_ok($$
 $$, 'P0001', null, 'sin sesiones no se programa');
 
 insert into public.campaign_sessions (campaign_id, session_date, start_time, end_time, responsible_user_id)
-values (pg_temp.jid(), current_date, '08:00', '12:00', '00000000-0000-0000-0000-0000000000b1');
+values (pg_temp.jid(), private.today_co(), '08:00', '12:00', '00000000-0000-0000-0000-0000000000b1');
 
 -- Asistencia agendada antes de ejecutar
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
@@ -108,7 +108,7 @@ select pg_temp.login('00000000-0000-0000-0000-0000000000b1');
 update public.campaigns_jornadas set logistics_confirmed = true, checklist_staff = true, checklist_equipment = true, checklist_materials = true, checklist_notice = true, status = 'en_ejecucion' where notes = 'J1';
 select is(pg_temp.jstatus(), 'en_ejecucion', 'la jornada inicia');
 insert into public.campaign_sessions (campaign_id, session_date, start_time, end_time, responsible_user_id)
-values (pg_temp.jid(), current_date, '13:00', '17:00', '00000000-0000-0000-0000-0000000000b1');
+values (pg_temp.jid(), private.today_co(), '13:00', '17:00', '00000000-0000-0000-0000-0000000000b1');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
 update public.campaign_attendance set status = 'atendido' where document_id = '1088123456';

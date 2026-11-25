@@ -24,14 +24,14 @@ select public.create_historical_order(
   jsonb_build_object('buyer_id', 'bbbbbbbb-0000-0000-0000-000000000001', 'company_id', 'aaaaaaaa-0000-0000-0000-000000000001',
     'payment_modality', 'nomina_empresa', 'collection_responsible', 'empresa', 'total_amount', 300000, 'balance_due', 200000,
     'historical_stage', 'entregada', 'historical_reference', 'Prueba circuito', 'installments_count', 2,
-    'installment_periodicity', 'mensual', 'first_due_date', current_date));
+    'installment_periodicity', 'mensual', 'first_due_date', private.today_co()));
 
 select is((public.circuit_summary() -> 'cobrar' ->> 'saldo')::numeric, 200000::numeric, 'Cartera ve el saldo por cobrar');
 select is((public.circuit_summary() -> 'cobrar' ->> 'vencidas')::int, 1, 'cuenta la cuota que vence hoy');
 select is((public.circuit_summary() -> 'facturar' ->> 'sin_factura')::int, 1, 'cuenta la orden verificada sin factura');
 
 insert into public.collections_payments (company_id, payment_date, total_received_bank, bank_reference, support_received)
-values ('aaaaaaaa-0000-0000-0000-000000000001', current_date, 50000, 'C-1', true);
+values ('aaaaaaaa-0000-0000-0000-000000000001', private.today_co(), 50000, 'C-1', true);
 select is((public.circuit_summary() -> 'cobrar' ->> 'pagos_sin_asignar')::int, 1, 'Cartera ve el pago sin asignar');
 select pg_temp.login('00000000-0000-0000-0000-0000000000b1');
 select is((public.circuit_summary() -> 'cobrar' ->> 'pagos_sin_asignar')::int, 0, 'Operación no cuenta los pagos (no los ve)');

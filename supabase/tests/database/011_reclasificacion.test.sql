@@ -23,7 +23,7 @@ insert into public.deals_opportunities (id, company_id, city_id, assigned_user_i
   stage, target_employees_n, estimated_close_date, tentative_campaign_date)
 values ('dddddddd-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001',
         (select id from public.cities where name = 'Pereira'), '00000000-0000-0000-0000-0000000000c1',
-        'Marisol - Pereira', 'referido', 'convenio_firmado', 50, current_date + 10, current_date + 5);
+        'Marisol - Pereira', 'referido', 'convenio_firmado', 50, private.today_co() + 10, private.today_co() + 5);
 insert into public.agreements_convenios (id, company_id, payroll_frequency, max_installments, hr_approval_required, status, approved_at)
 values ('cccccccc-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'mensual', 4, false, 'aprobado', now());
 insert into public.campaigns_jornadas (id, deal_id, agreement_id, responsible_user_id, logistics_confirmed, status)
@@ -61,11 +61,11 @@ set local role authenticated;
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
 select public.create_order(
   jsonb_build_object('campaign_id', 'eeeeeeee-0000-0000-0000-000000000001', 'buyer_id', 'bbbbbbbb-0000-0000-0000-000000000001',
-    'payment_modality', 'nomina_empresa', 'installments_count', 3, 'first_due_date', current_date + 20, 'notes', 'Ana'),
+    'payment_modality', 'nomina_empresa', 'installments_count', 3, 'first_due_date', private.today_co() + 20, 'notes', 'Ana'),
   jsonb_build_array(jsonb_build_object('item_type', 'montura', 'frame_description', 'A', 'quantity', 1, 'unit_price', 300000)));
 select public.create_order(
   jsonb_build_object('campaign_id', 'eeeeeeee-0000-0000-0000-000000000001', 'buyer_id', 'bbbbbbbb-0000-0000-0000-000000000002',
-    'payment_modality', 'nomina_empresa', 'installments_count', 2, 'first_due_date', current_date + 20, 'notes', 'Carlos'),
+    'payment_modality', 'nomina_empresa', 'installments_count', 2, 'first_due_date', private.today_co() + 20, 'notes', 'Carlos'),
   jsonb_build_array(jsonb_build_object('item_type', 'montura', 'frame_description', 'B', 'quantity', 1, 'unit_price', 200000)));
 select public.create_order(
   jsonb_build_object('buyer_id', 'bbbbbbbb-0000-0000-0000-000000000003', 'payment_modality', 'contado', 'notes', 'Pedro'),
@@ -73,39 +73,39 @@ select public.create_order(
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000a1');
 insert into public.collections_payments (company_id, payment_date, total_received_bank, bank_reference, support_received)
-values ('aaaaaaaa-0000-0000-0000-000000000001', current_date, 150000, 'EMP-1', true);
+values ('aaaaaaaa-0000-0000-0000-000000000001', private.today_co(), 150000, 'EMP-1', true);
 select public.apply_payment(pg_temp.pay('EMP-1'), pg_temp.ord('Ana'), 150000);
 
 -- ---------------- Solicitud (Administración / Cartera) ----------------
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
 select throws_ok($$
   insert into public.portfolio_reclassifications (order_id, reason, new_installments_count, new_periodicity, new_first_due_date)
-  values (pg_temp.ord('Ana'), 'retiro', 2, 'mensual', current_date + 10)
+  values (pg_temp.ord('Ana'), 'retiro', 2, 'mensual', private.today_co() + 10)
 $$, '42501', null, 'Comercial no solicita reclasificaciones');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000a1');
 select throws_ok($$
   insert into public.portfolio_reclassifications (order_id, reason, new_installments_count, new_periodicity, new_first_due_date)
-  values (pg_temp.ord('Pedro'), 'retiro', 1, 'mensual', current_date + 10)
+  values (pg_temp.ord('Pedro'), 'retiro', 1, 'mensual', private.today_co() + 10)
 $$, 'P0001', null, 'una orden de contado no se reclasifica');
 select throws_ok($$
   insert into public.portfolio_reclassifications (order_id, reason, new_installments_count, new_periodicity, new_first_due_date)
-  values (pg_temp.ord('Ana'), 'retiro', 2, 'mensual', current_date - 1)
+  values (pg_temp.ord('Ana'), 'retiro', 2, 'mensual', private.today_co() - 1)
 $$, 'P0001', null, 'el plan nuevo no vence en el pasado');
 select throws_ok($$
   insert into public.portfolio_reclassifications (order_id, reason, new_installments_count, new_periodicity, new_first_due_date)
-  values (pg_temp.ord('Ana'), 'otro', 2, 'mensual', current_date + 10)
+  values (pg_temp.ord('Ana'), 'otro', 2, 'mensual', private.today_co() + 10)
 $$, '23514', null, 'motivo "otro" exige notas');
 select lives_ok($$
   insert into public.portfolio_reclassifications (order_id, reason, notes, new_installments_count, new_periodicity, new_first_due_date)
-  values (pg_temp.ord('Ana'), 'retiro', 'Renunció el 10/11', 2, 'mensual', current_date + 10)
+  values (pg_temp.ord('Ana'), 'retiro', 'Renunció el 10/11', 2, 'mensual', private.today_co() + 10)
 $$, 'Administración solicita la reclasificación');
 select is(
   (select status::text || '/' || balance_at_request from public.portfolio_reclassifications where order_id = pg_temp.ord('Ana')),
   'pendiente/150000', 'la solicitud queda pendiente con el saldo del momento');
 select throws_ok($$
   insert into public.portfolio_reclassifications (order_id, reason, new_installments_count, new_periodicity, new_first_due_date)
-  values (pg_temp.ord('Ana'), 'retiro', 1, 'mensual', current_date + 10)
+  values (pg_temp.ord('Ana'), 'retiro', 1, 'mensual', private.today_co() + 10)
 $$, '23505', null, 'una sola solicitud pendiente por orden');
 select is(
   (select collection_responsible::text || '/' || (select count(*) from public.order_installments i where i.order_id = o.id)
@@ -138,7 +138,7 @@ $$, $$ values (1, 100000::numeric, 100000::numeric, false), (2, 100000::numeric,
   'las cuotas pendientes quedan reemplazadas y el saldo se reparte en el plan nuevo');
 select is(
   (select due_date from public.order_installments where order_id = pg_temp.ord('Ana') and installment_number = 5),
-  (current_date + 10 + interval '1 month')::date, 'el plan nuevo usa su propia periodicidad');
+  (private.today_co() + 10 + interval '1 month')::date, 'el plan nuevo usa su propia periodicidad');
 select throws_ok($$
   update public.portfolio_reclassifications set status = 'rechazada', decision_notes = 'x'
   where id = pg_temp.req('Ana', 'autorizada')
@@ -147,18 +147,18 @@ $$, 'P0001', null, 'una decisión no se cambia');
 select pg_temp.login('00000000-0000-0000-0000-0000000000a1');
 select throws_ok($$
   insert into public.portfolio_reclassifications (order_id, reason, new_installments_count, new_periodicity, new_first_due_date)
-  values (pg_temp.ord('Ana'), 'retiro', 1, 'mensual', current_date + 10)
+  values (pg_temp.ord('Ana'), 'retiro', 1, 'mensual', private.today_co() + 10)
 $$, 'P0001', null, 'una orden ya reclasificada no se vuelve a reclasificar');
 
 -- ---------------- Pagos después de reclasificar ----------------
 insert into public.collections_payments (buyer_id, payment_date, total_received_bank, bank_reference, support_received)
-values ('bbbbbbbb-0000-0000-0000-000000000001', current_date, 75000, 'ANA-1', true);
+values ('bbbbbbbb-0000-0000-0000-000000000001', private.today_co(), 75000, 'ANA-1', true);
 select is((select public.apply_payment(pg_temp.pay('ANA-1'), pg_temp.ord('Ana'), 75000)), 1,
   'el empleado paga y el abono va a la primera cuota del plan nuevo');
 select is((select paid_amount from public.order_installments where order_id = pg_temp.ord('Ana') and installment_number = 4),
   75000::numeric, 'la cuota 4 queda pagada');
 insert into public.collections_payments (company_id, payment_date, total_received_bank, bank_reference, support_received)
-values ('aaaaaaaa-0000-0000-0000-000000000001', current_date, 75000, 'EMP-LIQ', true);
+values ('aaaaaaaa-0000-0000-0000-000000000001', private.today_co(), 75000, 'EMP-LIQ', true);
 select lives_ok($$ select public.apply_payment(pg_temp.pay('EMP-LIQ'), pg_temp.ord('Ana'), 75000) $$,
   'la empresa todavía puede abonar (liquidación final)');
 select is((select collection_status::text || '/' || balance_due from public.orders where notes = 'Ana'),
@@ -175,7 +175,7 @@ $$, 'P0001', null, 'el plan original de una orden reclasificada no se cambia');
 -- ---------------- Rechazo y anulación ----------------
 select pg_temp.login('00000000-0000-0000-0000-0000000000a1');
 insert into public.portfolio_reclassifications (order_id, reason, new_installments_count, new_periodicity, new_first_due_date)
-values (pg_temp.ord('Carlos'), 'incapacidad', 1, 'quincenal', current_date + 5);
+values (pg_temp.ord('Carlos'), 'incapacidad', 1, 'quincenal', private.today_co() + 5);
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
 select throws_ok($$
   update public.orders set installments_count = 1 where notes = 'Carlos'
@@ -193,7 +193,7 @@ select is((select collection_responsible::text from public.orders where notes = 
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000a1');
 insert into public.portfolio_reclassifications (order_id, reason, new_installments_count, new_periodicity, new_first_due_date)
-values (pg_temp.ord('Carlos'), 'retiro', 1, 'mensual', current_date + 5);
+values (pg_temp.ord('Carlos'), 'retiro', 1, 'mensual', private.today_co() + 5);
 select pg_temp.login('00000000-0000-0000-0000-0000000000d1');
 select throws_ok($$
   update public.portfolio_reclassifications set status = 'anulada', decision_notes = 'x'

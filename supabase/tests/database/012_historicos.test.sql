@@ -36,7 +36,7 @@ create function pg_temp.hist(p jsonb, p_items jsonb default '[]') returns uuid l
     jsonb_build_object('buyer_id', 'bbbbbbbb-0000-0000-0000-000000000001', 'company_id', 'aaaaaaaa-0000-0000-0000-000000000001',
       'payment_modality', 'nomina_empresa', 'collection_responsible', 'empresa', 'total_amount', 400000,
       'balance_due', 250000, 'historical_stage', 'entregada', 'historical_reference', 'Excel ENERGIA fila 12',
-      'installments_count', 2, 'installment_periodicity', 'quincenal', 'first_due_date', current_date + 10) || p,
+      'installments_count', 2, 'installment_periodicity', 'quincenal', 'first_due_date', private.today_co() + 10) || p,
     p_items);
 $$;
 
@@ -93,7 +93,7 @@ select throws_ok($$ select pg_temp.hist('{"historical_reference": "excel energia
 
 -- Pagos posteriores siguen la Regla de Oro
 insert into public.collections_payments (company_id, payment_date, total_received_bank, bank_reference, support_received)
-values ('aaaaaaaa-0000-0000-0000-000000000001', current_date, 125000, 'EN-1', true);
+values ('aaaaaaaa-0000-0000-0000-000000000001', private.today_co(), 125000, 'EN-1', true);
 select is(
   (select public.apply_payment((select id from public.collections_payments where bank_reference = 'EN-1'),
                                pg_temp.ref('Excel ENERGIA fila 12'), 125000)),
@@ -106,11 +106,11 @@ select throws_ok($$
 $$, 'P0001', null, 'no se asigna más de lo recibido');
 select lives_ok($$
   insert into public.portfolio_reclassifications (order_id, reason, new_installments_count, new_periodicity, new_first_due_date)
-  values (pg_temp.ref('Excel ENERGIA fila 12'), 'retiro', 1, 'mensual', current_date + 5)
+  values (pg_temp.ref('Excel ENERGIA fila 12'), 'retiro', 1, 'mensual', private.today_co() + 5)
 $$, 'un histórico por nómina se puede reclasificar');
 
 select throws_ok($$
-  update public.orders set first_due_date = current_date + 40 where id = pg_temp.ref('Excel ENERGIA fila 12')
+  update public.orders set first_due_date = private.today_co() + 40 where id = pg_temp.ref('Excel ENERGIA fila 12')
 $$, 'P0001', null, 'el plan de un histórico no se cambia');
 select lives_ok($$
   update public.orders set notes = 'Revisado con Fabián' where id = pg_temp.ref('Excel ENERGIA fila 12')
@@ -129,17 +129,17 @@ select is(
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
 select throws_ok($$
-  select public.register_historical_delivery(pg_temp.ref('Excel PARTICULAR OCTUBRE fila 4'), current_date, 'Carlos')
+  select public.register_historical_delivery(pg_temp.ref('Excel PARTICULAR OCTUBRE fila 4'), private.today_co(), 'Carlos')
 $$, '42501', null, 'Comercial no registra entregas');
 select pg_temp.login('00000000-0000-0000-0000-0000000000b1');
 select throws_ok($$
-  select public.register_historical_delivery(pg_temp.ref('Excel ENERGIA fila 12'), current_date, 'Ana')
+  select public.register_historical_delivery(pg_temp.ref('Excel ENERGIA fila 12'), private.today_co(), 'Ana')
 $$, 'P0001', null, 'la entrega histórica solo aplica a órdenes cargadas en producción');
 select throws_ok($$
-  select public.register_historical_delivery(pg_temp.ref('Excel PARTICULAR OCTUBRE fila 4'), current_date + 1, 'Carlos')
+  select public.register_historical_delivery(pg_temp.ref('Excel PARTICULAR OCTUBRE fila 4'), private.today_co() + 1, 'Carlos')
 $$, 'P0001', null, 'la entrega no puede ser futura');
 select lives_ok($$
-  select public.register_historical_delivery(pg_temp.ref('Excel PARTICULAR OCTUBRE fila 4'), current_date, 'Carlos Ruiz')
+  select public.register_historical_delivery(pg_temp.ref('Excel PARTICULAR OCTUBRE fila 4'), private.today_co(), 'Carlos Ruiz')
 $$, 'Operación registra la entrega del histórico');
 select is(
   (select ops_status || '/' || historical_delivery_receiver from public.orders where id = pg_temp.ref('Excel PARTICULAR OCTUBRE fila 4')),
