@@ -64,7 +64,7 @@ const [assigned, branches, contacts, agreements, deals, campaigns, orders, allOr
   supabase.from('v_orders').select('deal_id, campaign_id, buyer_id, total_amount, is_cancelled').eq('company_id', id).limit(5000),
   canSeeMoney ? supabase.from('v_company_finance').select('*').eq('company_id', id).maybeSingle() : Promise.resolve({ data: null }),
   canSeeMoney ? supabase.from('v_payments').select('*').eq('company_id', id).order('payment_date', { ascending: false }).limit(50) : Promise.resolve({ data: [] }),
-  canSeeCosts ? supabase.from('v_order_margins').select('total_amount, cost_total, costs_count, is_cancelled').eq('company_id', id) : Promise.resolve({ data: [] }),
+  canSeeCosts ? supabase.from('v_order_margins').select('total_amount, cost_total, costs_count, costs_complete, is_cancelled').eq('company_id', id) : Promise.resolve({ data: [] }),
   canSeeTimeline ? supabase.rpc('company_timeline', { p_company_id: id, p_limit: 60 }) : Promise.resolve({ data: [] }),
 ]);
 
@@ -90,10 +90,10 @@ for (const o of active) {
 }
 const dealName = new Map((deals.data ?? []).map((d) => [d.id!, d.deal_name_branch]));
 
-const costRows = (margins.data ?? []) as { total_amount: number | null; cost_total: number | null; costs_count: number | null; is_cancelled: boolean | null }[];
+const costRows = (margins.data ?? []) as { total_amount: number | null; cost_total: number | null; costs_count: number | null; costs_complete: boolean | null; is_cancelled: boolean | null }[];
 const costTotal = costRows.reduce((s, m) => s + Number(m.cost_total ?? 0), 0);
 const soldActive = costRows.filter((m) => !m.is_cancelled).reduce((s, m) => s + Number(m.total_amount ?? 0), 0);
-const withoutCost = costRows.filter((m) => !m.is_cancelled && !m.costs_count).length;
+const withoutCost = costRows.filter((m) => !m.is_cancelled && !m.costs_complete).length;
 
 const orderList = orders.data ?? [];
 const fin = finance.data;
@@ -321,9 +321,10 @@ const hasFilter = Object.values(filters).some(Boolean);
           )}
           {canSeeCosts && costRows.length > 0 && (
             <p class="mt-3 rounded-md bg-slate-50 p-2 text-sm">
-              <span class="font-medium">Costos directos (Dirección y Socio):</span> costo {cop(costTotal)} · diferencia venta − costo {cop(soldActive - costTotal)}
-              {soldActive > 0 && ` (${pct((soldActive - costTotal) / soldActive)})`}
-              {withoutCost > 0 && <span class="text-amber-700"> · {withoutCost} orden(es) sin costo: diferencia incompleta</span>}
+              <span class="font-medium">Costos directos (Dirección y Socio):</span> costo {cop(costTotal)} · diferencia venta − costo{' '}
+              {withoutCost > 0 ? 'no disponible' : cop(soldActive - costTotal)}
+              {withoutCost === 0 && soldActive > 0 && ` (${pct((soldActive - costTotal) / soldActive)})`}
+              {withoutCost > 0 && <span class="text-amber-700"> · {withoutCost} orden(es) con costos incompletos</span>}
             </p>
           )}
           <h3 class="mb-1 mt-4 text-sm font-semibold">Recibos de caja corporativos</h3>

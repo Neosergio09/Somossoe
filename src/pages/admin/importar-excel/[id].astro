@@ -7,6 +7,8 @@ import {
   BALANCE_RULE_LABELS,
   BUYER_DOCUMENT_LABELS,
   COLLECTION_RESPONSIBLE_LABELS,
+  EXCEL_LENS_STATUS_LABELS,
+  EXCEL_ROW_KIND_LABELS,
   HISTORICAL_STAGE_HINTS,
   HISTORICAL_STAGE_LABELS,
   IMPORT_STATUS_BADGE,
@@ -42,6 +44,7 @@ const outcome = await runActions(Astro, {
         collection_responsible: z.enum(keys(COLLECTION_RESPONSIBLE_LABELS)),
         installment_periodicity: z.enum(keys(PAYROLL_LABELS)).optional(),
         first_due_date: date().optional(),
+        campaign_id: uuid().optional(),
       }),
       form,
     );
@@ -56,6 +59,7 @@ const outcome = await runActions(Astro, {
           agreement_id: patch.company_id ? (patch.agreement_id ?? null) : null,
           installment_periodicity: patch.installment_periodicity ?? null,
           first_due_date: patch.first_due_date ?? null,
+          campaign_id: patch.campaign_id ?? null,
         })
         .eq('id', sheet_id)
         .eq('import_id', id)
@@ -112,7 +116,7 @@ const outcome = await runActions(Astro, {
   load: async (form) => {
     const { sheet_id } = parseForm(z.object({ sheet_id: uuid() }), form);
     const loaded = ensure(await supabase.rpc('excel_import_load_sheet', { p_sheet_id: sheet_id }));
-    return { message: `Hoja cargada: ${loaded} orden(es) histórica(s) creada(s).` };
+    return { message: `Hoja cargada: ${loaded} fila(s) (ventas como órdenes históricas; quienes no compraron, a Seguimiento de la jornada).` };
   },
   discard: async () => {
     ensure(await supabase.from('excel_imports').update({ status: 'descartada' }).eq('id', id).select('id').single());
@@ -148,7 +152,7 @@ const sheet =
 const ROW_FILTERS = ['todas', ...keys(ROW_STATUS_LABELS)] as const;
 const filter = (ROW_FILTERS as readonly string[]).includes(Astro.url.searchParams.get('estado') ?? '') ? Astro.url.searchParams.get('estado')! : 'todas';
 
-const [rowsRes, companiesRes, agreementsRes] = await Promise.all([
+const [rowsRes, companiesRes, agreementsRes, campaignsRes] = await Promise.all([
   sheet
     ? (() => {
         let q = supabase.from('excel_import_rows').select('*, companies(name), orders(order_number)').eq('sheet_id', sheet.id).order('row_number');
@@ -160,8 +164,22 @@ const [rowsRes, companiesRes, agreementsRes] = await Promise.all([
   sheet?.company_id
     ? supabase.from('agreements_convenios').select('id, status, max_installments, payroll_frequency, valid_until').eq('company_id', sheet.company_id).order('created_at', { ascending: false })
     : Promise.resolve({ data: [] }),
+  // Jornadas para pasar a Seguimiento a quienes no compraron (de la empresa de la hoja si la tiene)
+  (() => {
+    let q = supabase
+      .from('v_campaigns')
+      .select('id, company_name, deal_name_branch, first_session_date, status, sessions_count')
+      .neq('status', 'cancelada')
+      .gt('sessions_count', 0)
+      .order('first_session_date', { ascending: false })
+      .limit(200);
+    if (sheet?.company_id) q = q.eq('company_id', sheet.company_id);
+    return q;
+  })(),
 ]);
 const rows = rowsRes.data ?? [];
+const campaigns = campaignsRes.data ?? [];
+const followupRows = sheet ? (await supabase.from('excel_import_rows').select('id', { count: 'exact', head: true }).eq('sheet_id', sheet.id).neq('row_kind', 'venta')).count ?? 0 : 0;
 const companies = companiesRes.data ?? [];
 const agreements = agreementsRes.data ?? [];
 
@@ -288,9 +306,24 @@ const marks = (m: unknown) => Object.entries((m ?? {}) as Record<string, string>
                       <label class="label">Próxima cuota (nómina con saldo)</label>
                       <input class="input" name="first_due_date" type="date" value={sheet.first_due_date ?? ''} />
                     </div>
+                    <div class="sm:col-span-2">
+                      <label class="label">Jornada del CRM para quienes no compraron{followupRows > 0 && ` (${followupRows} fila(s))`}</label>
+                      <select class="input" name="campaign_id">
+                        <option value="">— Ninguna —</option>
+                        {campaigns.map((c) => (
+                          <option value={c.id} selected={c.id === sheet.campaign_id}>
+                            {c.company_name} · {c.deal_name_branch}{c.first_session_date ? ` · ${fmtDate(c.first_session_date)}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <p class="mt-1 text-xs text-slate-500">
+                        Las filas de «pendientes por llamar» y «desistieron» no son ventas: se registran como atendidos con seguimiento en esa jornada (Jornadas → Seguimiento).
+                        {sheet.company_id ? ' Se listan las jornadas de la empresa de la hoja.' : ' Guarde la empresa para ver solo sus jornadas.'}
+                      </p>
+                    </div>
                   </div>
                   <p class="text-xs text-slate-500">
-                    Las cuotas pendientes de nómina se toman de la columna CUOTAS. Cada hoja es una clasificación humana: no se crea una jornada por pestaña.
+                    Las cuotas pendientes de nómina se toman de la columna CUOTAS. Si la fila trae «Estado del lente», su etapa manda sobre la de la hoja. Cada hoja es una clasificación humana: no se crea una jornada por pestaña.
                   </p>
                   <div class="flex flex-wrap gap-2">
                     <button class="btn btn-primary" type="submit">Guardar clasificación</button>
@@ -303,7 +336,7 @@ const marks = (m: unknown) => Object.entries((m ?? {}) as Record<string, string>
               imp.status === 'en_revision' && sheet.status !== 'cargada' && !sheet.skip_reason && (
                 <div class="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
                   {sheet.status === 'pendiente' && sheetCounts && (
-                    <form method="post" onsubmit={`return confirm('¿Cargar ${sheetCounts.lista} orden(es) histórica(s)? Esta acción no se deshace desde aquí.')`}>
+                    <form method="post" onsubmit={`return confirm('¿Cargar ${sheetCounts.lista} fila(s)? Esta acción no se deshace desde aquí.')`}>
                       <input type="hidden" name="_action" value="load" />
                       <input type="hidden" name="sheet_id" value={sheet.id} />
                       <button class="btn btn-primary" type="submit" disabled={sheetCounts.con_error > 0 || sheetCounts.lista === 0}>
@@ -356,6 +389,8 @@ const marks = (m: unknown) => Object.entries((m ?? {}) as Record<string, string>
                             <td>
                               {r.full_name ?? <span class="text-slate-400">sin nombre</span>}
                               <div class="text-xs text-slate-500">{r.document_id ?? 'sin documento'}{r.phone && ` · ${r.phone}`}</div>
+                              {r.row_kind !== 'venta' && <span class="badge badge-amber mt-1" title={r.section_label ?? ''}>{EXCEL_ROW_KIND_LABELS[r.row_kind]}</span>}
+                              {r.lens_status && <div class="text-xs text-slate-500">Lente: {EXCEL_LENS_STATUS_LABELS[r.lens_status]}</div>}
                             </td>
                             <td class="text-xs">{r.companies?.name ?? r.company_name ?? (sheet.company_id ? 'de la hoja' : '—')}</td>
                             <td class="whitespace-nowrap text-xs">{fmtDate(r.event_date)}</td>
@@ -368,11 +403,12 @@ const marks = (m: unknown) => Object.entries((m ?? {}) as Record<string, string>
                             </td>
                             <td class="text-xs">{marks(r.legacy_marks).map(([k, val]) => <div title={val}>{k}: {val.length > 30 ? `${val.slice(0, 30)}…` : val}</div>)}</td>
                           </tr>
-                          {(r.errors.length > 0 || r.omit || (editable && r.status !== 'cargada')) && (
+                          {(r.errors.length > 0 || r.warnings.length > 0 || r.omit || (editable && r.status !== 'cargada')) && (
                             <tr class="border-t-0">
                               <td></td>
                               <td colspan="10" class="pt-0">
                                 {r.errors.length > 0 && <ul class="text-xs text-red-700">{r.errors.map((e) => <li>• {e}</li>)}</ul>}
+                                {r.warnings.length > 0 && <ul class="text-xs text-amber-700">{r.warnings.map((e) => <li>△ {e}</li>)}</ul>}
                                 {r.omit && <p class="text-xs text-slate-500">Omitida: {r.omit_reason}</p>}
                                 {editable && r.status !== 'cargada' && (
                                   <details open={lastAction === 'update_row' && v.row_id === r.id}>

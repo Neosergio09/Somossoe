@@ -1,7 +1,7 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
 import { fmtDateTime } from '../../lib/format';
-import { WARRANTY_STATUS_BADGE, WARRANTY_STATUS_LABELS, WARRANTY_TYPE_LABELS } from '../../lib/labels';
+import { CREDIT_NOTE_STATUS_BADGE, CREDIT_NOTE_STATUS_LABELS, WARRANTY_STATUS_BADGE, WARRANTY_STATUS_LABELS, WARRANTY_TYPE_LABELS } from '../../lib/labels';
 import { orderNumber } from '../../lib/orders';
 
 const { supabase } = Astro.locals;
@@ -10,8 +10,9 @@ const status = Astro.url.searchParams.get('estado') ?? 'abiertos';
 let query = supabase.from('v_warranties').select('*').order('created_at', { ascending: false }).limit(300);
 if (status === 'abiertos') query = query.neq('status', 'cerrada');
 else if (status === 'cerrada') query = query.eq('status', 'cerrada');
+else if (status === 'notas_credito') query = query.in('credit_note_status', ['por_solicitar', 'solicitada']);
 const { data: warranties } = await query;
-const tabs: [string, string][] = [['abiertos', 'Abiertos'], ['cerrada', 'Cerrados'], ['todos', 'Todos']];
+const tabs: [string, string][] = [['abiertos', 'Abiertos'], ['cerrada', 'Cerrados'], ['notas_credito', 'Notas crédito pendientes'], ['todos', 'Todos']];
 ---
 
 <AppLayout title="Posventa">
@@ -35,7 +36,7 @@ const tabs: [string, string][] = [['abiertos', 'Abiertos'], ['cerrada', 'Cerrado
 
   <div class="card overflow-x-auto p-0">
     <table class="table">
-      <thead><tr><th>Caso</th><th>Orden</th><th>Comprador</th><th>Responsable</th><th>Estado</th><th>Abierto</th></tr></thead>
+      <thead><tr><th>Caso</th><th>Orden</th><th>Comprador</th><th>Responsable</th><th>Estado</th><th>Nota crédito</th><th>Abierto</th></tr></thead>
       <tbody>
         {
           warranties?.map((w) => (
@@ -48,11 +49,21 @@ const tabs: [string, string][] = [['abiertos', 'Abiertos'], ['cerrada', 'Cerrado
               <td>{w.buyer_name}{w.company_name && <div class="text-xs text-slate-500">{w.company_name}</div>}</td>
               <td>{w.responsible_name}</td>
               <td><span class={WARRANTY_STATUS_BADGE[w.status!]}>{WARRANTY_STATUS_LABELS[w.status!]}</span></td>
+              <td>
+                {w.credit_note_status && w.credit_note_status !== 'no_aplica' ? (
+                  <>
+                    <span class={CREDIT_NOTE_STATUS_BADGE[w.credit_note_status]}>{CREDIT_NOTE_STATUS_LABELS[w.credit_note_status]}</span>
+                    {w.credit_note_lab_name && <div class="text-xs text-slate-500">{w.credit_note_lab_name}</div>}
+                  </>
+                ) : (
+                  <span class="text-xs text-slate-400">—</span>
+                )}
+              </td>
               <td class="text-xs whitespace-nowrap">{fmtDateTime(w.created_at)}</td>
             </tr>
           ))
         }
-        {!warranties?.length && <tr><td colspan="6" class="py-6 text-center text-slate-500">No hay casos.</td></tr>}
+        {!warranties?.length && <tr><td colspan="7" class="py-6 text-center text-slate-500">No hay casos.</td></tr>}
       </tbody>
     </table>
   </div>

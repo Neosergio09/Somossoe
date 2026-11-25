@@ -28,7 +28,7 @@ const readyRows = (ready.data ?? []).filter((p) =>
 const tabs: [string, string, number][] = [
   ['por_liberar', 'Por liberar', toRelease.data?.length ?? 0],
   ['en_produccion', 'En producción', inProgress.data?.length ?? 0],
-  ['listas', 'Listas para entregar', readyRows.length],
+  ['listas', 'Recibidos en SOE por entregar', readyRows.length],
 ];
 const rows = tab === 'en_produccion' ? inProgress.data ?? [] : readyRows;
 const href = (p: { order_id: string | null; warranty_id: string | null }) => (p.warranty_id ? `/garantias/${p.warranty_id}` : `/ordenes/${p.order_id}`);
@@ -82,7 +82,7 @@ const href = (p: { order_id: string | null; warranty_id: string | null }) => (p.
     ) : (
       <div class="card overflow-x-auto p-0">
         <table class="table">
-          <thead><tr><th>Orden</th><th>Comprador</th><th>Laboratorio</th><th>Envío</th><th>Prometida</th><th>Lista</th><th>Estado</th></tr></thead>
+          <thead><tr><th>Orden</th><th>Comprador</th><th>Laboratorio</th><th>Orden al lab.</th><th>Prometida</th><th>Recibido en SOE</th><th class="text-right">Días</th><th>Estado</th></tr></thead>
           <tbody>
             {rows.map((p) => (
               <tr class:list={[p.is_overdue && 'bg-red-50']}>
@@ -95,6 +95,9 @@ const href = (p: { order_id: string | null; warranty_id: string | null }) => (p.
                 <td class="whitespace-nowrap">{fmtDate(p.sent_to_lab_at)}</td>
                 <td class="whitespace-nowrap">{fmtDate(p.promised_date)} {p.is_overdue && <span class="badge badge-red">Atrasada</span>}</td>
                 <td class="whitespace-nowrap">{fmtDate(p.ready_at)}</td>
+                <td class="text-right whitespace-nowrap" title={p.days_since_received != null ? 'Días desde que llegó a SOE' : 'Días desde la orden al laboratorio'}>
+                  {p.days_since_received ?? p.days_in_lab}
+                </td>
                 <td>
                   {p.warranty_id || !p.ops_status ? (
                     <span class={p.status ? PRODUCTION_STATUS_BADGE[p.status] : 'badge'}>{p.status ? PRODUCTION_STATUS_LABELS[p.status] : ''}</span>
@@ -104,7 +107,7 @@ const href = (p: { order_id: string | null; warranty_id: string | null }) => (p.
                 </td>
               </tr>
             ))}
-            {!rows.length && <tr><td colspan="7" class="py-6 text-center text-slate-500">Nada en esta vista.</td></tr>}
+            {!rows.length && <tr><td colspan="8" class="py-6 text-center text-slate-500">Nada en esta vista.</td></tr>}
           </tbody>
         </table>
       </div>

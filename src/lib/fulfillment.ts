@@ -72,9 +72,13 @@ export function fulfillmentActions(
       return { message: 'Producción actualizada.' };
     },
     production_ready: async (form) => {
-      const input = parseForm(z.object({ ready_at: date() }), form);
-      await updateProduction(productionId(form), { status: 'listo_para_entregar', ready_at: input.ready_at });
-      return { message: 'Producción marcada como lista para entregar.' };
+      const input = parseForm(z.object({ ready_at: date(), lab_order_reference: text(60).optional() }), form);
+      await updateProduction(productionId(form), {
+        status: 'listo_para_entregar',
+        ready_at: input.ready_at,
+        ...(input.lab_order_reference ? { lab_order_reference: input.lab_order_reference } : {}),
+      });
+      return { message: 'Lente marcado como recibido en SOE.' };
     },
     production_back: async (form) => {
       await updateProduction(productionId(form), { status: 'en_produccion', ready_at: null });

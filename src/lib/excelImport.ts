@@ -5,6 +5,12 @@
 // Exclusión clínica (doc §8): RX, ADD y cualquier encabezado de fórmula o
 // graduación no se leen; las columnas sin encabezado reconocido tampoco,
 // salvo marcas cortas conocidas (FACTURADO, X, ENTREGADA).
+//
+// Plantilla 2026 (L11, «SOE - JORNADAS (nuevo)»): título en la fila 1,
+// «Fecha jornada» en la fila 2, encabezados en la fila 4, estado del lente
+// calculado y hojas de consulta (INICIO, BASE, BUSCAR…) que no se importan.
+// En MAGNETRON las filas van en secciones: las de «pendientes por llamar» y
+// «desistieron» no son ventas, pasan a Seguimiento de la jornada.
 import type { Cell, CellValue, WorkbookSheet } from './xlsx';
 
 export type ImportRow = {
@@ -26,8 +32,15 @@ export type ImportRow = {
   cost_frame: number | null;
   cost_kit: number | null;
   paid_declared: number | null;
+  lens_status: LensStatus | null;
+  row_kind: RowKind;
+  section_label: string | null;
   legacy_marks: Record<string, string>;
 };
+
+export type LensStatus = 'por_pedir' | 'en_laboratorio' | 'por_entregar' | 'entregado';
+/** venta = se carga como orden; los demás no compraron y van a Seguimiento */
+export type RowKind = 'venta' | 'pendiente_cierre' | 'desistio';
 
 export type ImportSheet = {
   sheet_name: string;
@@ -38,7 +51,7 @@ export type ImportSheet = {
   rows: ImportRow[];
 };
 
-type Field = Exclude<keyof ImportRow, 'row_number' | 'block_number' | 'fingerprint' | 'legacy_marks'>;
+type Field = Exclude<keyof ImportRow, 'row_number' | 'block_number' | 'fingerprint' | 'legacy_marks' | 'row_kind' | 'section_label'>;
 
 /** Mayúsculas, sin tildes ni signos, espacios simples. */
 export const norm = (s: string) =>
@@ -63,7 +76,11 @@ const SHEET_MAPS: [string, string][] = [
   ['GARANTIAS', 'L10'],
 ];
 
-const GARANTIAS_REASON = 'Hoja de garantías con bloques mixtos y sin encabezado fiable: no se importa por columnas (doc §3.2).';
+const GARANTIAS_REASON = 'Hoja de garantías: no se importa por columnas. Las garantías se registran en Posventa sobre la orden ya cargada.';
+const HIDDEN_REASON = 'Hoja oculta del Excel (cálculos internos): no se importa.';
+const CONTROL_REASON = 'Hoja de consulta del Excel: se calcula a partir de las hojas de ventas, no se importa.';
+// Hojas de consulta de la plantilla 2026 (repiten datos de las hojas de ventas)
+const CONTROL_SHEETS = new Set(['INICIO', 'LABORATORIOS', 'POR ENTREGAR', 'BUSCAR', 'BUSCAR PACIENTE', 'BASE', 'CONFIG']);
 
 // Encabezados clínicos: nunca se leen
 const CLINICAL = /^(RX|ADD|AD|FORMULA|GRADUACION|DIAGNOSTICO|ESFERA|CILINDRO|EJE|DP|AV)( |$)/;
@@ -77,15 +94,17 @@ const HEADER_FIELDS: [RegExp, Field][] = [
   [/^(TELEFONO|CELULAR)/, 'phone'],
   [/^TIPO DE LENTE/, 'lens_type'],
   [/^CUOTAS?$/, 'installments'],
-  [/^ORDEN/, 'lab_reference'],
+  // ORDEN, N.º ORDEN («N ORDEN» normalizado), NO. ORDEN, NÚMERO DE ORDEN
+  [/^((N|NO|NRO|NUM|NUMERO)( DE)? )?ORDEN\b/, 'lab_reference'],
   [/^LABORATORIO/, 'lab_name'],
   [/^MONTURA/, 'frame'],
   [/^COSTO MONTURA/, 'cost_frame'],
   [/^COSTO KIT/, 'cost_kit'],
   [/^ABONO/, 'paid_declared'],
+  [/^ESTADO( DEL)? LENTE/, 'lens_status'],
 ];
 // Marcas legadas con encabezado: se guardan solo en la revisión
-const LEGACY_HEADERS = /^(PENDIENTE|FACTURADO|X|ENTREGADAS?|OBSERVACION(ES)?)$/;
+const LEGACY_HEADERS = /^(PENDIENTE|FACTURADO|X|ENTREGADAS?|OBSERVACION(ES)?|MEDIO DE PAGO)$/;
 // Marcas cortas en columnas sin encabezado (p. ej. FACTURADO en L1:N)
 const LEGACY_TOKENS = /^(FACTURADO|FACTURADA|X|ENTREGADO|ENTREGADA|ENTREGADAS|PENDIENTE)$/;
 
@@ -224,18 +243,62 @@ export async function rowFingerprint(row: Omit<ImportRow, 'fingerprint'>, sheetN
   return sha256(JSON.stringify(key));
 }
 
+/** Estado del lente calculado en la plantilla 2026 */
+export const lensStatus = (v: CellValue | undefined): LensStatus | null => {
+  if (typeof v !== 'string') return null;
+  const s = norm(v);
+  if (/^ENTREGAD/.test(s)) return 'entregado';
+  if (/^LLEGO/.test(s) || /POR ENTREGAR/.test(s)) return 'por_entregar';
+  if (/LABORATORIO/.test(s)) return 'en_laboratorio';
+  if (/^POR PEDIR/.test(s)) return 'por_pedir';
+  return null;
+};
+
+/**
+ * Fila de sección (solo texto, sin persona ni valor), p. ej. en MAGNETRON:
+ * «COMPRARON…», «PENDIENTES POR LLAMAR…», «DESISTIERON». Devuelve el tipo de
+ * las filas que siguen, o null si el texto no es una sección conocida.
+ */
+export const sectionKind = (label: string): RowKind | null => {
+  const s = norm(label);
+  if (/DESISTI/.test(s)) return 'desistio';
+  if (/PENDIENTE|LLAMAR|NO CONTESTA|NO HAN ABONADO|QUEDARON DE ABONAR/.test(s)) return 'pendiente_cierre';
+  if (/^COMPRARON|^COMPRO|^VENTAS?\b/.test(s)) return 'venta';
+  return null;
+};
+
+/** «Fecha jornada:» y su valor a la derecha, antes de los encabezados */
+function sheetEventDate(sheet: WorkbookSheet, headerRow: number): string | null {
+  for (const [rowNumber, cells] of sheet.cells) {
+    if (rowNumber >= headerRow) continue;
+    for (const [col, cell] of cells) {
+      if (typeof cell.value === 'string' && /^FECHA (DE )?(LA )?JORNADA/.test(norm(cell.value))) {
+        const date = toDate(cells.get(col + 1)?.value);
+        if (date) return date;
+      }
+    }
+  }
+  return null;
+}
+
 export async function interpretSheet(sheet: WorkbookSheet): Promise<ImportSheet> {
   const normalized = norm(sheet.name);
-  const map_code = SHEET_MAPS.find(([name]) => name === normalized)?.[1] ?? null;
-  const base = { sheet_name: sheet.name, sheet_index: sheet.index, map_code };
-  if (map_code === 'L10' || /\bGARANTIA/.test(normalized)) {
-    return { ...base, map_code: 'L10', detected_columns: [], skip_reason: GARANTIAS_REASON, rows: [] };
-  }
+  const nameMap = SHEET_MAPS.find(([name]) => name === normalized)?.[1] ?? null;
+  const base = { sheet_name: sheet.name, sheet_index: sheet.index, map_code: nameMap };
+  const skipped = (map_code: string | null, reason: string) => ({ ...base, map_code, detected_columns: [], skip_reason: reason, rows: [] });
+  if (nameMap === 'L10' || /\bGARANTIA/.test(normalized)) return skipped('L10', GARANTIAS_REASON);
+  if (sheet.hidden) return skipped(null, HIDDEN_REASON);
+  if (CONTROL_SHEETS.has(normalized)) return skipped(null, CONTROL_REASON);
 
   const rows: ImportRow[] = [];
   const detected = new Set<string>();
   let columns: ColumnMap | null = null;
   let block = 0;
+  let template2026 = false;
+  let defaultDate: string | null = null;
+  let kind: RowKind = 'venta';
+  let section: string | null = null;
+  let groupCompany: string | null = null;
 
   for (const rowNumber of [...sheet.cells.keys()].sort((a, b) => a - b)) {
     const cells = sheet.cells.get(rowNumber)!;
@@ -243,7 +306,12 @@ export async function interpretSheet(sheet: WorkbookSheet): Promise<ImportSheet>
       columns = buildColumnMap(cells);
       fixDateUnderNameHeader(columns, sheet, rowNumber);
       columns.detected.forEach((h) => detected.add(h));
+      if ([...columns.fields.values()].includes('lens_status') || columns.detected.includes('MEDIO DE PAGO')) template2026 = true;
+      defaultDate = sheetEventDate(sheet, rowNumber) ?? defaultDate;
       block += 1;
+      kind = 'venta';
+      section = null;
+      groupCompany = null;
       continue;
     }
     if (!columns || isTotalRow(cells)) continue;
@@ -256,15 +324,36 @@ export async function interpretSheet(sheet: WorkbookSheet): Promise<ImportSheet>
     const sale = get('sale_value');
     if (sale?.formula && /SUM|SUMA/i.test(sale.formula)) continue;
 
+    const fullName = text(get('full_name')?.value);
+    const documentId = text(get('document_id')?.value);
+    const saleValue = money(sale?.value);
+
+    // Fila de solo texto: sección (MAGNETRON) o, en la plantilla 2026 sin
+    // columna EMPRESA, el nombre de la empresa del grupo (hoja de empresas
+    // clientes, donde cada empresa va como fila separadora)
+    if (!fullName && !documentId && saleValue == null) {
+      const labels = [...cells.values()].filter((c) => typeof c.value === 'string' && !c.formula).map((c) => String(c.value).trim());
+      if (labels.length === 1 && labels[0]) {
+        const k = sectionKind(labels[0]);
+        if (k) {
+          kind = k;
+          section = labels[0].slice(0, 200);
+        } else if (template2026 && ![...columns.fields.values()].includes('company_name') && toDate(labels[0]) == null) {
+          groupCompany = labels[0].slice(0, 200);
+        }
+      }
+      continue;
+    }
+
     const row: Omit<ImportRow, 'fingerprint'> = {
       row_number: rowNumber,
       block_number: block,
-      event_date: toDate(get('event_date')?.value ?? (columns.dateInFirstColumn ? cells.get(0)?.value : undefined)),
-      company_name: text(get('company_name')?.value),
-      full_name: text(get('full_name')?.value),
-      document_id: text(get('document_id')?.value),
+      event_date: toDate(get('event_date')?.value ?? (columns.dateInFirstColumn ? cells.get(0)?.value : undefined)) ?? defaultDate,
+      company_name: text(get('company_name')?.value) ?? groupCompany,
+      full_name: fullName,
+      document_id: documentId,
       phone: text(get('phone')?.value),
-      sale_value: money(sale?.value),
+      sale_value: saleValue,
       installments: integer(get('installments')?.value),
       lab_reference: text(get('lab_reference')?.value)?.slice(0, 60) ?? null,
       lab_name: text(get('lab_name')?.value),
@@ -274,10 +363,11 @@ export async function interpretSheet(sheet: WorkbookSheet): Promise<ImportSheet>
       cost_frame: money(get('cost_frame')?.value),
       cost_kit: money(get('cost_kit')?.value),
       paid_declared: money(get('paid_declared')?.value),
+      lens_status: lensStatus(get('lens_status')?.value),
+      row_kind: kind,
+      section_label: section,
       legacy_marks: {},
     };
-    // Filas vacías o de notas sueltas: no son ventas
-    if (!row.full_name && !row.document_id && row.sale_value == null) continue;
 
     for (const [col, header] of columns.legacy) {
       const v = text(cells.get(col)?.value);
@@ -294,6 +384,7 @@ export async function interpretSheet(sheet: WorkbookSheet): Promise<ImportSheet>
 
   return {
     ...base,
+    map_code: template2026 ? 'L11' : nameMap,
     detected_columns: [...detected],
     skip_reason: block === 0 ? 'No se encontró una fila de encabezados con NOMBRE y CÉDULA/DOCUMENTO.' : null,
     rows,

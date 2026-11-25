@@ -2,7 +2,7 @@
 -- (Especificación Módulo de Jornadas V01).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(53);
+select plan(55);
 
 -- ---------------- Preparación (como postgres) ----------------
 insert into auth.users (id, email) values
@@ -242,8 +242,13 @@ $$, 'Dirección registra un costo estimado');
 insert into public.order_costs (order_id, component, amount, basis, source)
 values (pg_temp.ord('Ana'), 'montura', 80000, 'verificado', 'Factura proveedor monturas');
 select is(
+  (select cost_basis || '/' || cost_total || '/' || coalesce(margin_amount::text, '') from public.v_order_margins where order_id = pg_temp.ord('Ana')),
+  'incompleto/200000/', 'gafas completas sin costo de kit: margen no disponible');
+insert into public.order_costs (order_id, component, amount, basis, source)
+values (pg_temp.ord('Ana'), 'kit', 10000, 'verificado', 'Kit estándar');
+select is(
   (select cost_basis || '/' || cost_total || '/' || margin_amount from public.v_order_margins where order_id = pg_temp.ord('Ana')),
-  'estimado/200000/100000', 'con un costo estimado el margen se marca estimado');
+  'estimado/210000/90000', 'con todos los costos y uno estimado el margen se marca estimado');
 select is(
   (select cost_basis || '/' || coalesce(margin_amount::text, 'null') from public.v_order_margins where order_id = pg_temp.ord('Carlos')),
   'sin_costos/null', 'sin costos el margen no está disponible (no es cero)');
@@ -273,7 +278,7 @@ $$, '42501', null, 'un costo no se edita');
 select is(
   (select cost_basis || '/' || cost_total || '/' || margin_amount || '/' || margin_ratio
    from public.v_order_margins where order_id = pg_temp.ord('Ana')),
-  'verificado/190000/110000/0.3667', 'el margen usa solo las versiones vigentes');
+  'verificado/200000/100000/0.3333', 'el margen usa solo las versiones vigentes');
 
 select throws_ok($$
   update public.order_costs set is_voided = true where source = 'Factura proveedor monturas'
@@ -283,17 +288,20 @@ where source = 'Factura proveedor monturas';
 select throws_ok($$
   update public.order_costs set is_voided = true, void_reason = 'otra vez' where source = 'Factura proveedor monturas'
 $$, 'P0001', null, 'un costo anulado no se vuelve a anular');
-select is((select cost_total from public.v_order_margins where order_id = pg_temp.ord('Ana')), 110000::numeric,
-  'el costo anulado sale del margen');
+select is((select cost_total || '/' || cost_basis || '/' || coalesce(margin_amount::text, '') from public.v_order_margins where order_id = pg_temp.ord('Ana')),
+  '120000/incompleto/', 'el costo anulado sale y la orden vuelve a quedar sin margen');
 select is(
   (select sold_amount || '/' || cost_total || '/' || orders_without_costs from public.v_campaign_margins where campaign_id = pg_temp.jid()),
-  '500000/110000/1', 'margen de la jornada: venta sin anuladas, costos vigentes y órdenes sin costo');
+  '500000/120000/1', 'margen de la jornada: venta sin anuladas, costos vigentes y órdenes sin costo');
+select is(
+  (select orders_incomplete_costs || '/' || coalesce(margin_amount::text, '') from public.v_campaign_margins where campaign_id = pg_temp.jid()),
+  '2/', 'sin costos completos en todas las órdenes la jornada no muestra margen');
 select cmp_ok((select count(*) from public.audit_logs where table_name = 'order_costs'), '>', 0::bigint,
   'Dirección ve la auditoría de costos');
 
 -- Nadie más recibe costos
 select pg_temp.login('00000000-0000-0000-0000-0000000000e1');
-select is((select count(*) from public.v_order_costs), 3::bigint, 'el socio consulta los costos y su historial');
+select is((select count(*) from public.v_order_costs), 4::bigint, 'el socio consulta los costos y su historial');
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
 select is(
   (select count(*) from public.order_costs) + (select count(*) from public.v_order_margins)

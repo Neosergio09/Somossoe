@@ -4,6 +4,8 @@ import { hasRole } from '../../lib/auth';
 import { cop, fmtDate, fmtDateTime, fmtTime, fmtWeekday, pct } from '../../lib/format';
 import { checkbox, date, ensure, ensureFresh, FormError, formVersion, int, parseForm, runActions, text, time, uuid, VERSION_FIELD, z } from '../../lib/forms';
 import {
+  ATTENDANCE_FOLLOWUP_BADGE,
+  ATTENDANCE_FOLLOWUP_LABELS,
   ATTENDANCE_STATUS_BADGE,
   ATTENDANCE_STATUS_LABELS,
   CAMPAIGN_STATUS_BADGE,
@@ -207,6 +209,31 @@ const outcome = await runActions(Astro, {
     const warning = row && OCCUPYING.includes(input.status) ? await capacityWarning(row.session_id) : '';
     return { message: `Asistencia: ${ATTENDANCE_STATUS_LABELS[input.status].toLowerCase()}.${warning}` };
   },
+  set_followup: async (form) => {
+    const input = parseForm(
+      z.object({
+        attendee_id: uuid(),
+        followup_status: z.enum(['pendiente_cierre', 'desistio']).optional(),
+        followup_date: date().optional(),
+        followup_note: text(500).optional(),
+      }),
+      form,
+    );
+    ensure(
+      await supabase
+        .from('campaign_attendance')
+        .update({
+          followup_status: input.followup_status ?? null,
+          followup_date: input.followup_date ?? null,
+          followup_note: input.followup_note ?? null,
+        })
+        .eq('id', input.attendee_id)
+        .eq('campaign_id', id)
+        .select('id')
+        .single(),
+    );
+    return { message: input.followup_status ? `Seguimiento: ${ATTENDANCE_FOLLOWUP_LABELS[input.followup_status].toLowerCase()}.` : 'Seguimiento quitado.' };
+  },
   delete_attendee: async (form) => {
     const attendeeId = String(form.get('attendee_id') ?? '');
     ensure(await supabase.from('campaign_attendance').delete().eq('id', attendeeId).eq('campaign_id', id).select('id').single());
@@ -262,11 +289,14 @@ const beforeExecution = status === 'borrador' || status === 'programada';
 const canEdit = isTeam && (beforeExecution || status === 'en_ejecucion');
 const canCancel = hasRole(Astro.locals, 'operacion', 'direccion') && beforeExecution;
 const canAttend = isTeam && (beforeExecution || status === 'en_ejecucion');
+// Seguimiento de quien no compró: también después de cerrar la captura
+const canFollowup = isTeam && ['en_ejecucion', 'captura_cerrada', 'operacion_cerrada'].includes(status);
 // Reprogramar: Operación o Dirección, antes de ejecutar (con motivo e historial)
 const canReschedule = hasRole(Astro.locals, 'operacion', 'direccion') && beforeExecution;
 // Antes de ejecutar solo se agenda o cancela; en ejecución, cualquier estado
 const attendanceOptions: AttendanceStatus[] = beforeExecution ? ['agendado', 'cancelado'] : ATTENDANCE_STATUSES;
 const attendees = attendance.data ?? [];
+const pendingFollowups = attendees.filter((a) => a.followup_status === 'pendiente_cierre' && !a.buyer_id).length;
 const occupancy = (sid: string) => attendees.filter((a) => a.session_id === sid && OCCUPYING.includes(a.status)).length;
 const orderList = orders.data ?? [];
 const activeOrders = orderList.filter((o) => !o.is_cancelled);
@@ -286,7 +316,7 @@ const canViewCosts = hasRole(Astro.locals, 'direccion', 'socio');
 const [campaignMargin, orderMargins] = canViewCosts
   ? await Promise.all([
       supabase.from('v_campaign_margins').select('*').eq('campaign_id', id).maybeSingle(),
-      supabase.from('v_order_margins').select('order_id, cost_total, cost_basis, margin_amount').eq('campaign_id', id),
+      supabase.from('v_order_margins').select('order_id, cost_total, cost_basis, margin_amount, costs_complete').eq('campaign_id', id),
     ])
   : [{ data: null }, { data: [] }];
 const marginByOrder = new Map((orderMargins.data ?? []).map((m) => [m.order_id, m]));
@@ -455,7 +485,10 @@ const sessionLabel = (sid: string) => {
       <section class="card">
         <div class="mb-1 flex items-center justify-between">
           <h2>Asistencia</h2>
-          <span class="text-sm text-slate-500">{attendees.length} registros</span>
+          <span class="text-sm text-slate-500">
+            {attendees.length} registros
+            {pendingFollowups > 0 && <> · <a href="/jornadas/seguimiento">{pendingFollowups} pendiente(s) de cierre</a></>}
+          </span>
         </div>
         <p class="mb-3 text-xs text-slate-500">Solo datos operativos: no se registran diagnósticos ni historia clínica.</p>
         {
@@ -516,7 +549,34 @@ const sessionLabel = (sid: string) => {
                   {a.buyer_id ? (
                     <span class="badge badge-green">Compró</span>
                   ) : (
-                    canOrder && <a class="btn btn-sm" href={orderLink(a)}>Registrar orden</a>
+                    <>
+                      {canOrder && <a class="btn btn-sm" href={orderLink(a)}>Registrar orden</a>}
+                      {a.followup_status && (
+                        <div class="mt-1">
+                          <span class={ATTENDANCE_FOLLOWUP_BADGE[a.followup_status]}>{ATTENDANCE_FOLLOWUP_LABELS[a.followup_status]}</span>
+                          {a.followup_date && <span class="text-xs text-slate-500"> · llamar {fmtDate(a.followup_date)}</span>}
+                          {a.followup_note && <div class="max-w-xs whitespace-normal text-xs text-slate-500">{a.followup_note}</div>}
+                        </div>
+                      )}
+                      {canFollowup && a.status === 'atendido' && (
+                        <details class="mt-1 text-xs">
+                          <summary class="cursor-pointer text-brand-700">{a.followup_status ? 'Editar seguimiento' : 'No compró: seguimiento'}</summary>
+                          <form method="post" class="mt-1 space-y-1">
+                            <input type="hidden" name="_action" value="set_followup" />
+                            <input type="hidden" name="attendee_id" value={a.id} />
+                            <select class="input py-1 text-xs" name="followup_status" aria-label={`Seguimiento de ${a.full_name}`}>
+                              <option value="">Sin seguimiento</option>
+                              {Object.entries(ATTENDANCE_FOLLOWUP_LABELS).map(([value, label]) => (
+                                <option value={value} selected={a.followup_status === value}>{label}</option>
+                              ))}
+                            </select>
+                            <input class="input py-1 text-xs" type="date" name="followup_date" value={a.followup_date ?? ''} aria-label="Fecha para volver a llamar" title="Fecha para volver a llamar (obligatoria si queda pendiente)" />
+                            <input class="input py-1 text-xs" name="followup_note" maxlength="500" placeholder="Nota (p. ej., abona en la quincena)" value={a.followup_note ?? ''} />
+                            <button class="btn btn-sm" type="submit">Guardar</button>
+                          </form>
+                        </details>
+                      )}
+                    </>
                   )}
                 </td>
                 <td>
@@ -564,6 +624,7 @@ const sessionLabel = (sid: string) => {
                     <td class="text-right whitespace-nowrap">
                       {cop(marginByOrder.get(o.id!)?.cost_total)}
                       {marginByOrder.get(o.id!)?.cost_basis === 'estimado' && <span class="badge badge-amber ml-1">Est.</span>}
+                      {!o.is_cancelled && marginByOrder.get(o.id!)?.cost_basis === 'incompleto' && <span class="badge badge-amber ml-1" title="Faltan costos">Incompl.</span>}
                     </td>
                   )}
                   {canViewCosts && <td class="text-right whitespace-nowrap">{cop(marginByOrder.get(o.id!)?.margin_amount)}</td>}
@@ -709,15 +770,15 @@ const sessionLabel = (sid: string) => {
                 <dl class="space-y-1">
                   <div class="flex justify-between"><dt>Venta (sin anuladas)</dt><dd>{cop(campaignMargin.data.sold_amount)}</dd></div>
                   <div class="flex justify-between"><dt>Costo directo</dt><dd>{cop(campaignMargin.data.cost_total)}</dd></div>
-                  <div class="flex justify-between font-semibold"><dt>Diferencia</dt><dd>{cop(campaignMargin.data.margin_amount)} <span class="font-normal text-slate-500">({pct(campaignMargin.data.margin_ratio)})</span></dd></div>
+                  <div class="flex justify-between font-semibold"><dt>Diferencia</dt><dd>{campaignMargin.data.margin_amount == null ? 'No disponible' : <>{cop(campaignMargin.data.margin_amount)} <span class="font-normal text-slate-500">({pct(campaignMargin.data.margin_ratio)})</span></>}</dd></div>
                 </dl>
               ) : (
                 <p class="text-slate-500">—</p>
               )
             }
             {
-              campaignMargin.data && Number(campaignMargin.data.orders_without_costs) > 0 && (
-                <p class="mt-2"><span class={MARGIN_BASIS_BADGE.sin_costos}>{campaignMargin.data.orders_without_costs} orden(es) sin costos</span> <span class="text-xs text-slate-500">la diferencia está incompleta</span></p>
+              campaignMargin.data && Number(campaignMargin.data.orders_incomplete_costs) > 0 && (
+                <p class="mt-2"><span class={MARGIN_BASIS_BADGE.incompleto}>{campaignMargin.data.orders_incomplete_costs} orden(es) con costos incompletos</span> <span class="text-xs text-slate-500">la diferencia se muestra cuando todas tengan sus costos</span></p>
               )
             }
             {campaignMargin.data?.has_estimated && <p class="mt-2"><span class={MARGIN_BASIS_BADGE.estimado}>{MARGIN_BASIS_LABELS.estimado}</span> <span class="text-xs text-slate-500">incluye costos sin verificar</span></p>}

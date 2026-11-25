@@ -127,6 +127,32 @@ export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
   cancelado: 'Cancelado',
 };
 
+/** Seguimiento de quien fue atendido y no compró (no es una venta). */
+export type AttendanceFollowup = Enums['attendance_followup'];
+export const ATTENDANCE_FOLLOWUP_LABELS: Record<AttendanceFollowup, string> = {
+  pendiente_cierre: 'Pendiente de cierre',
+  desistio: 'Desistió',
+};
+export const ATTENDANCE_FOLLOWUP_BADGE: Record<AttendanceFollowup, string> = {
+  pendiente_cierre: 'badge badge-amber',
+  desistio: 'badge',
+};
+
+/** Nota crédito que SOE le cobra al laboratorio por una garantía. */
+export type CreditNoteStatus = Enums['credit_note_status'];
+export const CREDIT_NOTE_STATUS_LABELS: Record<CreditNoteStatus, string> = {
+  no_aplica: 'No aplica',
+  por_solicitar: 'Por solicitar',
+  solicitada: 'Solicitada',
+  recibida: 'Recibida',
+};
+export const CREDIT_NOTE_STATUS_BADGE: Record<CreditNoteStatus, string> = {
+  no_aplica: 'badge',
+  por_solicitar: 'badge badge-red',
+  solicitada: 'badge badge-amber',
+  recibida: 'badge badge-green',
+};
+
 export const ATTENDANCE_STATUS_BADGE: Record<AttendanceStatus, string> = {
   agendado: 'badge badge-blue',
   presente: 'badge badge-amber',
@@ -235,7 +261,7 @@ export const INSTALLMENT_STATUS_BADGE: Record<string, string> = {
 // ---------------------------------------------------------------------
 export const PRODUCTION_STATUS_LABELS: Record<Enums['production_status'], string> = {
   en_produccion: 'En producción',
-  listo_para_entregar: 'Lista para entregar',
+  listo_para_entregar: 'Recibido en SOE',
   cancelada: 'Cancelada',
 };
 
@@ -302,15 +328,17 @@ export const COST_BASIS_BADGE: Record<CostBasis, string> = {
   verificado: 'badge badge-green',
 };
 
-/** Estado del margen: sin costos no hay margen (nunca se asume cero). */
+/** Estado del margen: sin todos los costos no hay margen (nunca se asume cero). */
 export const MARGIN_BASIS_LABELS: Record<string, string> = {
   sin_costos: 'Sin costos',
+  incompleto: 'Costos incompletos',
   estimado: 'Estimado',
   verificado: 'Verificado',
 };
 
 export const MARGIN_BASIS_BADGE: Record<string, string> = {
   sin_costos: 'badge',
+  incompleto: 'badge badge-amber',
   estimado: 'badge badge-amber',
   verificado: 'badge badge-green',
 };
@@ -381,6 +409,20 @@ export const SHEET_STATUS_BADGE: Record<Enums['excel_sheet_status'], string> = {
   omitida: 'badge',
   cargada: 'badge badge-green',
 };
+/** Filas del Excel que no son ventas pasan a Seguimiento de la jornada */
+export const EXCEL_ROW_KIND_LABELS: Record<Enums['excel_row_kind'], string> = {
+  venta: 'Venta',
+  pendiente_cierre: 'No compró · pendiente',
+  desistio: 'No compró · desistió',
+};
+
+export const EXCEL_LENS_STATUS_LABELS: Record<Enums['excel_lens_status'], string> = {
+  por_pedir: 'Por pedir',
+  en_laboratorio: 'En laboratorio',
+  por_entregar: 'Llegó, por entregar',
+  entregado: 'Entregado',
+};
+
 export const ROW_STATUS_LABELS: Record<Enums['excel_row_status'], string> = {
   lista: 'Lista',
   con_error: 'Con error',

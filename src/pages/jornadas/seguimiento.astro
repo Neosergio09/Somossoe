@@ -1,0 +1,80 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import { fmtDate, fmtDateTime } from '../../lib/format';
+import { ATTENDANCE_FOLLOWUP_BADGE, ATTENDANCE_FOLLOWUP_LABELS } from '../../lib/labels';
+import { orderNumber } from '../../lib/orders';
+
+// Asistentes atendidos que no compraron en la jornada. No son ventas: la
+// venta existe solo cuando se registra la orden.
+const { supabase } = Astro.locals;
+const tab = Astro.url.searchParams.get('vista') ?? 'pendientes';
+
+const { data } = await supabase
+  .from('v_attendance_followups')
+  .select('*')
+  .order('followup_date', { nullsFirst: false })
+  .order('followup_updated_at', { ascending: false })
+  .limit(500);
+const all = data ?? [];
+const pending = all.filter((a) => a.followup_status === 'pendiente_cierre' && !a.purchased);
+const gaveUp = all.filter((a) => a.followup_status === 'desistio' && !a.purchased);
+const bought = all.filter((a) => a.purchased);
+const overdue = pending.filter((a) => a.is_overdue).length;
+
+const tabs: [string, string, number][] = [
+  ['pendientes', 'Pendientes de cierre', pending.length],
+  ['desistieron', 'Desistieron', gaveUp.length],
+  ['compraron', 'Compraron después', bought.length],
+];
+const rows = tab === 'desistieron' ? gaveUp : tab === 'compraron' ? bought : pending;
+---
+
+<AppLayout title="Seguimiento de jornadas">
+  <a href="/jornadas" class="text-sm">← Jornadas</a>
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <h1>Seguimiento de quienes no compraron</h1>
+    {overdue > 0 && <span class="badge badge-red">{overdue} con la fecha de llamada vencida</span>}
+  </div>
+  <p class="mb-4 text-sm text-slate-500">
+    Asistentes atendidos que no compraron en la jornada. No cuentan como ventas: cuando compran, se registra su orden (reabriendo la captura de la jornada o como venta directa) y pasan a «Compraron después».
+  </p>
+
+  <nav class="mb-4 flex flex-wrap gap-1 text-sm">
+    {
+      tabs.map(([value, label, count]) => (
+        <a
+          href={`?vista=${value}`}
+          class:list={['rounded-md px-3 py-1.5 hover:no-underline', tab === value ? 'bg-brand-700 text-white' : 'border border-slate-200 bg-white text-slate-700']}
+        >
+          {label} ({count})
+        </a>
+      ))
+    }
+  </nav>
+
+  <div class="card overflow-x-auto p-0">
+    <table class="table">
+      <thead><tr><th>Asistente</th><th>Teléfono</th><th>Jornada</th><th>Seguimiento</th><th>Llamar</th><th>Nota</th><th>Actualizó</th></tr></thead>
+      <tbody>
+        {rows.map((a) => (
+          <tr class:list={[a.is_overdue && 'bg-red-50']}>
+            <td>{a.full_name}<div class="text-xs text-slate-500">{a.document_id}{a.area && ` · ${a.area}`}</div></td>
+            <td class="whitespace-nowrap">{a.phone ?? '—'}</td>
+            <td><a href={`/jornadas/${a.campaign_id}`}>{a.company_name ?? 'Jornada'}</a>{a.deal_name_branch && <div class="text-xs text-slate-500">{a.deal_name_branch}</div>}</td>
+            <td>
+              {a.purchased ? (
+                <a href={`/ordenes/${a.purchase_order_id}`} class="badge badge-green">Compró · {orderNumber(a.purchase_order_number)}</a>
+              ) : (
+                a.followup_status && <span class={ATTENDANCE_FOLLOWUP_BADGE[a.followup_status]}>{ATTENDANCE_FOLLOWUP_LABELS[a.followup_status]}</span>
+              )}
+            </td>
+            <td class="whitespace-nowrap">{fmtDate(a.followup_date)} {a.is_overdue && <span class="badge badge-red">Vencida</span>}</td>
+            <td class="max-w-xs text-xs">{a.followup_note ?? '—'}</td>
+            <td class="text-xs text-slate-500">{a.followup_updated_by_name ?? '—'}<div>{fmtDateTime(a.followup_updated_at)}</div></td>
+          </tr>
+        ))}
+        {!rows.length && <tr><td colspan="7" class="py-6 text-center text-slate-500">Nada en esta vista.</td></tr>}
+      </tbody>
+    </table>
+  </div>
+</AppLayout>
