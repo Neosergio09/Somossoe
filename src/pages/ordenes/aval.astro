@@ -1,0 +1,207 @@
+---
+// Aval de la empresa por listado (backlog V0.2 · SOE-17): la empresa comunica
+// qué ventas de nómina aprueba o rechaza; se registra la decisión de varias
+// órdenes a la vez con un solo soporte. La BD valida cada orden
+// (public.record_company_approval) y no deja nada a medias.
+import AppLayout from '../../layouts/AppLayout.astro';
+import SupportFile from '../../components/SupportFile.astro';
+import { hasRole } from '../../lib/auth';
+import { filesRequired, supportPathFrom } from '../../lib/supports';
+import { cop, fmtDate, todayCo } from '../../lib/format';
+import { date, ensure, FormError, parseForm, runActions, text, z } from '../../lib/forms';
+import { orderNumber } from '../../lib/orders';
+
+if (!hasRole(Astro.locals, 'comercial', 'administracion_cartera')) return Astro.redirect('/ordenes');
+const { supabase, userId } = Astro.locals;
+const params = Astro.url.searchParams;
+const companyId = params.get('empresa') ?? '';
+const campaignId = params.get('jornada') ?? '';
+const status = params.get('estado') ?? 'pendiente';
+const isAdmin = hasRole(Astro.locals, 'administracion_cartera');
+let pickedIds: string[] = [];
+
+const outcome = await runActions(Astro, {
+  decide: async (form) => {
+    const ids = form.getAll('order_ids').map(String).filter(Boolean);
+    pickedIds = ids;
+    if (!ids.length) throw new FormError('Seleccione al menos una orden.');
+    const input = parseForm(
+      z.object({
+        decision: z.enum(['aprobada', 'rechazada']),
+        decided_on: date(),
+        reference: text(200).optional(),
+        reason: text(500).optional(),
+      }),
+      form,
+    );
+    const filePath = supportPathFrom(form, 'file_path', 'ordenes');
+    ensure(
+      await supabase.rpc('record_company_approval', {
+        p_order_ids: ids,
+        p_decision: input.decision,
+        p_decided_on: input.decided_on,
+        ...(input.reference ? { p_reference: input.reference } : {}),
+        ...(filePath ? { p_file_path: filePath } : {}),
+        ...(input.reason ? { p_reason: input.reason } : {}),
+      }),
+    );
+    const n = ids.length;
+    return { message: `${input.decision === 'aprobada' ? 'Aval' : 'Rechazo'} registrado para ${n} ${n === 1 ? 'orden' : 'órdenes'}.` };
+  },
+});
+if (outcome?.kind === 'redirect') return outcome.response;
+const error = outcome?.kind === 'error' ? outcome.error : null;
+const v = outcome?.kind === 'error' ? outcome.values : {};
+
+let query = supabase
+  .from('v_orders')
+  .select('id, order_number, buyer_name, buyer_document_id, company_id, company_name, campaign_id, deal_name_branch, total_amount, installments_count, created_by, created_by_name, created_at, company_approval_decision, company_approval_on')
+  .eq('payment_modality', 'nomina_empresa')
+  .eq('hr_approval_required', true)
+  .eq('is_cancelled', false)
+  .eq('is_historical_migration', false)
+  .eq('ops_status', 'pendiente_liberar')
+  .order('order_number')
+  .limit(500);
+if (companyId) query = query.eq('company_id', companyId);
+if (campaignId) query = query.eq('campaign_id', campaignId);
+if (status === 'pendiente') query = query.is('company_approval_decision', null);
+else if (status === 'aprobada' || status === 'rechazada') query = query.eq('company_approval_decision', status);
+
+const [{ data: orders }, { data: companies }, requireFiles] = await Promise.all([
+  query,
+  supabase.from('companies').select('id, name').order('name'),
+  filesRequired(supabase),
+]);
+const campaigns = companyId
+  ? ((await supabase.from('v_campaigns').select('id, deal_name_branch, first_session_date').eq('company_id', companyId).order('first_session_date', { ascending: false })).data ?? [])
+  : [];
+const rows = orders ?? [];
+const canPick = (o: { created_by: string | null }) => isAdmin || o.created_by === userId;
+// Tras un error se conservan las órdenes que estaban marcadas
+const selected = new Set<string>(outcome?.kind === 'error' ? pickedIds : []);
+const STATUS_TABS: [string, string][] = [
+  ['pendiente', 'Pendientes'],
+  ['rechazada', 'Rechazadas'],
+  ['aprobada', 'Aprobadas sin liberar'],
+  ['todas', 'Todas'],
+];
+const q = (patch: Record<string, string>) => {
+  const p = new URLSearchParams({ empresa: companyId, jornada: campaignId, estado: status, ...patch });
+  for (const [k, val] of [...p.entries()]) if (!val) p.delete(k);
+  return `?${p.toString()}`;
+};
+---
+
+<AppLayout title="Aval de la empresa" error={error}>
+  <div class="mb-4">
+    <a href="/ordenes" class="text-sm">← Órdenes</a>
+    <h1>Aval de la empresa</h1>
+    <p class="text-sm text-slate-600">
+      Registre lo que la empresa comunica (listado, correo) para varias ventas de nómina a la vez. Una venta aprobada puede verificarse y
+      liberarse; una rechazada queda registrada y bloqueada.
+    </p>
+  </div>
+
+  <form method="get" class="card mb-4 flex flex-wrap items-end gap-3 text-sm">
+    <div>
+      <label class="label">Empresa</label>
+      <select class="input" name="empresa" onchange="this.form.jornada && (this.form.jornada.value = ''); this.form.submit()">
+        <option value="">Todas</option>
+        {companies?.map((c) => <option value={c.id} selected={c.id === companyId}>{c.name}</option>)}
+      </select>
+    </div>
+    {
+      companyId && (
+        <div>
+          <label class="label">Jornada</label>
+          <select class="input" name="jornada" onchange="this.form.submit()">
+            <option value="">Todas</option>
+            {campaigns.map((c) => (
+              <option value={c.id} selected={c.id === campaignId}>{c.deal_name_branch} · {fmtDate(c.first_session_date)}</option>
+            ))}
+          </select>
+        </div>
+      )
+    }
+    <input type="hidden" name="estado" value={status} />
+    <noscript><button class="btn btn-sm" type="submit">Filtrar</button></noscript>
+  </form>
+
+  <nav class="mb-3 flex flex-wrap gap-1 text-sm">
+    {STATUS_TABS.map(([value, label]) => (
+      <a href={q({ estado: value })} class:list={['rounded-md px-3 py-1.5 hover:no-underline', status === value ? 'bg-brand-700 text-white' : 'border border-slate-200 bg-white text-slate-700']}>{label}</a>
+    ))}
+  </nav>
+
+  <form method="post" class="space-y-4">
+    <input type="hidden" name="_action" value="decide" />
+    <div class="card overflow-x-auto p-0">
+      <table class="table">
+        <thead>
+          <tr>
+            <th class="w-8"><input type="checkbox" aria-label="Seleccionar todas" data-check-all /></th>
+            <th>Orden</th><th>Comprador</th><th>Empresa / jornada</th><th class="text-right">Valor</th><th>Cuotas</th><th>Aval</th><th>Registró</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((o) => (
+            <tr>
+              <td>{canPick(o) && <input type="checkbox" name="order_ids" value={o.id} checked={selected.has(o.id!)} data-row />}</td>
+              <td><a href={`/ordenes/${o.id}#aval`}>{orderNumber(o.order_number)}</a></td>
+              <td>{o.buyer_name}<div class="text-xs text-slate-500">{o.buyer_document_id}</div></td>
+              <td>{o.company_name}<div class="text-xs text-slate-500">{o.deal_name_branch ?? 'Venta directa'}</div></td>
+              <td class="text-right whitespace-nowrap">{cop(o.total_amount)}</td>
+              <td>{o.installments_count}</td>
+              <td>
+                {o.company_approval_decision === 'aprobada' ? <span class="badge badge-green">Aprobada {fmtDate(o.company_approval_on)}</span>
+                  : o.company_approval_decision === 'rechazada' ? <span class="badge badge-red">Rechazada {fmtDate(o.company_approval_on)}</span>
+                  : <span class="badge badge-amber">Pendiente</span>}
+              </td>
+              <td class="text-xs text-slate-500">{o.created_by_name}</td>
+            </tr>
+          ))}
+          {!rows.length && <tr><td colspan="8" class="py-6 text-center text-slate-500">No hay ventas de nómina en este filtro.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+    {!isAdmin && rows.some((o) => !canPick(o)) && <p class="text-xs text-slate-500">Solo puede seleccionar las órdenes que usted registró.</p>}
+
+    {
+      rows.some(canPick) && (
+        <section class="card grid gap-3 text-sm sm:grid-cols-2">
+          <div class="sm:col-span-2 flex gap-4">
+            <label class="flex items-center gap-1"><input type="radio" name="decision" value="aprobada" checked={v.decision !== 'rechazada'} /> La empresa aprobó</label>
+            <label class="flex items-center gap-1"><input type="radio" name="decision" value="rechazada" checked={v.decision === 'rechazada'} /> La empresa rechazó</label>
+          </div>
+          <div>
+            <label class="label">Fecha en que la empresa lo comunicó *</label>
+            <input class="input" type="date" name="decided_on" required max={todayCo()} value={v.decided_on ?? todayCo()} />
+          </div>
+          <div>
+            <label class="label">Referencia del listado</label>
+            <input class="input" name="reference" maxlength="200" placeholder="Ej. Listado RRHH del 20-nov" value={v.reference ?? ''} />
+          </div>
+          <div class="sm:col-span-2">
+            <label class="label">Motivo (obligatorio si rechaza)</label>
+            <input class="input" name="reason" maxlength="500" value={v.reason ?? ''} />
+          </div>
+          <div class="sm:col-span-2">
+            <SupportFile kind="ordenes" name="file_path" label="Soporte (listado o comunicación de la empresa)" required={requireFiles} />
+          </div>
+          <div class="sm:col-span-2">
+            <button class="btn btn-primary" type="submit">Registrar decisión para las seleccionadas</button>
+            <p class="mt-1 text-xs text-slate-500">Si alguna orden no admite la decisión, no se registra ninguna y se indica cuál.</p>
+          </div>
+        </section>
+      )
+    }
+  </form>
+</AppLayout>
+
+<script>
+  const all = document.querySelector<HTMLInputElement>('[data-check-all]');
+  all?.addEventListener('change', () => {
+    document.querySelectorAll<HTMLInputElement>('[data-row]').forEach((c) => (c.checked = all.checked));
+  });
+</script>

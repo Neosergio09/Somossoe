@@ -1117,6 +1117,74 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"order_company_approvals": {
+                  Row: {
+                    "batch_id": string | null,"decided_on": string,"decision": string,"file_path": string | null,"id": string,"is_voided": boolean,"order_id": string,"reason": string | null,"recorded_at": string,"recorded_by": string | null,"reference": string | null,"seq": number,"void_reason": string | null,"voided_at": string | null,"voided_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "batch_id"?: string | null,"decided_on": string,"decision": string,"file_path"?: string | null,"id"?: string,"is_voided"?: boolean,"order_id": string,"reason"?: string | null,"recorded_at"?: string,"recorded_by"?: string | null,"reference"?: string | null,"seq"?: never,"void_reason"?: string | null,"voided_at"?: string | null,"voided_by"?: string | null
+                  }
+                  Update: {
+                    "batch_id"?: string | null,"decided_on"?: string,"decision"?: string,"file_path"?: string | null,"id"?: string,"is_voided"?: boolean,"order_id"?: string,"reason"?: string | null,"recorded_at"?: string,"recorded_by"?: string | null,"reference"?: string | null,"seq"?: never,"void_reason"?: string | null,"voided_at"?: string | null,"voided_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "order_company_approvals_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_company_approvals_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_attendance_followups"
+      referencedColumns: ["purchase_order_id"]
+    },{
+      foreignKeyName: "order_company_approvals_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_finance_by_order"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "order_company_approvals_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_order_margins"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "order_company_approvals_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_company_approvals_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders_to_invoice"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_company_approvals_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_receivables"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_company_approvals_recorded_by_fkey"
+      columns: ["recorded_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_company_approvals_voided_by_fkey"
+      columns: ["voided_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"order_costs": {
                   Row: {
                     "amount": number,"basis": Database["public"]['Enums']["cost_basis"],"component": Database["public"]['Enums']["cost_component"],"created_at": string,"created_by": string | null,"id": string,"is_voided": boolean,"lab_provider_id": string | null,"notes": string | null,"order_id": string,"order_item_id": string | null,"replaces_id": string | null,"source": string,"superseded_at": string | null,"void_reason": string | null,"voided_at": string | null,"voided_by": string | null
@@ -1631,14 +1699,14 @@ isOneToOne: false
                   ]
                 },"orders": {
                   Row: {
-                    "accounting_status": Database["public"]['Enums']["order_accounting_status"],"agreement_id": string | null,"balance_due": number,"branch_id": string | null,"buyer_id": string,"campaign_id": string | null,"cancel_reason": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"city_id": string | null,"collection_responsible": Database["public"]['Enums']["collection_responsible"],"collection_status": Database["public"]['Enums']["order_collection_status"],"company_id": string | null,"created_at": string,"created_by": string | null,"doc_status": Database["public"]['Enums']["order_doc_status"],"employee_auth_file_path": string | null,"employee_auth_received": boolean,"first_due_date": string | null,"historical_collected_before_migration": number,"historical_delivered_at": string | null,"historical_delivery_receiver": string | null,"historical_reference": string | null,"historical_stage": Database["public"]['Enums']["historical_stage"] | null,"hr_approval_file_path": string | null,"hr_approval_received": boolean,"id": string,"installment_periodicity": Database["public"]['Enums']["payroll_frequency"] | null,"installments_count": number | null,"is_cancelled": boolean,"is_historical_migration": boolean,"notes": string | null,"ops_status": Database["public"]['Enums']["order_ops_status"],"order_number": number,"payment_modality": Database["public"]['Enums']["payment_modality"],"prepayment_exception_at": string | null,"prepayment_exception_by": string | null,"prepayment_exception_reason": string | null,"requirements_verified": boolean,"requirements_verified_at": string | null,"requirements_verified_by": string | null,"total_amount": number,"updated_at": string
+                    "accounting_status": Database["public"]['Enums']["order_accounting_status"],"agreement_id": string | null,"balance_due": number,"branch_id": string | null,"buyer_id": string,"campaign_id": string | null,"cancel_reason": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"city_id": string | null,"collection_responsible": Database["public"]['Enums']["collection_responsible"],"collection_status": Database["public"]['Enums']["order_collection_status"],"company_approval_decision": string | null,"company_approval_on": string | null,"company_id": string | null,"created_at": string,"created_by": string | null,"doc_status": Database["public"]['Enums']["order_doc_status"],"employee_auth_file_path": string | null,"employee_auth_received": boolean,"first_due_date": string | null,"historical_collected_before_migration": number,"historical_delivered_at": string | null,"historical_delivery_receiver": string | null,"historical_reference": string | null,"historical_stage": Database["public"]['Enums']["historical_stage"] | null,"hr_approval_file_path": string | null,"hr_approval_received": boolean,"id": string,"installment_periodicity": Database["public"]['Enums']["payroll_frequency"] | null,"installments_count": number | null,"is_cancelled": boolean,"is_historical_migration": boolean,"notes": string | null,"ops_status": Database["public"]['Enums']["order_ops_status"],"order_number": number,"payment_modality": Database["public"]['Enums']["payment_modality"],"prepayment_exception_at": string | null,"prepayment_exception_by": string | null,"prepayment_exception_reason": string | null,"requirements_verified": boolean,"requirements_verified_at": string | null,"requirements_verified_by": string | null,"total_amount": number,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "accounting_status"?: Database["public"]['Enums']["order_accounting_status"],"agreement_id"?: string | null,"balance_due"?: number,"branch_id"?: string | null,"buyer_id": string,"campaign_id"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"city_id"?: string | null,"collection_responsible"?: Database["public"]['Enums']["collection_responsible"],"collection_status"?: Database["public"]['Enums']["order_collection_status"],"company_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"doc_status"?: Database["public"]['Enums']["order_doc_status"],"employee_auth_file_path"?: string | null,"employee_auth_received"?: boolean,"first_due_date"?: string | null,"historical_collected_before_migration"?: number,"historical_delivered_at"?: string | null,"historical_delivery_receiver"?: string | null,"historical_reference"?: string | null,"historical_stage"?: Database["public"]['Enums']["historical_stage"] | null,"hr_approval_file_path"?: string | null,"hr_approval_received"?: boolean,"id"?: string,"installment_periodicity"?: Database["public"]['Enums']["payroll_frequency"] | null,"installments_count"?: number | null,"is_cancelled"?: boolean,"is_historical_migration"?: boolean,"notes"?: string | null,"ops_status"?: Database["public"]['Enums']["order_ops_status"],"order_number"?: never,"payment_modality": Database["public"]['Enums']["payment_modality"],"prepayment_exception_at"?: string | null,"prepayment_exception_by"?: string | null,"prepayment_exception_reason"?: string | null,"requirements_verified"?: boolean,"requirements_verified_at"?: string | null,"requirements_verified_by"?: string | null,"total_amount"?: number,"updated_at"?: string
+                    "accounting_status"?: Database["public"]['Enums']["order_accounting_status"],"agreement_id"?: string | null,"balance_due"?: number,"branch_id"?: string | null,"buyer_id": string,"campaign_id"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"city_id"?: string | null,"collection_responsible"?: Database["public"]['Enums']["collection_responsible"],"collection_status"?: Database["public"]['Enums']["order_collection_status"],"company_approval_decision"?: string | null,"company_approval_on"?: string | null,"company_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"doc_status"?: Database["public"]['Enums']["order_doc_status"],"employee_auth_file_path"?: string | null,"employee_auth_received"?: boolean,"first_due_date"?: string | null,"historical_collected_before_migration"?: number,"historical_delivered_at"?: string | null,"historical_delivery_receiver"?: string | null,"historical_reference"?: string | null,"historical_stage"?: Database["public"]['Enums']["historical_stage"] | null,"hr_approval_file_path"?: string | null,"hr_approval_received"?: boolean,"id"?: string,"installment_periodicity"?: Database["public"]['Enums']["payroll_frequency"] | null,"installments_count"?: number | null,"is_cancelled"?: boolean,"is_historical_migration"?: boolean,"notes"?: string | null,"ops_status"?: Database["public"]['Enums']["order_ops_status"],"order_number"?: never,"payment_modality": Database["public"]['Enums']["payment_modality"],"prepayment_exception_at"?: string | null,"prepayment_exception_by"?: string | null,"prepayment_exception_reason"?: string | null,"requirements_verified"?: boolean,"requirements_verified_at"?: string | null,"requirements_verified_by"?: string | null,"total_amount"?: number,"updated_at"?: string
                   }
                   Update: {
-                    "accounting_status"?: Database["public"]['Enums']["order_accounting_status"],"agreement_id"?: string | null,"balance_due"?: number,"branch_id"?: string | null,"buyer_id"?: string,"campaign_id"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"city_id"?: string | null,"collection_responsible"?: Database["public"]['Enums']["collection_responsible"],"collection_status"?: Database["public"]['Enums']["order_collection_status"],"company_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"doc_status"?: Database["public"]['Enums']["order_doc_status"],"employee_auth_file_path"?: string | null,"employee_auth_received"?: boolean,"first_due_date"?: string | null,"historical_collected_before_migration"?: number,"historical_delivered_at"?: string | null,"historical_delivery_receiver"?: string | null,"historical_reference"?: string | null,"historical_stage"?: Database["public"]['Enums']["historical_stage"] | null,"hr_approval_file_path"?: string | null,"hr_approval_received"?: boolean,"id"?: string,"installment_periodicity"?: Database["public"]['Enums']["payroll_frequency"] | null,"installments_count"?: number | null,"is_cancelled"?: boolean,"is_historical_migration"?: boolean,"notes"?: string | null,"ops_status"?: Database["public"]['Enums']["order_ops_status"],"order_number"?: never,"payment_modality"?: Database["public"]['Enums']["payment_modality"],"prepayment_exception_at"?: string | null,"prepayment_exception_by"?: string | null,"prepayment_exception_reason"?: string | null,"requirements_verified"?: boolean,"requirements_verified_at"?: string | null,"requirements_verified_by"?: string | null,"total_amount"?: number,"updated_at"?: string
+                    "accounting_status"?: Database["public"]['Enums']["order_accounting_status"],"agreement_id"?: string | null,"balance_due"?: number,"branch_id"?: string | null,"buyer_id"?: string,"campaign_id"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"city_id"?: string | null,"collection_responsible"?: Database["public"]['Enums']["collection_responsible"],"collection_status"?: Database["public"]['Enums']["order_collection_status"],"company_approval_decision"?: string | null,"company_approval_on"?: string | null,"company_id"?: string | null,"created_at"?: string,"created_by"?: string | null,"doc_status"?: Database["public"]['Enums']["order_doc_status"],"employee_auth_file_path"?: string | null,"employee_auth_received"?: boolean,"first_due_date"?: string | null,"historical_collected_before_migration"?: number,"historical_delivered_at"?: string | null,"historical_delivery_receiver"?: string | null,"historical_reference"?: string | null,"historical_stage"?: Database["public"]['Enums']["historical_stage"] | null,"hr_approval_file_path"?: string | null,"hr_approval_received"?: boolean,"id"?: string,"installment_periodicity"?: Database["public"]['Enums']["payroll_frequency"] | null,"installments_count"?: number | null,"is_cancelled"?: boolean,"is_historical_migration"?: boolean,"notes"?: string | null,"ops_status"?: Database["public"]['Enums']["order_ops_status"],"order_number"?: never,"payment_modality"?: Database["public"]['Enums']["payment_modality"],"prepayment_exception_at"?: string | null,"prepayment_exception_by"?: string | null,"prepayment_exception_reason"?: string | null,"requirements_verified"?: boolean,"requirements_verified_at"?: string | null,"requirements_verified_by"?: string | null,"total_amount"?: number,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -2700,7 +2768,7 @@ isOneToOne: false
                   ]
                 },"v_orders": {
                   Row: {
-                    "accounting_status": Database["public"]['Enums']["order_accounting_status"],"agreement_id": string | null,"balance_due": number,"branch_id": string | null,"branch_name": string | null,"buyer_document_id": string,"buyer_document_type": Database["public"]['Enums']["buyer_document_type"],"buyer_id": string,"buyer_name": string,"campaign_id": string | null,"campaign_status": Database["public"]['Enums']["campaign_status"] | null,"cancel_reason": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"city_id": string | null,"city_name": string | null,"collection_responsible": Database["public"]['Enums']["collection_responsible"],"collection_status": Database["public"]['Enums']["order_collection_status"],"company_id": string | null,"company_name": string | null,"created_at": string,"created_by": string | null,"created_by_name": string | null,"deal_id": string | null,"deal_name_branch": string | null,"doc_status": Database["public"]['Enums']["order_doc_status"],"employee_auth_file_path": string | null,"employee_auth_received": boolean,"first_due_date": string | null,"historical_collected_before_migration": number,"historical_delivered_at": string | null,"historical_delivery_receiver": string | null,"historical_reference": string | null,"historical_stage": Database["public"]['Enums']["historical_stage"] | null,"hr_approval_file_path": string | null,"hr_approval_received": boolean,"hr_approval_required": boolean | null,"id": string,"installment_periodicity": Database["public"]['Enums']["payroll_frequency"] | null,"installments_count": number | null,"is_cancelled": boolean,"is_historical_migration": boolean,"items_count": number | null,"missing_requirements": (string)[] | null,"notes": string | null,"ops_status": Database["public"]['Enums']["order_ops_status"],"order_number": number,"payment_modality": Database["public"]['Enums']["payment_modality"],"prepayment_exception_at": string | null,"prepayment_exception_by": string | null,"prepayment_exception_reason": string | null,"release_blockers": (string)[] | null,"requirements_verified": boolean,"requirements_verified_at": string | null,"requirements_verified_by": string | null,"total_amount": number,"updated_at": string
+                    "accounting_status": Database["public"]['Enums']["order_accounting_status"],"agreement_id": string | null,"balance_due": number,"branch_id": string | null,"branch_name": string | null,"buyer_document_id": string,"buyer_document_type": Database["public"]['Enums']["buyer_document_type"],"buyer_id": string,"buyer_name": string,"campaign_id": string | null,"campaign_status": Database["public"]['Enums']["campaign_status"] | null,"cancel_reason": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"city_id": string | null,"city_name": string | null,"collection_responsible": Database["public"]['Enums']["collection_responsible"],"collection_status": Database["public"]['Enums']["order_collection_status"],"company_approval_decision": string | null,"company_approval_on": string | null,"company_id": string | null,"company_name": string | null,"created_at": string,"created_by": string | null,"created_by_name": string | null,"deal_id": string | null,"deal_name_branch": string | null,"doc_status": Database["public"]['Enums']["order_doc_status"],"employee_auth_file_path": string | null,"employee_auth_received": boolean,"first_due_date": string | null,"historical_collected_before_migration": number,"historical_delivered_at": string | null,"historical_delivery_receiver": string | null,"historical_reference": string | null,"historical_stage": Database["public"]['Enums']["historical_stage"] | null,"hr_approval_file_path": string | null,"hr_approval_received": boolean,"hr_approval_required": boolean | null,"id": string,"installment_periodicity": Database["public"]['Enums']["payroll_frequency"] | null,"installments_count": number | null,"is_cancelled": boolean,"is_historical_migration": boolean,"items_count": number | null,"missing_requirements": (string)[] | null,"notes": string | null,"ops_status": Database["public"]['Enums']["order_ops_status"],"order_number": number,"payment_modality": Database["public"]['Enums']["payment_modality"],"prepayment_exception_at": string | null,"prepayment_exception_by": string | null,"prepayment_exception_reason": string | null,"release_blockers": (string)[] | null,"requirements_verified": boolean,"requirements_verified_at": string | null,"requirements_verified_by": string | null,"total_amount": number,"updated_at": string
                   }
                   ComputedFields: never
                   Relationships: [
@@ -3221,6 +3289,9 @@ isOneToOne: false
 "recalculate_deal_forecast":
 { Args: { "p_deal_id": string }; Returns: number
                            },
+"record_company_approval":
+{ Args: { "p_decided_on": string,"p_decision": string,"p_file_path"?: string,"p_order_ids": (string)[],"p_reason"?: string,"p_reference"?: string }; Returns: string
+                           },
 "register_delivery":
 { Args: { "p_delivery": Json,"p_items": Json }; Returns: string
                            },
@@ -3235,6 +3306,9 @@ isOneToOne: false
                            },
 "validate_fabrication_spec":
 { Args: { "p_spec_id": string }; Returns: undefined
+                           },
+"void_company_approval":
+{ Args: { "p_approval_id": string,"p_reason": string }; Returns: undefined
                            },
 "void_fabrication_spec":
 { Args: { "p_reason": string,"p_spec_id": string }; Returns: undefined

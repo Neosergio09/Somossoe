@@ -384,9 +384,10 @@ const backHref = campaign ? `/jornadas/${campaign.id}` : '/ordenes';
                 <>
                   <label class="flex items-center gap-2 text-sm">
                     <input type="checkbox" name="hr_approval_received" checked={v.hr_approval_received === 'on'} />
-                    Aval de RRHH recibido
+                    La empresa ya aprobó esta venta (aval de RRHH)
                   </label>
                   <SupportFile kind="ordenes" name="hr_approval_file_path" label="Archivo del aval de RRHH" compact />
+                  <p class="text-xs text-slate-500">Si aún no llega, guarde la venta: queda pendiente y el aval se registra después, uno a uno o por listado.</p>
                 </>
               )}
               <p class="text-xs text-slate-500">Adjuntar el archivo marca el soporte como recibido.</p>

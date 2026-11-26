@@ -9,7 +9,7 @@ export type CircuitSummary = {
   /** Órdenes no anuladas con costos incompletos (solo quien ve costos). */
   costos_incompletos: number;
   jornada: { en_ejecucion: number; por_ejecutar: number; captura_cerrada: number };
-  orden: { por_verificar: number; por_liberar: number };
+  orden: { por_verificar: number; por_liberar: number; sin_aval?: number; aval_rechazado?: number };
   producir: { en_lab: number; atrasadas: number };
   entregar: { listas: number; parciales: number };
   posventa: number;

@@ -598,7 +598,12 @@ const sessionLabel = (sid: string) => {
       <section class="card">
         <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2>Órdenes de la jornada</h2>
-          {canOrder && <a class="btn btn-primary btn-sm" href={orderLink()}>Registrar orden</a>}
+          <div class="flex flex-wrap gap-2">
+            {hasRole(Astro.locals, 'comercial', 'administracion_cartera') && (
+              <a class="btn btn-sm" href={`/ordenes/aval?empresa=${j.company_id}&jornada=${j.id}`}>Aval de la empresa</a>
+            )}
+            {canOrder && <a class="btn btn-primary btn-sm" href={orderLink()}>Registrar orden</a>}
+          </div>
         </div>
         {beforeExecution && <p class="mb-3 text-sm text-slate-500">Las órdenes se registran con la jornada En ejecución.</p>}
         {status === 'captura_cerrada' && <p class="mb-3 text-sm text-slate-500">Captura cerrada: para una venta tardía, Operación reabre la captura indicando el motivo.</p>}
