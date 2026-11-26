@@ -3345,7 +3345,7 @@ isOneToOne: false
 { Args: { "p_items"?: Json,"p_order": Json }; Returns: string
                            },
 "create_order":
-{ Args: { "p_items": Json,"p_order": Json }; Returns: string
+{ Args: { "p_items": Json,"p_order": Json,"p_sensitive_consent"?: boolean,"p_specs"?: Json }; Returns: string
                            },
 "excel_import_create":
 { Args: { "p_file_name": string,"p_file_sha256": string,"p_sheets": Json }; Returns: string
