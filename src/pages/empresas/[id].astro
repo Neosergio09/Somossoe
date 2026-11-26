@@ -205,335 +205,334 @@ const nitDisplay = company.nit ? `${company.nit}${company.nit_dv != null ? `-${c
     }
   </div>
 
-  <div class="grid gap-4 lg:grid-cols-3">
-    <section class="card lg:col-span-2">
-      <h2 class="mb-3">Ficha de la empresa</h2>
-      <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
-        <div><dt class="label">Total de empleados</dt><dd>{company.total_employees ?? '—'}</dd></div>
-        <div><dt class="label">Pago de nómina</dt><dd>{company.payroll_frequency ? PAYROLL_LABELS[company.payroll_frequency] : '—'}</dd></div>
-        <div><dt class="label">Ejecutivo</dt><dd>{company.assigned?.full_name ?? '—'}</dd></div>
-        <div><dt class="label">Sitio web</dt><dd>{company.website ?? '—'}</dd></div>
-        <div><dt class="label">Creada</dt><dd>{fmtDateTime(company.created_at)}</dd></div>
-      </dl>
+  <div class="grid gap-4 lg:grid-cols-3 xl:grid-cols-[minmax(0,1fr)_24rem] 2xl:grid-cols-[minmax(0,1fr)_28rem]">
+    <div class="min-w-0 space-y-4 lg:col-span-2 xl:col-span-1">
+      <section class="card">
+        <h2 class="mb-3">Ficha de la empresa</h2>
+        <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
+          <div><dt class="label">Total de empleados</dt><dd>{company.total_employees ?? '—'}</dd></div>
+          <div><dt class="label">Pago de nómina</dt><dd>{company.payroll_frequency ? PAYROLL_LABELS[company.payroll_frequency] : '—'}</dd></div>
+          <div><dt class="label">Ejecutivo</dt><dd>{company.assigned?.full_name ?? '—'}</dd></div>
+          <div><dt class="label">Sitio web</dt><dd>{company.website ?? '—'}</dd></div>
+          <div><dt class="label">Creada</dt><dd>{fmtDateTime(company.created_at)}</dd></div>
+        </dl>
 
-      {
-        canEdit && (
-          <details class="mt-4">
-            <summary class="cursor-pointer text-sm font-medium text-brand-700">Editar ficha</summary>
-            <form method="post" class="mt-3 grid-form">
-              <input type="hidden" name="_action" value="update_company" />
-              <div class="sm:col-span-2">
-                <label class="label">Razón social</label>
-                <input class="input" name="name" required value={company.name} />
-              </div>
-              <div>
-                <label class="label">Sector</label>
-                <input class="input" name="sector" required value={company.sector} />
-              </div>
-              <div>
-                <label class="label">Total de empleados</label>
-                <input class="input" name="total_employees" type="number" min="1" value={company.total_employees ?? ''} />
-              </div>
-              <div>
-                <label class="label">Pago de nómina</label>
-                <select class="input" name="payroll_frequency">
-                  <option value="">Sin definir</option>
-                  {Object.entries(PAYROLL_LABELS).map(([value, label]) => (
-                    <option value={value} selected={company.payroll_frequency === value}>{label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label class="label">Ejecutivo asignado</label>
-                <select class="input" name="assigned_user_id">
-                  <option value="">—</option>
-                  {assignableUsers.map((u) => (
-                    <option value={u.id} selected={company.assigned_user_id === u.id}>{u.full_name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label class="label">Sitio web</label>
-                <input class="input" name="website" value={company.website ?? ''} />
-              </div>
-              {company.is_nit_provisional && (
-                <>
-                  <div>
-                    <label class="label">NIT (sin DV)</label>
-                    <input class="input" name="nit" inputmode="numeric" value={company.nit ?? ''} />
-                  </div>
-                  <div>
-                    <label class="label">DV</label>
-                    <input class="input" name="nit_dv" inputmode="numeric" maxlength="1" value={company.nit_dv ?? ''} />
-                  </div>
-                </>
-              )}
-              {!company.is_nit_provisional && (
-                <>
-                  <input type="hidden" name="nit" value={company.nit ?? ''} />
-                  <input type="hidden" name="nit_dv" value={company.nit_dv ?? ''} />
-                </>
-              )}
-              <div class="sm:col-span-2">
-                <button class="btn btn-primary" type="submit">Guardar</button>
-              </div>
-            </form>
-          </details>
-        )
-      }
-
-      {
-        (company.is_nit_provisional ? canConfirmNit : canReopenNit) && (
-          <div class="mt-4 border-t border-slate-200 pt-4">
-            {company.is_nit_provisional ? (
-              <form method="post" class="flex flex-wrap items-end gap-2">
-                <input type="hidden" name="_action" value="confirm_nit" />
-                <div>
-                  <label class="label">NIT verificado</label>
-                  <input class="input" name="nit" inputmode="numeric" required value={company.nit ?? ''} />
-                </div>
-                <div class="w-20">
-                  <label class="label">DV</label>
-                  <input class="input" name="nit_dv" inputmode="numeric" maxlength="1" required value={company.nit_dv ?? ''} />
-                </div>
-                <button class="btn btn-primary" type="submit">Confirmar NIT en firme</button>
-              </form>
-            ) : (
-              <form method="post">
-                <input type="hidden" name="_action" value="reopen_nit" />
-                <button class="btn btn-sm" type="submit">Volver el NIT a provisional</button>
-              </form>
-            )}
-          </div>
-        )
-      }
-    </section>
-
-    <section class="card">
-      <h2 class="mb-3">Sedes</h2>
-      <ul class="space-y-3 text-sm">
         {
-          branches.data?.map((b) => (
-            <li class="rounded-md border border-slate-100 p-2">
-              <div class="font-medium">
-                {b.name} {b.is_main && <span class="badge badge-blue">Principal</span>}
-              </div>
-              <div class="text-slate-500">
-                {b.cities?.name ?? b.city_other ?? '—'}
-                {b.address && ` · ${b.address}`}
-              </div>
-              {canEdit && (
-                <details class="mt-1">
-                  <summary class="cursor-pointer text-xs text-brand-700">Editar</summary>
-                  <form method="post" class="mt-2 space-y-2">
-                    <input type="hidden" name="_action" value="update_branch" />
-                    <input type="hidden" name="branch_id" value={b.id} />
-                    <input class="input" name="name" required value={b.name} />
-                    <select class="input" name="city_id">
-                      <option value="">—</option>
-                      {cities.map((c) => <option value={c.id} selected={b.city_id === c.id}>{c.name}</option>)}
-                    </select>
-                    <input class="input" name="city_other" placeholder="Otra ciudad" value={b.city_other ?? ''} />
-                    <input class="input" name="address" placeholder="Dirección" value={b.address ?? ''} />
-                    <label class="flex items-center gap-2 text-xs">
-                      <input type="checkbox" name="is_main" checked={b.is_main} /> Sede principal
-                    </label>
-                    <button class="btn btn-sm btn-primary" type="submit">Guardar</button>
-                  </form>
-                </details>
-              )}
-            </li>
-          ))
+          canEdit && (
+            <details class="mt-4">
+              <summary class="cursor-pointer text-sm font-medium text-brand-700">Editar ficha</summary>
+              <form method="post" class="mt-3 grid-form">
+                <input type="hidden" name="_action" value="update_company" />
+                <div class="sm:col-span-2">
+                  <label class="label">Razón social</label>
+                  <input class="input" name="name" required value={company.name} />
+                </div>
+                <div>
+                  <label class="label">Sector</label>
+                  <input class="input" name="sector" required value={company.sector} />
+                </div>
+                <div>
+                  <label class="label">Total de empleados</label>
+                  <input class="input" name="total_employees" type="number" min="1" value={company.total_employees ?? ''} />
+                </div>
+                <div>
+                  <label class="label">Pago de nómina</label>
+                  <select class="input" name="payroll_frequency">
+                    <option value="">Sin definir</option>
+                    {Object.entries(PAYROLL_LABELS).map(([value, label]) => (
+                      <option value={value} selected={company.payroll_frequency === value}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label class="label">Ejecutivo asignado</label>
+                  <select class="input" name="assigned_user_id">
+                    <option value="">—</option>
+                    {assignableUsers.map((u) => (
+                      <option value={u.id} selected={company.assigned_user_id === u.id}>{u.full_name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label class="label">Sitio web</label>
+                  <input class="input" name="website" value={company.website ?? ''} />
+                </div>
+                {company.is_nit_provisional && (
+                  <>
+                    <div>
+                      <label class="label">NIT (sin DV)</label>
+                      <input class="input" name="nit" inputmode="numeric" value={company.nit ?? ''} />
+                    </div>
+                    <div>
+                      <label class="label">DV</label>
+                      <input class="input" name="nit_dv" inputmode="numeric" maxlength="1" value={company.nit_dv ?? ''} />
+                    </div>
+                  </>
+                )}
+                {!company.is_nit_provisional && (
+                  <>
+                    <input type="hidden" name="nit" value={company.nit ?? ''} />
+                    <input type="hidden" name="nit_dv" value={company.nit_dv ?? ''} />
+                  </>
+                )}
+                <div class="sm:col-span-2">
+                  <button class="btn btn-primary" type="submit">Guardar</button>
+                </div>
+              </form>
+            </details>
+          )
         }
-        {!branches.data?.length && <li class="text-slate-500">Sin sedes registradas.</li>}
-      </ul>
-      {
-        canCreate && (
-          <details class="mt-3">
-            <summary class="cursor-pointer text-sm font-medium text-brand-700">Agregar sede</summary>
-            <form method="post" class="mt-2 space-y-2">
-              <input type="hidden" name="_action" value="add_branch" />
-              <input class="input" name="name" required placeholder="Nombre de la sede" />
-              <select class="input" name="city_id">
-                <option value="">Ciudad…</option>
-                {cities.map((c) => <option value={c.id}>{c.name}</option>)}
-              </select>
-              <input class="input" name="city_other" placeholder="Otra ciudad (si no está en la lista)" />
-              <input class="input" name="address" placeholder="Dirección" />
-              <label class="flex items-center gap-2 text-xs">
-                <input type="checkbox" name="is_main" /> Sede principal
-              </label>
-              <button class="btn btn-sm btn-primary" type="submit">Agregar</button>
-            </form>
-          </details>
-        )
-      }
-    </section>
 
-    <section class="card lg:col-span-3">
-      <h2 class="mb-3">Contactos</h2>
-      <div class="overflow-x-auto">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>Nombre</th>
-              <th>Cargo / Área</th>
-              <th>Rol en la decisión</th>
-              <th>Teléfono</th>
-              <th>Correo</th>
-              <th>Sede</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {
-              contacts.data?.map((c) => (
-                <tr class:list={[!c.active && 'text-slate-400']}>
-                  <td>
-                    {c.full_name} {!c.active && <span class="badge">Inactivo</span>}
-                  </td>
-                  <td>
-                    {c.role_title} · {AREA_LABELS[c.area]}
-                  </td>
-                  <td>
-                    {c.is_coordinator && <span class="badge badge-blue mr-1">Coordina</span>}
-                    {c.is_decision_maker && <span class="badge badge-green">Decide</span>}
-                  </td>
-                  <td>{c.phone_whatsapp ?? '—'}</td>
-                  <td>{c.email ?? '—'}</td>
-                  <td>{c.company_branches?.name ?? '—'}</td>
-                  <td class="whitespace-nowrap">
-                    {canEdit && (
-                      <>
-                        <details class="inline-block">
-                          <summary class="cursor-pointer text-xs text-brand-700">Editar</summary>
-                          <form method="post" class="mt-2 w-72 space-y-2">
-                            <input type="hidden" name="_action" value="update_contact" />
+        {
+          (company.is_nit_provisional ? canConfirmNit : canReopenNit) && (
+            <div class="mt-4 border-t border-slate-200 pt-4">
+              {company.is_nit_provisional ? (
+                <form method="post" class="flex flex-wrap items-end gap-2">
+                  <input type="hidden" name="_action" value="confirm_nit" />
+                  <div>
+                    <label class="label">NIT verificado</label>
+                    <input class="input" name="nit" inputmode="numeric" required value={company.nit ?? ''} />
+                  </div>
+                  <div class="w-20">
+                    <label class="label">DV</label>
+                    <input class="input" name="nit_dv" inputmode="numeric" maxlength="1" required value={company.nit_dv ?? ''} />
+                  </div>
+                  <button class="btn btn-primary" type="submit">Confirmar NIT en firme</button>
+                </form>
+              ) : (
+                <form method="post">
+                  <input type="hidden" name="_action" value="reopen_nit" />
+                  <button class="btn btn-sm" type="submit">Volver el NIT a provisional</button>
+                </form>
+              )}
+            </div>
+          )
+        }
+      </section>
+      <section class="card">
+        <h2 class="mb-3">Contactos</h2>
+        <div class="overflow-x-auto">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Cargo / Área</th>
+                <th>Rol en la decisión</th>
+                <th>Teléfono</th>
+                <th>Correo</th>
+                <th>Sede</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {
+                contacts.data?.map((c) => (
+                  <tr class:list={[!c.active && 'text-slate-400']}>
+                    <td>
+                      {c.full_name} {!c.active && <span class="badge">Inactivo</span>}
+                    </td>
+                    <td>
+                      {c.role_title} · {AREA_LABELS[c.area]}
+                    </td>
+                    <td>
+                      {c.is_coordinator && <span class="badge badge-blue mr-1">Coordina</span>}
+                      {c.is_decision_maker && <span class="badge badge-green">Decide</span>}
+                    </td>
+                    <td>{c.phone_whatsapp ?? '—'}</td>
+                    <td>{c.email ?? '—'}</td>
+                    <td>{c.company_branches?.name ?? '—'}</td>
+                    <td class="whitespace-nowrap">
+                      {canEdit && (
+                        <>
+                          <details class="inline-block">
+                            <summary class="cursor-pointer text-xs text-brand-700">Editar</summary>
+                            <form method="post" class="mt-2 w-72 space-y-2">
+                              <input type="hidden" name="_action" value="update_contact" />
+                              <input type="hidden" name="contact_id" value={c.id} />
+                              <input class="input" name="full_name" required value={c.full_name} />
+                              <input class="input" name="role_title" required value={c.role_title} />
+                              <select class="input" name="area">
+                                {Object.entries(AREA_LABELS).map(([value, label]) => (
+                                  <option value={value} selected={c.area === value}>{label}</option>
+                                ))}
+                              </select>
+                              <select class="input" name="branch_id">
+                                <option value="">Sin sede</option>
+                                {branches.data?.map((b) => <option value={b.id} selected={c.branch_id === b.id}>{b.name}</option>)}
+                              </select>
+                              <input class="input" name="phone_whatsapp" placeholder="Teléfono / WhatsApp" value={c.phone_whatsapp ?? ''} />
+                              <input class="input" name="email" type="email" placeholder="Correo" value={c.email ?? ''} />
+                              <label class="flex items-center gap-2 text-xs">
+                                <input type="checkbox" name="is_coordinator" checked={c.is_coordinator} /> Coordina
+                              </label>
+                              <label class="flex items-center gap-2 text-xs">
+                                <input type="checkbox" name="is_decision_maker" checked={c.is_decision_maker} /> Decide
+                              </label>
+                              <button class="btn btn-sm btn-primary" type="submit">Guardar</button>
+                            </form>
+                          </details>
+                          <form method="post" class="ml-2 inline">
+                            <input type="hidden" name="_action" value="toggle_contact" />
                             <input type="hidden" name="contact_id" value={c.id} />
-                            <input class="input" name="full_name" required value={c.full_name} />
-                            <input class="input" name="role_title" required value={c.role_title} />
-                            <select class="input" name="area">
-                              {Object.entries(AREA_LABELS).map(([value, label]) => (
-                                <option value={value} selected={c.area === value}>{label}</option>
-                              ))}
-                            </select>
-                            <select class="input" name="branch_id">
-                              <option value="">Sin sede</option>
-                              {branches.data?.map((b) => <option value={b.id} selected={c.branch_id === b.id}>{b.name}</option>)}
-                            </select>
-                            <input class="input" name="phone_whatsapp" placeholder="Teléfono / WhatsApp" value={c.phone_whatsapp ?? ''} />
-                            <input class="input" name="email" type="email" placeholder="Correo" value={c.email ?? ''} />
-                            <label class="flex items-center gap-2 text-xs">
-                              <input type="checkbox" name="is_coordinator" checked={c.is_coordinator} /> Coordina
-                            </label>
-                            <label class="flex items-center gap-2 text-xs">
-                              <input type="checkbox" name="is_decision_maker" checked={c.is_decision_maker} /> Decide
-                            </label>
-                            <button class="btn btn-sm btn-primary" type="submit">Guardar</button>
+                            <input type="hidden" name="active" value={c.active ? 'false' : 'true'} />
+                            <button class="btn btn-sm" type="submit">{c.active ? 'Desactivar' : 'Reactivar'}</button>
                           </form>
-                        </details>
-                        <form method="post" class="ml-2 inline">
-                          <input type="hidden" name="_action" value="toggle_contact" />
-                          <input type="hidden" name="contact_id" value={c.id} />
-                          <input type="hidden" name="active" value={c.active ? 'false' : 'true'} />
-                          <button class="btn btn-sm" type="submit">{c.active ? 'Desactivar' : 'Reactivar'}</button>
-                        </form>
-                      </>
-                    )}
-                  </td>
-                </tr>
-              ))
-            }
-            {!contacts.data?.length && <tr><td colspan="7" class="text-slate-500">Sin contactos.</td></tr>}
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              }
+              {!contacts.data?.length && <tr><td colspan="7" class="text-slate-500">Sin contactos.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        {
+          canCreate && (
+            <details class="mt-3">
+              <summary class="cursor-pointer text-sm font-medium text-brand-700">Agregar contacto</summary>
+              <form method="post" class="mt-3 grid-form">
+                <input type="hidden" name="_action" value="add_contact" />
+                <div><label class="label">Nombre completo *</label><input class="input" name="full_name" required /></div>
+                <div><label class="label">Cargo *</label><input class="input" name="role_title" required /></div>
+                <div>
+                  <label class="label">Área *</label>
+                  <select class="input" name="area" required>
+                    {Object.entries(AREA_LABELS).map(([value, label]) => <option value={value}>{label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label class="label">Sede</label>
+                  <select class="input" name="branch_id">
+                    <option value="">Sin sede</option>
+                    {branches.data?.map((b) => <option value={b.id}>{b.name}</option>)}
+                  </select>
+                </div>
+                <div><label class="label">Teléfono / WhatsApp</label><input class="input" name="phone_whatsapp" /></div>
+                <div><label class="label">Correo</label><input class="input" name="email" type="email" /></div>
+                <div class="flex items-center gap-4 text-sm sm:col-span-2">
+                  <label class="flex items-center gap-2"><input type="checkbox" name="is_coordinator" /> Coordina</label>
+                  <label class="flex items-center gap-2"><input type="checkbox" name="is_decision_maker" /> Decide</label>
+                </div>
+                <div class="sm:col-span-2"><button class="btn btn-primary" type="submit">Agregar contacto</button></div>
+              </form>
+            </details>
+          )
+        }
+      </section>
+      <section class="card">
+        <h2 class="mb-3">Oportunidades</h2>
+        <table class="table">
+          <thead><tr><th>Negocio</th><th>Ciudad</th><th>Etapa</th><th>Facturación estimada</th><th>Ejecutivo</th><th>Inactividad</th></tr></thead>
+          <tbody>
+            {deals.data?.map((d) => (
+              <tr>
+                <td><a href={`/oportunidades/${d.id}`}>{d.deal_name_branch}</a></td>
+                <td>{d.city_name}</td>
+                <td>{d.stage ? STAGE_LABELS[d.stage] : ''}</td>
+                <td>{cop(d.estimated_billing_amount)}</td>
+                <td>{d.assigned_user_name}</td>
+                <td>{d.days_inactive} días</td>
+              </tr>
+            ))}
+            {!deals.data?.length && <tr><td colspan="6" class="text-slate-500">Sin oportunidades.</td></tr>}
           </tbody>
         </table>
-      </div>
-      {
-        canCreate && (
-          <details class="mt-3">
-            <summary class="cursor-pointer text-sm font-medium text-brand-700">Agregar contacto</summary>
-            <form method="post" class="mt-3 grid-form">
-              <input type="hidden" name="_action" value="add_contact" />
-              <div><label class="label">Nombre completo *</label><input class="input" name="full_name" required /></div>
-              <div><label class="label">Cargo *</label><input class="input" name="role_title" required /></div>
-              <div>
-                <label class="label">Área *</label>
-                <select class="input" name="area" required>
-                  {Object.entries(AREA_LABELS).map(([value, label]) => <option value={value}>{label}</option>)}
+      </section>
+    </div>
+    <div class="space-y-4">
+      <section class="card">
+        <h2 class="mb-3">Sedes</h2>
+        <ul class="space-y-1.5 text-sm">
+          {
+            branches.data?.map((b) => (
+              <li class="rounded-md border border-slate-100 px-2 py-1.5">
+                <div class="font-medium">
+                  {b.name} {b.is_main && <span class="badge badge-blue">Principal</span>}
+                </div>
+                <div class="text-xs text-slate-500">
+                  {b.cities?.name ?? b.city_other ?? '—'}
+                  {b.address && ` · ${b.address}`}
+                </div>
+                {canEdit && (
+                  <details class="mt-1">
+                    <summary class="cursor-pointer text-xs text-brand-700">Editar</summary>
+                    <form method="post" class="mt-2 space-y-2">
+                      <input type="hidden" name="_action" value="update_branch" />
+                      <input type="hidden" name="branch_id" value={b.id} />
+                      <input class="input" name="name" required value={b.name} />
+                      <select class="input" name="city_id">
+                        <option value="">—</option>
+                        {cities.map((c) => <option value={c.id} selected={b.city_id === c.id}>{c.name}</option>)}
+                      </select>
+                      <input class="input" name="city_other" placeholder="Otra ciudad" value={b.city_other ?? ''} />
+                      <input class="input" name="address" placeholder="Dirección" value={b.address ?? ''} />
+                      <label class="flex items-center gap-2 text-xs">
+                        <input type="checkbox" name="is_main" checked={b.is_main} /> Sede principal
+                      </label>
+                      <button class="btn btn-sm btn-primary" type="submit">Guardar</button>
+                    </form>
+                  </details>
+                )}
+              </li>
+            ))
+          }
+          {!branches.data?.length && <li class="text-slate-500">Sin sedes registradas.</li>}
+        </ul>
+        {
+          canCreate && (
+            <details class="mt-3">
+              <summary class="cursor-pointer text-sm font-medium text-brand-700">Agregar sede</summary>
+              <form method="post" class="mt-2 space-y-2">
+                <input type="hidden" name="_action" value="add_branch" />
+                <input class="input" name="name" required placeholder="Nombre de la sede" />
+                <select class="input" name="city_id">
+                  <option value="">Ciudad…</option>
+                  {cities.map((c) => <option value={c.id}>{c.name}</option>)}
                 </select>
-              </div>
-              <div>
-                <label class="label">Sede</label>
-                <select class="input" name="branch_id">
-                  <option value="">Sin sede</option>
-                  {branches.data?.map((b) => <option value={b.id}>{b.name}</option>)}
-                </select>
-              </div>
-              <div><label class="label">Teléfono / WhatsApp</label><input class="input" name="phone_whatsapp" /></div>
-              <div><label class="label">Correo</label><input class="input" name="email" type="email" /></div>
-              <div class="flex items-center gap-4 text-sm sm:col-span-2">
-                <label class="flex items-center gap-2"><input type="checkbox" name="is_coordinator" /> Coordina</label>
-                <label class="flex items-center gap-2"><input type="checkbox" name="is_decision_maker" /> Decide</label>
-              </div>
-              <div class="sm:col-span-2"><button class="btn btn-primary" type="submit">Agregar contacto</button></div>
-            </form>
-          </details>
-        )
-      }
-    </section>
-
-    <section class="card lg:col-span-3">
-      <h2 class="mb-3">Oportunidades</h2>
-      <table class="table">
-        <thead><tr><th>Negocio</th><th>Ciudad</th><th>Etapa</th><th>Facturación estimada</th><th>Ejecutivo</th><th>Inactividad</th></tr></thead>
-        <tbody>
-          {deals.data?.map((d) => (
-            <tr>
-              <td><a href={`/oportunidades/${d.id}`}>{d.deal_name_branch}</a></td>
-              <td>{d.city_name}</td>
-              <td>{d.stage ? STAGE_LABELS[d.stage] : ''}</td>
-              <td>{cop(d.estimated_billing_amount)}</td>
-              <td>{d.assigned_user_name}</td>
-              <td>{d.days_inactive} días</td>
-            </tr>
-          ))}
-          {!deals.data?.length && <tr><td colspan="6" class="text-slate-500">Sin oportunidades.</td></tr>}
-        </tbody>
-      </table>
-    </section>
-
-    <section class="card lg:col-span-2">
-      <div class="mb-3 flex items-center justify-between">
-        <h2>Convenios</h2>
-        {canCreate && <a class="btn btn-sm" href={`/convenios/nuevo?company_id=${company.id}`}>Nuevo convenio</a>}
-      </div>
-      <table class="table">
-        <thead><tr><th>Alcance</th><th>Estado</th><th>Cuotas</th><th>Vigencia</th></tr></thead>
-        <tbody>
+                <input class="input" name="city_other" placeholder="Otra ciudad (si no está en la lista)" />
+                <input class="input" name="address" placeholder="Dirección" />
+                <label class="flex items-center gap-2 text-xs">
+                  <input type="checkbox" name="is_main" /> Sede principal
+                </label>
+                <button class="btn btn-sm btn-primary" type="submit">Agregar</button>
+              </form>
+            </details>
+          )
+        }
+      </section>
+      <section class="card">
+        <div class="mb-3 flex items-center justify-between">
+          <h2>Convenios</h2>
+          {canCreate && <a class="btn btn-sm" href={`/convenios/nuevo?company_id=${company.id}`}>Nuevo convenio</a>}
+        </div>
+        <ul class="space-y-2 text-sm">
           {agreements.data?.map((a) => (
-            <tr>
-              <td><a href={`/convenios/${a.id}`}>{a.deal_name_branch ?? 'Marco (todas las sedes)'}</a></td>
-              <td><span class={AGREEMENT_STATUS_BADGE[a.effective_status ?? 'borrador']}>{AGREEMENT_STATUS_LABELS[a.effective_status ?? 'borrador']}</span></td>
-              <td>{a.max_installments} {a.payroll_frequency ? PAYROLL_LABELS[a.payroll_frequency].toLowerCase() : ''}</td>
-              <td>{fmtDate(a.valid_until)}</td>
-            </tr>
+            <li>
+              <div class="flex items-center justify-between gap-2">
+                <a href={`/convenios/${a.id}`} class="truncate">{a.deal_name_branch ?? 'Marco (todas las sedes)'}</a>
+                <span class={AGREEMENT_STATUS_BADGE[a.effective_status ?? 'borrador']}>{AGREEMENT_STATUS_LABELS[a.effective_status ?? 'borrador']}</span>
+              </div>
+              <div class="text-xs text-slate-500">
+                {a.max_installments} cuotas {a.payroll_frequency ? PAYROLL_LABELS[a.payroll_frequency].toLowerCase() : ''} · vigente hasta {fmtDate(a.valid_until)}
+              </div>
+            </li>
           ))}
-          {!agreements.data?.length && <tr><td colspan="4" class="text-slate-500">Sin convenios.</td></tr>}
-        </tbody>
-      </table>
-    </section>
-
-    <section class="card">
-      <h2 class="mb-3">Jornadas</h2>
-      <ul class="space-y-2 text-sm">
-        {campaigns.data?.map((j) => (
-          <li class="flex items-center justify-between gap-2">
-            <a href={`/jornadas/${j.id}`}>{j.deal_name_branch} · {fmtDate(j.first_session_date)}</a>
-            <span class={j.status ? CAMPAIGN_STATUS_BADGE[j.status] : 'badge'}>{j.status ? CAMPAIGN_STATUS_LABELS[j.status] : ''}</span>
-          </li>
-        ))}
-        {!campaigns.data?.length && <li class="text-slate-500">Sin jornadas.</li>}
-      </ul>
-    </section>
+          {!agreements.data?.length && <li class="text-slate-500">Sin convenios.</li>}
+        </ul>
+      </section>
+      <section class="card">
+        <h2 class="mb-3">Jornadas</h2>
+        <ul class="space-y-2 text-sm">
+          {campaigns.data?.map((j) => (
+            <li class="flex items-center justify-between gap-2">
+              <a href={`/jornadas/${j.id}`}>{j.deal_name_branch} · {fmtDate(j.first_session_date)}</a>
+              <span class={j.status ? CAMPAIGN_STATUS_BADGE[j.status] : 'badge'}>{j.status ? CAMPAIGN_STATUS_LABELS[j.status] : ''}</span>
+            </li>
+          ))}
+          {!campaigns.data?.length && <li class="text-slate-500">Sin jornadas.</li>}
+        </ul>
+      </section>
+    </div>
   </div>
 </AppLayout>

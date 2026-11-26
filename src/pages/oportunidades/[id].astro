@@ -89,7 +89,7 @@ const [board, logs, agreements, campaigns, branches, contacts, cities, users, or
   supabase.from('v_agreements').select('id, deal_name_branch, effective_status, max_installments, payroll_frequency, valid_until').eq('company_id', deal.company_id).or(`deal_id.eq.${id},deal_id.is.null`).order('created_at', { ascending: false }),
   supabase.from('v_campaigns').select('id, status, first_session_date, sessions_count, attended_headcount, responsible_user_name').eq('deal_id', id).order('created_at', { ascending: false }),
   supabase.from('company_branches').select('id, name').eq('company_id', deal.company_id).order('name'),
-  supabase.from('contacts').select('id, full_name, role_title').eq('company_id', deal.company_id).eq('active', true).order('full_name'),
+  supabase.from('contacts').select('id, full_name, role_title, phone_whatsapp, email, is_coordinator, is_decision_maker').eq('company_id', deal.company_id).eq('active', true).order('full_name'),
   operationalCities(supabase),
   activeUsers(supabase, ['comercial', 'direccion', 'superadmin']),
   activeOrigins(supabase),
@@ -142,8 +142,8 @@ const flags = board.data;
     </div>
   </div>
 
-  <div class="grid gap-4 lg:grid-cols-3">
-    <div class="space-y-4 lg:col-span-2">
+  <div class="grid gap-4 lg:grid-cols-3 xl:grid-cols-[minmax(0,1fr)_24rem] 2xl:grid-cols-[minmax(0,1fr)_28rem]">
+    <div class="min-w-0 space-y-4 lg:col-span-2 xl:col-span-1">
       <section class="card">
         <h2 class="mb-3">Bitácora de interacciones</h2>
         {
@@ -223,6 +223,52 @@ const flags = board.data;
     </div>
 
     <div class="space-y-4">
+      {/* SOE-08: contexto de la cuenta con vínculos reales (sin duplicar fichas) */}
+      <section class="card space-y-3 text-sm">
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <div class="label">Cuenta</div>
+            <a href={`/empresas/${deal.company_id}`} class="text-base font-semibold">{deal.companies?.name}</a>
+            <div class="text-xs text-slate-500">
+              {deal.cities?.name}{deal.company_branches?.name && ` · ${deal.company_branches.name}`}
+            </div>
+          </div>
+          <a class="btn btn-sm" href={`/empresas/${deal.company_id}/360`}>Vista 360°</a>
+        </div>
+        {(() => {
+          const current = (agreements.data ?? []).find((a) => a.effective_status === 'aprobado');
+          return current ? (
+            <p class="rounded-md bg-green-50 px-2 py-1.5 text-xs text-green-800">
+              Convenio activo · <a href={`/convenios/${current.id}`}>{current.max_installments} cuotas {current.payroll_frequency ? PAYROLL_LABELS[current.payroll_frequency].toLowerCase() : ''}</a> · hasta {fmtDate(current.valid_until)}
+            </p>
+          ) : (
+            <p class="rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-800">Sin convenio activo para esta oportunidad.</p>
+          );
+        })()}
+        <div>
+          <div class="label mb-1">Contactos</div>
+          <ul class="space-y-2">
+            {(contacts.data ?? []).map((c) => (
+              <li class:list={[deal.primary_contact_id === c.id && 'rounded-md bg-brand-50 p-1.5']}>
+                <div class="flex flex-wrap items-center gap-1">
+                  <span class="font-medium">{c.full_name}</span>
+                  {deal.primary_contact_id === c.id && <span class="badge badge-blue">Principal</span>}
+                  {c.is_coordinator && <span class="badge">Coordina</span>}
+                  {c.is_decision_maker && <span class="badge badge-green">Decide</span>}
+                </div>
+                <div class="text-xs text-slate-500">{c.role_title}</div>
+                <div class="flex flex-wrap gap-x-3 text-xs">
+                  {c.phone_whatsapp && <a href={`tel:${c.phone_whatsapp.replace(/\s/g, '')}`}>{c.phone_whatsapp}</a>}
+                  {c.phone_whatsapp && <a href={`https://wa.me/57${c.phone_whatsapp.replace(/\D/g, '').replace(/^57/, '')}`} target="_blank" rel="noopener">WhatsApp</a>}
+                  {c.email && <a href={`mailto:${c.email}`}>{c.email}</a>}
+                </div>
+              </li>
+            ))}
+            {!contacts.data?.length && <li class="text-slate-500">Sin contactos activos. <a href={`/empresas/${deal.company_id}`}>Agregar en la empresa</a></li>}
+          </ul>
+        </div>
+      </section>
+
       <section class="card">
         <h2 class="mb-3">Etapa</h2>
         {
