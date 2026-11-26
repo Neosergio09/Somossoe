@@ -2,7 +2,7 @@
 import AppLayout from '../../layouts/AppLayout.astro';
 import { hasRole, isOwnerComercial } from '../../lib/auth';
 import { cop, fmtDate, fmtDateTime } from '../../lib/format';
-import { checkbox, ensure, int, nullify, parseForm, runActions, text, uuid, z } from '../../lib/forms';
+import { checkbox, ensure, FormError, int, nullify, parseForm, runActions, text, uuid, z } from '../../lib/forms';
 import {
   AGREEMENT_STATUS_BADGE,
   AGREEMENT_STATUS_LABELS,
@@ -12,13 +12,13 @@ import {
   PAYROLL_LABELS,
   STAGE_LABELS,
 } from '../../lib/labels';
-import { activeUsers, allActiveCities } from '../../lib/options';
+import { activeUsers, allActiveCities, catalogNames } from '../../lib/options';
 
 const { supabase } = Astro.locals;
 const id = Astro.params.id!;
 
 const branchSchema = z.object({
-  name: text(120),
+  name: text(120).optional(),
   city_id: uuid().optional(),
   city_other: text(80).optional(),
   address: text(200).optional(),
@@ -88,11 +88,12 @@ const outcome = await runActions(Astro, {
   },
   add_branch: async (form) => {
     const input = parseForm(branchSchema, form);
+    if (!input.city_id && !input.city_other) throw new FormError('Indique la ciudad o municipio de la sede.');
     if (input.is_main) await setMainBranch('00000000-0000-0000-0000-000000000000');
     ensure(
       await supabase.from('company_branches').insert({
         company_id: id,
-        name: input.name,
+        name: input.name ?? '',
         city_id: input.city_other ? null : (input.city_id ?? null),
         city_other: input.city_other ?? null,
         address: input.address ?? null,
@@ -109,7 +110,7 @@ const outcome = await runActions(Astro, {
       await supabase
         .from('company_branches')
         .update({
-          name: input.name,
+          name: input.name ?? '',
           city_id: input.city_other ? null : (input.city_id ?? null),
           city_other: input.city_other ?? null,
           address: input.address ?? null,
@@ -152,7 +153,7 @@ const { data: company } = await supabase
   .maybeSingle();
 if (!company) return new Response('Empresa no encontrada', { status: 404 });
 
-const [branches, contacts, deals, agreements, campaigns, users, cities] = await Promise.all([
+const [branches, contacts, deals, agreements, campaigns, users, cities, sectors] = await Promise.all([
   supabase.from('company_branches').select('*, cities(name)').eq('company_id', id).order('is_main', { ascending: false }).order('name'),
   supabase.from('contacts').select('*, company_branches(name)').eq('company_id', id).order('active', { ascending: false }).order('full_name'),
   supabase.from('v_deals_board').select('id, deal_name_branch, city_name, stage, estimated_billing_amount, assigned_user_name, days_inactive').eq('company_id', id).order('created_at', { ascending: false }),
@@ -160,6 +161,7 @@ const [branches, contacts, deals, agreements, campaigns, users, cities] = await 
   supabase.from('v_campaigns').select('id, deal_name_branch, city_name, status, first_session_date, attended_headcount').eq('company_id', id).order('created_at', { ascending: false }),
   activeUsers(supabase, ['comercial', 'direccion', 'superadmin']),
   allActiveCities(supabase),
+  catalogNames(supabase, 'sector'),
 ]);
 
 const isAdmin = hasRole(Astro.locals, 'administracion_cartera');
@@ -210,7 +212,7 @@ const nitDisplay = company.nit ? `${company.nit}${company.nit_dv != null ? `-${c
       <section class="card">
         <h2 class="mb-3">Ficha de la empresa</h2>
         <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
-          <div><dt class="label">Total de empleados</dt><dd>{company.total_employees ?? '—'}</dd></div>
+          <div><dt class="label">Total de empleados de la empresa</dt><dd>{company.total_employees ?? '—'}</dd></div>
           <div><dt class="label">Pago de nómina</dt><dd>{company.payroll_frequency ? PAYROLL_LABELS[company.payroll_frequency] : '—'}</dd></div>
           <div><dt class="label">Ejecutivo</dt><dd>{company.assigned?.full_name ?? '—'}</dd></div>
           <div><dt class="label">Sitio web</dt><dd>{company.website ?? '—'}</dd></div>
@@ -228,11 +230,12 @@ const nitDisplay = company.nit ? `${company.nit}${company.nit_dv != null ? `-${c
                   <input class="input" name="name" required value={company.name} />
                 </div>
                 <div>
-                  <label class="label">Sector</label>
-                  <input class="input" name="sector" required value={company.sector} />
+                  <label class="label">Sector económico</label>
+                  <input class="input" name="sector" required list="sector-options" autocomplete="off" value={company.sector} />
+                  <datalist id="sector-options">{sectors.map((name) => <option value={name} />)}</datalist>
                 </div>
                 <div>
-                  <label class="label">Total de empleados</label>
+                  <label class="label">Total de empleados de la empresa</label>
                   <input class="input" name="total_employees" type="number" min="1" value={company.total_employees ?? ''} />
                 </div>
                 <div>
@@ -460,13 +463,13 @@ const nitDisplay = company.nit ? `${company.nit}${company.nit_dv != null ? `-${c
                     <form method="post" class="mt-2 space-y-2">
                       <input type="hidden" name="_action" value="update_branch" />
                       <input type="hidden" name="branch_id" value={b.id} />
-                      <input class="input" name="name" required value={b.name} />
                       <select class="input" name="city_id">
                         <option value="">—</option>
                         {cities.map((c) => <option value={c.id} selected={b.city_id === c.id}>{c.name}</option>)}
                       </select>
                       <input class="input" name="city_other" placeholder="Otra ciudad" value={b.city_other ?? ''} />
                       <input class="input" name="address" placeholder="Dirección" value={b.address ?? ''} />
+                      <input class="input" name="name" placeholder="Nombre propio (opcional, ej. Planta norte)" value={b.name_auto ? '' : b.name} />
                       <label class="flex items-center gap-2 text-xs">
                         <input type="checkbox" name="is_main" checked={b.is_main} /> Sede principal
                       </label>
@@ -485,13 +488,13 @@ const nitDisplay = company.nit ? `${company.nit}${company.nit_dv != null ? `-${c
               <summary class="cursor-pointer text-sm font-medium text-brand-700">Agregar sede</summary>
               <form method="post" class="mt-2 space-y-2">
                 <input type="hidden" name="_action" value="add_branch" />
-                <input class="input" name="name" required placeholder="Nombre de la sede" />
                 <select class="input" name="city_id">
-                  <option value="">Ciudad…</option>
+                  <option value="">Ciudad o municipio…</option>
                   {cities.map((c) => <option value={c.id}>{c.name}</option>)}
                 </select>
                 <input class="input" name="city_other" placeholder="Otra ciudad (si no está en la lista)" />
-                <input class="input" name="address" placeholder="Dirección" />
+                <input class="input" name="address" required placeholder="Dirección" />
+                <input class="input" name="name" placeholder="Nombre propio (opcional, ej. Planta norte)" />
                 <label class="flex items-center gap-2 text-xs">
                   <input type="checkbox" name="is_main" /> Sede principal
                 </label>

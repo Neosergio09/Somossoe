@@ -28,7 +28,7 @@ const val = (field: string) => (values[field] == null ? '' : String(values[field
   </div>
   <div class="sm:col-span-2">
     <label class="label">Tipo de lente</label>
-    <input class="input" name={name('lens_type')} value={val('lens_type')} placeholder="Monofocal, progresivo…" />
+    <input class="input" name={name('lens_type')} value={val('lens_type')} list="lens-type-options" autocomplete="off" placeholder="Escriba para buscar" />
   </div>
   <div class="sm:col-span-2">
     <label class="label">Filtro</label>

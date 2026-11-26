@@ -30,6 +30,7 @@ const collapsed = Astro.cookies.get('nav_collapsed')?.value === '1';
 const s = showChrome ? (Astro.locals.summary ?? (await loadSummary(Astro.locals.supabase))) : null;
 const canSeeMoney = hasRole(Astro.locals, ...MONEY_ROLES);
 const isDireccion = hasRole(Astro.locals, 'direccion');
+const canEditCatalogs = hasRole(Astro.locals, 'direccion', 'administracion_cartera', 'costos');
 
 type NavItem = { href: string; label: string; icon: IconName; count?: number; hot?: boolean; module?: ModuleKey };
 const groups: { phase: string; items: NavItem[] }[] = s
@@ -69,6 +70,7 @@ const groups: { phase: string; items: NavItem[] }[] = s
         phase: 'Control',
         items: [
           { href: '/compradores', label: 'Compradores', icon: 'users' },
+          ...(canEditCatalogs ? [{ href: '/admin/catalogos', label: 'Catálogos', icon: 'grid' as IconName }] : []),
           ...(isDireccion
             ? [
                 { href: '/admin/usuarios', label: 'Usuarios', icon: 'key' as IconName },

@@ -5,7 +5,7 @@ import DeliveriesPanel from '../../components/DeliveriesPanel.astro';
 import SupportFile from '../../components/SupportFile.astro';
 import { filesRequired, supportHref, supportPathFrom } from '../../lib/supports';
 import { hasRole } from '../../lib/auth';
-import { cop, fmtDateTime } from '../../lib/format';
+import { cop, fmtDate, fmtDateTime } from '../../lib/format';
 import { checkbox, ensure, FormError, int, parseForm, runActions, text, uuid, z } from '../../lib/forms';
 import { activeLabs, fulfillmentActions } from '../../lib/fulfillment';
 import { itemLabel, loadDeliveries } from '../../lib/deliveries';
@@ -137,8 +137,17 @@ const pendingReplacement = !!production && !hasDeliveries;
     <div>
       <a href="/garantias" class="text-sm">← Posventa</a>
       <h1>{WARRANTY_TYPE_LABELS[w.incident_type!]} · Orden <a href={`/ordenes/${orderId}`}>{orderNumber(w.order_number)}</a></h1>
-      <p class="text-sm text-slate-600">{w.buyer_name} · {w.buyer_document_id}{w.company_name && ` · ${w.company_name}`}</p>
+      <p class="text-sm text-slate-600">
+        {w.buyer_name} · {w.buyer_document_id}{w.company_name ? ` · ${w.company_name}` : ' · Venta directa'}
+        {w.buyer_phone && <> · <a href={`tel:${w.buyer_phone.replace(/\s/g, '')}`}>{w.buyer_phone}</a></>}
+      </p>
       <p class="text-xs text-slate-500">Abierto por {w.opened_by_name ?? '—'} el {fmtDateTime(w.created_at)} · Responsable: {w.responsible_name}</p>
+      <p class="mt-1 flex flex-wrap gap-1 text-xs">
+        <span class="badge">{w.days_open === 1 ? '1 día' : `${w.days_open ?? 0} días`} {w.status === 'cerrada' ? 'hasta el cierre' : 'abierto'}</span>
+        {w.promised_date && <span class="badge">Laboratorio prometió: {fmtDate(w.promised_date)}</span>}
+        {w.is_overdue && <span class="badge badge-red">Atrasada</span>}
+        {w.lab_name && <span class="badge">{w.lab_name}</span>}
+      </p>
     </div>
     <span class={`${WARRANTY_STATUS_BADGE[w.status!]} text-sm`}>{WARRANTY_STATUS_LABELS[w.status!]}</span>
   </div>

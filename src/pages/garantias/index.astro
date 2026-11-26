@@ -1,18 +1,46 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
-import { fmtDateTime } from '../../lib/format';
+import { fmtDate, fmtDateTime } from '../../lib/format';
 import { CREDIT_NOTE_STATUS_BADGE, CREDIT_NOTE_STATUS_LABELS, WARRANTY_STATUS_BADGE, WARRANTY_STATUS_LABELS, WARRANTY_TYPE_LABELS } from '../../lib/labels';
+import { activeUsers } from '../../lib/options';
 import { orderNumber } from '../../lib/orders';
 
 const { supabase } = Astro.locals;
-const status = Astro.url.searchParams.get('estado') ?? 'abiertos';
+const params = Astro.url.searchParams;
+const status = params.get('estado') ?? 'abiertos';
+const company = params.get('empresa') ?? '';
+const lab = params.get('laboratorio') ?? '';
+const responsible = params.get('responsable') ?? '';
+const overdue = params.get('atrasadas') === '1';
+const isId = (v: string) => /^[0-9a-f-]{36}$/.test(v);
 
-let query = supabase.from('v_warranties').select('*').order('created_at', { ascending: false }).limit(300);
+// N26-15: los abiertos se ordenan por antigüedad (el más viejo primero)
+let query = supabase
+  .from('v_warranties')
+  .select('*')
+  .order('created_at', { ascending: status === 'abiertos' })
+  .limit(300);
 if (status === 'abiertos') query = query.neq('status', 'cerrada');
 else if (status === 'cerrada') query = query.eq('status', 'cerrada');
 else if (status === 'notas_credito') query = query.in('credit_note_status', ['por_solicitar', 'solicitada']);
-const { data: warranties } = await query;
+if (isId(company)) query = query.eq('company_id', company);
+if (isId(lab)) query = query.eq('lab_provider_id', lab);
+if (isId(responsible)) query = query.eq('responsible_user_id', responsible);
+if (overdue) query = query.eq('is_overdue', true);
+
+const [{ data: warranties }, { data: companies }, { data: labs }, users] = await Promise.all([
+  query,
+  supabase.from('companies').select('id, name').order('name'),
+  supabase.from('lab_providers').select('id, name').order('name'),
+  activeUsers(supabase, ['operacion', 'direccion', 'superadmin']),
+]);
 const tabs: [string, string][] = [['abiertos', 'Abiertos'], ['cerrada', 'Cerrados'], ['notas_credito', 'Notas crédito pendientes'], ['todos', 'Todos']];
+const tabLink = (value: string) => {
+  const u = new URLSearchParams(params);
+  u.set('estado', value);
+  return `?${u}`;
+};
+const days = (n: number | null) => (n == null ? '—' : n === 1 ? '1 día' : `${n} días`);
 ---
 
 <AppLayout title="Posventa">
@@ -21,34 +49,81 @@ const tabs: [string, string][] = [['abiertos', 'Abiertos'], ['cerrada', 'Cerrado
     <p class="text-sm text-slate-500">Los casos se registran desde la ficha de la orden entregada.</p>
   </div>
 
-  <nav class="mb-4 flex flex-wrap gap-1 text-sm">
-    {
-      tabs.map(([value, label]) => (
-        <a
-          href={`?estado=${value}`}
-          class:list={['rounded-md px-3 py-1.5 hover:no-underline', status === value ? 'bg-brand-700 text-white' : 'border border-slate-200 bg-white text-slate-700']}
-        >
-          {label}
-        </a>
-      ))
-    }
-  </nav>
+  <div class="mb-4 flex flex-wrap items-center gap-2">
+    <nav class="flex flex-wrap gap-1 text-sm">
+      {
+        tabs.map(([value, label]) => (
+          <a
+            href={tabLink(value)}
+            class:list={['rounded-md px-3 py-1.5 hover:no-underline', status === value ? 'bg-brand-700 text-white' : 'border border-slate-200 bg-white text-slate-700']}
+          >
+            {label}
+          </a>
+        ))
+      }
+    </nav>
+    <form method="get" class="ml-auto flex flex-wrap items-center gap-2">
+      <input type="hidden" name="estado" value={status} />
+      <select class="input w-auto" name="empresa">
+        <option value="">Toda empresa</option>
+        {companies?.map((c) => <option value={c.id} selected={company === c.id}>{c.name}</option>)}
+      </select>
+      <select class="input w-auto" name="laboratorio">
+        <option value="">Todo laboratorio</option>
+        {labs?.map((l) => <option value={l.id} selected={lab === l.id}>{l.name}</option>)}
+      </select>
+      <select class="input w-auto" name="responsable">
+        <option value="">Todo responsable</option>
+        {users.map((u) => <option value={u.id} selected={responsible === u.id}>{u.full_name}</option>)}
+      </select>
+      <label class="flex items-center gap-1 text-sm">
+        <input type="checkbox" name="atrasadas" value="1" checked={overdue} /> Solo atrasadas
+      </label>
+      <button class="btn" type="submit">Filtrar</button>
+    </form>
+  </div>
 
   <div class="card overflow-x-auto p-0">
     <table class="table">
-      <thead><tr><th>Caso</th><th>Orden</th><th>Comprador</th><th>Responsable</th><th>Estado</th><th>Nota crédito</th><th>Abierto</th></tr></thead>
+      <thead>
+        <tr>
+          <th>Caso</th>
+          <th>Orden</th>
+          <th>Comprador</th>
+          <th>Laboratorio</th>
+          <th>Responsable</th>
+          <th>Estado</th>
+          <th>Plazo prometido</th>
+          <th>Días abiertos</th>
+          <th>Nota crédito</th>
+        </tr>
+      </thead>
       <tbody>
         {
           warranties?.map((w) => (
             <tr>
               <td>
+                {/* El motivo puede incluir síntomas: solo se ve en la ficha del caso */}
                 <a href={`/garantias/${w.id}`} class="font-medium">{WARRANTY_TYPE_LABELS[w.incident_type!]}</a>
-                <div class="max-w-xs truncate text-xs text-slate-500">{w.description}</div>
+                <div class="text-xs text-slate-500">{fmtDateTime(w.created_at)}</div>
               </td>
               <td><a href={`/ordenes/${w.order_id}`}>{orderNumber(w.order_number)}</a></td>
-              <td>{w.buyer_name}{w.company_name && <div class="text-xs text-slate-500">{w.company_name}</div>}</td>
+              <td>
+                {w.buyer_name}
+                {w.buyer_phone && <div class="text-xs"><a href={`tel:${w.buyer_phone.replace(/\s/g, '')}`}>{w.buyer_phone}</a></div>}
+                {w.company_name ? <div class="text-xs text-slate-500">{w.company_name}</div> : <div class="text-xs text-slate-400">Venta directa</div>}
+              </td>
+              <td class="text-xs">{w.lab_name ?? '—'}</td>
               <td>{w.responsible_name}</td>
               <td><span class={WARRANTY_STATUS_BADGE[w.status!]}>{WARRANTY_STATUS_LABELS[w.status!]}</span></td>
+              <td class="text-xs whitespace-nowrap">
+                {w.promised_date ? fmtDate(w.promised_date) : '—'}
+                {w.is_overdue && <span class="badge badge-red ml-1">Atrasada</span>}
+              </td>
+              <td class="whitespace-nowrap">
+                {days(w.days_open)}
+                {w.status === 'cerrada' && <div class="text-xs text-slate-500">hasta el cierre</div>}
+              </td>
               <td>
                 {w.credit_note_status && w.credit_note_status !== 'no_aplica' ? (
                   <>
@@ -59,11 +134,10 @@ const tabs: [string, string][] = [['abiertos', 'Abiertos'], ['cerrada', 'Cerrado
                   <span class="text-xs text-slate-400">—</span>
                 )}
               </td>
-              <td class="text-xs whitespace-nowrap">{fmtDateTime(w.created_at)}</td>
             </tr>
           ))
         }
-        {!warranties?.length && <tr><td colspan="7" class="py-6 text-center text-slate-500">No hay casos.</td></tr>}
+        {!warranties?.length && <tr><td colspan="9" class="py-6 text-center text-slate-500">No hay casos.</td></tr>}
       </tbody>
     </table>
   </div>

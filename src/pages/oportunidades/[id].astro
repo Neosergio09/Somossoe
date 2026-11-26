@@ -1,9 +1,11 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
 import { hasRole, isOwnerComercial } from '../../lib/auth';
-import { cop, fmtDate, fmtDateTime } from '../../lib/format';
+import { cop, fmtDate, fmtDateTime, todayCo } from '../../lib/format';
+import SupportFile from '../../components/SupportFile.astro';
+import { supportHref, supportPathFrom } from '../../lib/supports';
 import { changeDealStage } from '../../lib/deals';
-import { date, ensure, int, nullify, parseForm, runActions, text, uuid, z } from '../../lib/forms';
+import { date, ensure, FormError, int, nullify, parseForm, runActions, text, uuid, z } from '../../lib/forms';
 import {
   AGREEMENT_STATUS_BADGE,
   AGREEMENT_STATUS_LABELS,
@@ -33,6 +35,7 @@ const outcome = await runActions(Astro, {
         origin_code: z.string().min(1),
         target_employees_n: int().positive().optional(),
         payroll_frequency: z.enum(['mensual', 'quincenal']).optional(),
+        payroll_frequency_note: text(300).optional(),
         estimated_close_date: date().optional(),
         tentative_campaign_date: date().optional(),
         next_action: text(300).optional(),
@@ -60,11 +63,46 @@ const outcome = await runActions(Astro, {
       z.object({
         interaction_type: z.enum(['reunion', 'llamada', 'whatsapp', 'correo']),
         interaction_note: text(4000),
+        // N26-06: fecha y hora reales (hora de Colombia), puede ser anterior a hoy
+        occurred_at: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, { error: 'Fecha y hora inválidas' }),
       }),
       form,
     );
-    ensure(await supabase.from('deal_interaction_logs').insert({ ...input, deal_id: id }));
+    const occurredAt = new Date(`${input.occurred_at}:00-05:00`);
+    if (occurredAt.getTime() > Date.now() + 5 * 60 * 1000) throw new FormError('La fecha de la interacción no puede ser futura.');
+    ensure(
+      await supabase.from('deal_interaction_logs').insert({
+        deal_id: id,
+        interaction_type: input.interaction_type,
+        interaction_note: input.interaction_note,
+        occurred_at: occurredAt.toISOString(),
+      }),
+    );
     return { message: 'Interacción registrada en la bitácora.' };
+  },
+  add_proposal: async (form) => {
+    const input = parseForm(
+      z.object({
+        document_name: text(200).min(1, { error: 'indique el nombre' }),
+        sent_on: date(),
+        no_file_reason: text(500).optional(),
+      }),
+      form,
+    );
+    const filePath = supportPathFrom(form, 'file_path', 'propuestas');
+    if (!filePath && !input.no_file_reason) {
+      throw new FormError('Adjunte el archivo de la propuesta o explique por qué no lo hay (ej. enviada por WhatsApp).');
+    }
+    ensure(
+      await supabase.from('deal_proposals').insert({
+        deal_id: id,
+        document_name: input.document_name,
+        sent_on: input.sent_on,
+        file_path: filePath,
+        no_file_reason: filePath ? null : input.no_file_reason!,
+      }),
+    );
+    return { message: 'Propuesta registrada.' };
   },
   recalculate: async () => {
     const amount = ensure(await supabase.rpc('recalculate_deal_forecast', { p_deal_id: id }));
@@ -77,22 +115,23 @@ const error = outcome?.kind === 'error' ? outcome.error : null;
 const { data: deal } = await supabase
   .from('deals_opportunities')
   .select(
-    '*, companies(id, name, total_employees, assigned_user_id), cities(name), company_branches(name), contacts(full_name, role_title, phone_whatsapp, email), assigned:users_profiles!deals_opportunities_assigned_user_id_fkey(full_name), owner:users_profiles!deals_opportunities_next_action_owner_id_fkey(full_name)',
+    '*, companies(id, name, total_employees, assigned_user_id, payroll_frequency), cities(name), company_branches(name), contacts(full_name, role_title, phone_whatsapp, email), assigned:users_profiles!deals_opportunities_assigned_user_id_fkey(full_name), owner:users_profiles!deals_opportunities_next_action_owner_id_fkey(full_name)',
   )
   .eq('id', id)
   .maybeSingle();
 if (!deal) return new Response('Oportunidad no encontrada', { status: 404 });
 
-const [board, logs, agreements, campaigns, branches, contacts, cities, users, origins] = await Promise.all([
+const [board, logs, agreements, campaigns, branches, contacts, cities, users, origins, proposals] = await Promise.all([
   supabase.from('v_deals_board').select('days_inactive, inactivity_alert, is_new_business, next_action_overdue').eq('id', id).maybeSingle(),
-  supabase.from('deal_interaction_logs').select('*, users_profiles(full_name)').eq('deal_id', id).order('created_at', { ascending: false }),
+  supabase.from('deal_interaction_logs').select('*, users_profiles(full_name)').eq('deal_id', id).order('occurred_at', { ascending: false }).order('created_at', { ascending: false }),
   supabase.from('v_agreements').select('id, deal_name_branch, effective_status, max_installments, payroll_frequency, valid_until').eq('company_id', deal.company_id).or(`deal_id.eq.${id},deal_id.is.null`).order('created_at', { ascending: false }),
   supabase.from('v_campaigns').select('id, status, first_session_date, sessions_count, attended_headcount, responsible_user_name').eq('deal_id', id).order('created_at', { ascending: false }),
   supabase.from('company_branches').select('id, name').eq('company_id', deal.company_id).order('name'),
   supabase.from('contacts').select('id, full_name, role_title, phone_whatsapp, email, is_coordinator, is_decision_maker').eq('company_id', deal.company_id).eq('active', true).order('full_name'),
   operationalCities(supabase),
   activeUsers(supabase, ['comercial', 'direccion', 'superadmin']),
-  activeOrigins(supabase),
+  activeOrigins(supabase, deal.origin_code),
+  supabase.from('deal_proposals').select('*, users_profiles(full_name)').eq('deal_id', id).order('version', { ascending: false }),
 ]);
 
 const isDireccion = hasRole(Astro.locals, 'direccion');
@@ -106,6 +145,10 @@ const canCreateCampaign = hasRole(Astro.locals, 'operacion') && ['convenio_firma
 const automaticStage = ['jornada_en_ejecucion', 'facturacion_cerrada'].includes(deal.stage);
 const closedForGood = deal.stage === 'cierre_perdido' && deal.lost_substatus === 'no_contactar';
 const flags = board.data;
+// Fecha y hora actuales en Colombia para el campo «ocurrió el»
+const nowCo = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Bogota', dateStyle: 'short', timeStyle: 'short' }).format(new Date()).replace(' ', 'T');
+const companyPayroll = deal.companies?.payroll_frequency ?? null;
+const payrollDiffers = !!(companyPayroll && deal.payroll_frequency && companyPayroll !== deal.payroll_frequency);
 ---
 
 <AppLayout title={deal.deal_name_branch} error={error}>
@@ -158,7 +201,14 @@ const flags = board.data;
                 ))}
               </div>
               <textarea class="input" name="interaction_note" rows="3" required placeholder="Resumen de lo conversado o copia del mensaje" />
-              <button class="btn btn-primary" type="submit">Registrar interacción</button>
+              <div class="flex flex-wrap items-end gap-2">
+                <div>
+                  <label class="label" for="occurred_at">Ocurrió el</label>
+                  <input class="input w-auto" id="occurred_at" name="occurred_at" type="datetime-local" required value={nowCo} max={nowCo} />
+                </div>
+                <button class="btn btn-primary" type="submit">Registrar interacción</button>
+              </div>
+              <p class="text-xs text-slate-500">Si la llamada o reunión fue antes, cambie la fecha. La hora de registro se guarda sola y no se edita.</p>
             </form>
           )
         }
@@ -168,7 +218,10 @@ const flags = board.data;
               <li class="border-l-2 border-brand-100 pl-3 text-sm">
                 <div class="text-xs text-slate-500">
                   <span class="badge mr-1">{INTERACTION_LABELS[l.interaction_type]}</span>
-                  {fmtDateTime(l.created_at)} · {l.users_profiles?.full_name}
+                  {fmtDateTime(l.occurred_at)} · {l.users_profiles?.full_name}
+                  {Math.abs(new Date(l.created_at).getTime() - new Date(l.occurred_at).getTime()) > 10 * 60 * 1000 && (
+                    <span class="text-slate-400"> · registrado {fmtDateTime(l.created_at)}</span>
+                  )}
                 </div>
                 <p class="mt-1 whitespace-pre-line">{l.interaction_note}</p>
               </li>
@@ -176,6 +229,60 @@ const flags = board.data;
           }
           {!logs.data?.length && <li class="text-sm text-slate-500">Sin interacciones registradas.</li>}
         </ol>
+      </section>
+
+      <section class="card">
+        <h2 class="mb-1">Propuestas comerciales</h2>
+        <p class="mb-3 text-xs text-slate-500">Para pasar a Propuesta enviada se necesita al menos una. Las versiones anteriores se conservan.</p>
+        <table class="table">
+          <thead><tr><th>Versión</th><th>Documento</th><th>Enviada</th><th>Soporte</th><th>Registró</th></tr></thead>
+          <tbody>
+            {proposals.data?.map((p) => (
+              <tr>
+                <td>v{p.version}</td>
+                <td>{p.document_name}</td>
+                <td>{fmtDate(p.sent_on)}</td>
+                <td>
+                  {p.file_path ? (
+                    <a class="badge badge-green" href={supportHref(p.file_path)} target="_blank" rel="noopener">Ver archivo</a>
+                  ) : (
+                    <span class="text-xs text-slate-600">Sin archivo: {p.no_file_reason}</span>
+                  )}
+                </td>
+                <td class="text-xs text-slate-500">{p.users_profiles?.full_name} · {fmtDateTime(p.created_at)}</td>
+              </tr>
+            ))}
+            {!proposals.data?.length && <tr><td colspan="5" class="text-slate-500">Sin propuestas registradas.</td></tr>}
+          </tbody>
+        </table>
+        {
+          canLog && !closedForGood && (
+            <details class="mt-3">
+              <summary class="cursor-pointer text-sm font-medium text-brand-700">Registrar propuesta</summary>
+              <form method="post" class="mt-2 grid gap-2 sm:grid-cols-2">
+                <input type="hidden" name="_action" value="add_proposal" />
+                <div>
+                  <label class="label" for="document_name">Nombre</label>
+                  <input class="input" id="document_name" name="document_name" required maxlength="200" value={`Propuesta v${(proposals.data?.[0]?.version ?? 0) + 1}`} />
+                </div>
+                <div>
+                  <label class="label" for="sent_on">Fecha de envío</label>
+                  <input class="input" id="sent_on" name="sent_on" type="date" required value={todayCo()} max={todayCo()} />
+                </div>
+                <div class="sm:col-span-2">
+                  <SupportFile kind="propuestas" name="file_path" label="Archivo de la propuesta" />
+                </div>
+                <div class="sm:col-span-2">
+                  <label class="label" for="no_file_reason">Si no hay archivo, explique por qué</label>
+                  <input class="input" id="no_file_reason" name="no_file_reason" maxlength="500" placeholder="Ej. enviada por WhatsApp al gerente; se pidió el PDF" />
+                </div>
+                <div class="sm:col-span-2">
+                  <button class="btn btn-primary" type="submit">Guardar propuesta</button>
+                </div>
+              </form>
+            </details>
+          )
+        }
       </section>
 
       <section class="card">
@@ -292,7 +399,7 @@ const flags = board.data;
               </select>
               <button class="btn btn-primary w-full" type="submit">Cambiar etapa</button>
               <p class="text-xs text-slate-500">
-                Reunión Exploratoria en adelante exige una Reunión en la bitácora. Convenio Firmado exige un convenio aprobado y la fecha tentativa de jornada.
+                Reunión Exploratoria en adelante exige una Reunión en la bitácora. Propuesta Enviada exige una propuesta registrada. Convenio Firmado exige un convenio aprobado y la fecha tentativa de jornada.
               </p>
             </form>
           ) : (
@@ -308,7 +415,16 @@ const flags = board.data;
           <div><dt class="label">Ejecutivo</dt><dd>{deal.assigned?.full_name}</dd></div>
           <div><dt class="label">Contacto principal</dt><dd>{deal.contacts ? `${deal.contacts.full_name} · ${deal.contacts.role_title}` : '—'}</dd></div>
           <div><dt class="label">Empleados a atender (N)</dt><dd>{deal.target_employees_n ?? '—'}{deal.companies?.total_employees ? ` de ${deal.companies.total_employees}` : ''}</dd></div>
-          <div><dt class="label">Pago de nómina</dt><dd>{deal.payroll_frequency ? PAYROLL_LABELS[deal.payroll_frequency] : '—'}</dd></div>
+          <div>
+            <dt class="label">Pago de nómina</dt>
+            <dd>{deal.payroll_frequency ? PAYROLL_LABELS[deal.payroll_frequency] : '—'}</dd>
+            {payrollDiffers && (
+              <dd class="mt-1 rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                Difiere de la empresa ({PAYROLL_LABELS[companyPayroll!]}).
+                {deal.payroll_frequency_note ? ` Excepción: ${deal.payroll_frequency_note}` : ' Corríjala o explique la excepción en «Editar datos».'}
+              </dd>
+            )}
+          </div>
           <div><dt class="label">Cierre estimado de convenio</dt><dd>{fmtDate(deal.estimated_close_date)}</dd></div>
           <div><dt class="label">Fecha tentativa de jornada</dt><dd>{fmtDate(deal.tentative_campaign_date)}</dd></div>
           <div><dt class="label">Origen</dt><dd>{origins.find((o) => o.code === deal.origin_code)?.label ?? deal.origin_code}</dd></div>
@@ -351,6 +467,8 @@ const flags = board.data;
                   <option value="">—</option>
                   {Object.entries(PAYROLL_LABELS).map(([value, label]) => <option value={value} selected={deal.payroll_frequency === value}>{label}</option>)}
                 </select>
+                {companyPayroll && <p class="text-xs text-slate-500">La empresa paga {PAYROLL_LABELS[companyPayroll].toLowerCase()}.</p>}
+                <input class="input" name="payroll_frequency_note" maxlength="300" placeholder="Si difiere de la empresa, motivo de la excepción" value={deal.payroll_frequency_note ?? ''} />
                 <label class="label">Cierre estimado de convenio</label>
                 <input class="input" name="estimated_close_date" type="date" value={deal.estimated_close_date ?? ''} />
                 <label class="label">Fecha tentativa de jornada</label>

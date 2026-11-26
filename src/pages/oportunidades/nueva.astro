@@ -26,6 +26,7 @@ const outcome = await runActions(Astro, {
         origin_code: z.string().min(1),
         target_employees_n: int().positive().optional(),
         payroll_frequency: z.enum(['mensual', 'quincenal']).optional(),
+        payroll_frequency_note: text(300).optional(),
         estimated_close_date: date().optional(),
         tentative_campaign_date: date().optional(),
         next_action: text(300),
@@ -65,15 +66,17 @@ const [{ data: companies }, cities, users, origins, settings] = await Promise.al
 let branches: { id: string; name: string; city_id: string | null }[] = [];
 let contacts: { id: string; full_name: string; role_title: string }[] = [];
 let companyName = '';
+let companyPayroll: string | null = null;
 if (selectedCompanyId) {
   const [b, c, co] = await Promise.all([
     supabase.from('company_branches').select('id, name, city_id').eq('company_id', selectedCompanyId).order('name'),
     supabase.from('contacts').select('id, full_name, role_title').eq('company_id', selectedCompanyId).eq('active', true).order('full_name'),
-    supabase.from('companies').select('name').eq('id', selectedCompanyId).maybeSingle(),
+    supabase.from('companies').select('name, payroll_frequency').eq('id', selectedCompanyId).maybeSingle(),
   ]);
   branches = b.data ?? [];
   contacts = c.data ?? [];
   companyName = co.data?.name ?? '';
+  companyPayroll = co.data?.payroll_frequency ?? null;
 }
 const c = Number(settings.data?.find((s) => s.key === 'conversion_rate_c')?.value ?? 0.7);
 const t = Number(settings.data?.find((s) => s.key === 'average_ticket_t')?.value ?? 300000);
@@ -149,10 +152,14 @@ const t = Number(settings.data?.find((s) => s.key === 'average_ticket_t')?.value
           </div>
           <div>
             <label class="label" for="payroll_frequency">Pago de nómina</label>
-            <select class="input" id="payroll_frequency" name="payroll_frequency">
-              <option value="">Igual a la empresa</option>
+            <select class="input" id="payroll_frequency" name="payroll_frequency" data-company-payroll={companyPayroll ?? ''}>
+              <option value="">Igual a la empresa{companyPayroll && ` (${PAYROLL_LABELS[companyPayroll as 'mensual' | 'quincenal']})`}</option>
               {Object.entries(PAYROLL_LABELS).map(([value, label]) => <option value={value} selected={v.payroll_frequency === value}>{label}</option>)}
             </select>
+            <div class="mt-1 hidden space-y-1 rounded-md bg-amber-50 p-2 text-xs text-amber-800" data-payroll-warning>
+              <p>La ficha de la empresa dice otra frecuencia de nómina. Si es una excepción real de esta sede, explíquela; la empresa no cambia.</p>
+              <input class="input" name="payroll_frequency_note" maxlength="300" placeholder="Motivo de la excepción (opcional)" value={v.payroll_frequency_note} />
+            </div>
           </div>
           <div>
             <label class="label" for="estimated_close_date">Fecha estimada de cierre de convenio</label>
@@ -190,3 +197,16 @@ const t = Number(settings.data?.find((s) => s.key === 'average_ticket_t')?.value
     )
   }
 </AppLayout>
+
+<script>
+  // N26-05: aviso si la nómina de la oportunidad difiere de la empresa (no bloquea)
+  for (const select of document.querySelectorAll<HTMLSelectElement>('[data-company-payroll]')) {
+    const warning = select.parentElement?.querySelector<HTMLElement>('[data-payroll-warning]');
+    const sync = () => {
+      const company = select.dataset.companyPayroll;
+      warning?.classList.toggle('hidden', !(company && select.value && select.value !== company));
+    };
+    select.addEventListener('change', sync);
+    sync();
+  }
+</script>

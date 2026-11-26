@@ -73,7 +73,7 @@ const dealIds = (deals.data ?? []).map((d) => d.id!);
 const [documents, logs] = await Promise.all([
   agreementIds.length ? supabase.from('agreement_documents').select('*').in('agreement_id', agreementIds).order('uploaded_at', { ascending: false }) : Promise.resolve({ data: [] }),
   dealIds.length
-    ? supabase.from('deal_interaction_logs').select('id, deal_id, interaction_type, interaction_note, created_at, users_profiles(full_name)').in('deal_id', dealIds).order('created_at', { ascending: false }).limit(20)
+    ? supabase.from('deal_interaction_logs').select('id, deal_id, interaction_type, interaction_note, occurred_at, users_profiles(full_name)').in('deal_id', dealIds).order('occurred_at', { ascending: false }).limit(20)
     : Promise.resolve({ data: [] }),
 ]);
 
@@ -240,7 +240,7 @@ const hasFilter = Object.values(filters).some(Boolean);
             {logs.data?.map((l) => (
               <li>
                 <span class="badge">{INTERACTION_LABELS[l.interaction_type]}</span>
-                <span class="text-xs text-slate-500"> {fmtDateTime(l.created_at)} · {(l.users_profiles as { full_name: string } | null)?.full_name} · {dealName.get(l.deal_id)}</span>
+                <span class="text-xs text-slate-500"> {fmtDateTime(l.occurred_at)} · {(l.users_profiles as { full_name: string } | null)?.full_name} · {dealName.get(l.deal_id)}</span>
                 <div class="text-slate-700">{l.interaction_note}</div>
               </li>
             ))}

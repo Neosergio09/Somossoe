@@ -1,0 +1,84 @@
+---
+/**
+ * Catálogos buscables (N26-02, N26-11): sectores económicos y tipos de
+ * lente. Las listas las entrega SOE (confirmaciones C01 y C03); aquí se
+ * cargan y mantienen. Un valor retirado deja de sugerirse, pero los
+ * registros que ya lo usan lo conservan.
+ */
+import AppLayout from '../../layouts/AppLayout.astro';
+import { hasRole } from '../../lib/auth';
+import { checkbox, ensure, FormError, parseForm, runActions, text, z } from '../../lib/forms';
+
+if (!hasRole(Astro.locals, 'direccion', 'administracion_cartera', 'costos')) return Astro.redirect('/');
+
+const { supabase } = Astro.locals;
+const KINDS = { sector: 'Sectores económicos', tipo_lente: 'Tipos de lente' } as const;
+type Kind = keyof typeof KINDS;
+const kindSchema = z.enum(['sector', 'tipo_lente']);
+
+const outcome = await runActions(Astro, {
+  add_items: async (form) => {
+    const input = parseForm(z.object({ kind: kindSchema, names: text(20000) }), form);
+    // Uno por línea: permite pegar la lista que entregue SOE
+    const lines = input.names.split(/\r?\n/).map((n) => n.trim().replace(/\s+/g, ' ')).filter(Boolean);
+    // Sin repetidos sin distinguir mayúsculas; se conserva la primera forma escrita
+    const names = lines.filter((n, i) => lines.findIndex((m) => m.toLowerCase() === n.toLowerCase()) === i);
+    if (!names.length) throw new FormError('Escriba al menos un valor (uno por línea).');
+    if (names.some((n) => n.length > 150)) throw new FormError('Cada valor admite hasta 150 caracteres.');
+    const { data: existing } = await supabase.from('catalog_items').select('name').eq('kind', input.kind);
+    const known = new Set((existing ?? []).map((r) => r.name.toLowerCase()));
+    const fresh = names.filter((n) => !known.has(n.toLowerCase()));
+    if (fresh.length) ensure(await supabase.from('catalog_items').insert(fresh.map((name) => ({ kind: input.kind, name }))));
+    const skipped = names.length - fresh.length;
+    return { message: `${fresh.length} agregado(s)${skipped ? `; ${skipped} ya estaba(n) en el catálogo` : ''}.` };
+  },
+  update_item: async (form) => {
+    const input = parseForm(z.object({ id: z.guid(), name: text(150).min(1), active: checkbox() }), form);
+    ensure(await supabase.from('catalog_items').update({ name: input.name.trim(), active: input.active }).eq('id', input.id).select('id').single());
+    return { message: 'Valor actualizado.' };
+  },
+});
+if (outcome?.kind === 'redirect') return outcome.response;
+const error = outcome?.kind === 'error' ? outcome.error : null;
+
+const { data: items } = await supabase.from('catalog_items').select('id, kind, name, active').order('active', { ascending: false }).order('name');
+const byKind = (kind: Kind) => (items ?? []).filter((i) => i.kind === kind);
+---
+
+<AppLayout title="Catálogos" error={error}>
+  <h1 class="mb-1">Catálogos</h1>
+  <p class="mb-4 text-sm text-slate-500">
+    Valores que se sugieren al escribir en los formularios. Cargue las listas que entregue SOE; retirar un valor no cambia los registros que ya lo usan.
+  </p>
+  <div class="grid gap-4 lg:grid-cols-2">
+    {
+      (Object.keys(KINDS) as Kind[]).map((kind) => (
+        <section class="card space-y-3">
+          <h2>{KINDS[kind]} <span class="text-sm font-normal text-slate-500">({byKind(kind).filter((i) => i.active).length} activos)</span></h2>
+          <form method="post" class="space-y-2">
+            <input type="hidden" name="_action" value="add_items" />
+            <input type="hidden" name="kind" value={kind} />
+            <textarea class="input" name="names" rows="3" required placeholder="Uno por línea (puede pegar una lista)" />
+            <button class="btn btn-primary btn-sm" type="submit">Agregar</button>
+          </form>
+          <ul class="divide-y divide-slate-100 text-sm">
+            {byKind(kind).map((i) => (
+              <li class="py-1.5">
+                <form method="post" class="flex flex-wrap items-center gap-2">
+                  <input type="hidden" name="_action" value="update_item" />
+                  <input type="hidden" name="id" value={i.id} />
+                  <input class:list={['input flex-1', !i.active && 'text-slate-400']} name="name" required maxlength="150" value={i.name} />
+                  <label class="flex items-center gap-1 text-xs">
+                    <input type="checkbox" name="active" checked={i.active} /> Activo
+                  </label>
+                  <button class="btn btn-sm" type="submit">Guardar</button>
+                </form>
+              </li>
+            ))}
+            {!byKind(kind).length && <li class="py-2 text-slate-500">Sin valores. Pendiente la lista de SOE.</li>}
+          </ul>
+        </section>
+      ))
+    }
+  </div>
+</AppLayout>

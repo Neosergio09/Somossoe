@@ -1,4 +1,5 @@
 ---
+import LensTypeOptions from '../../components/LensTypeOptions.astro';
 import AppLayout from '../../layouts/AppLayout.astro';
 import OrderItemFields from '../../components/OrderItemFields.astro';
 import SupportFile from '../../components/SupportFile.astro';
@@ -453,6 +454,7 @@ const backHref = campaign ? `/jornadas/${campaign.id}` : '/ordenes';
       </form>
     )
   }
+  <LensTypeOptions />
 </AppLayout>
 
 <script>
