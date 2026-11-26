@@ -509,6 +509,7 @@ if (revealItem && revealPurpose && FABRICATION_PURPOSES.includes(revealPurpose) 
   else fabRevealed = { itemId: revealItem, spec: data as unknown as FabricationSpec | null };
 }
 const fabRequired = setting('require_fabrication_spec') === 1;
+const plannedLabId = (await supabase.from('orders').select('planned_lab_provider_id').eq('id', id).maybeSingle()).data?.planned_lab_provider_id ?? null;
 ---
 
 <AppLayout title={`Orden ${orderNumber(o.order_number)}`} error={error ?? fabError}>
@@ -804,6 +805,7 @@ const fabRequired = setting('require_fabrication_spec') === 1;
             values={v}
             lastAction={lastAction}
             referenceHistory={referenceHistory}
+            plannedLabId={plannedLabId}
           />
         )
       }

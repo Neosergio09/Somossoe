@@ -20,6 +20,8 @@ interface Props {
   hasDeliveries: boolean;
   releaseLabel?: string;
   values?: Record<string, string>;
+  /** Laboratorio previsto en la venta (Operación lo confirma al liberar) */
+  plannedLabId?: string | null;
   lastAction?: string;
   /** Cambios del n.º de pedido del laboratorio (SOE-14) */
   referenceHistory?: { old_reference: string; new_reference: string | null; reason: string; changed_at: string; changed_by_name?: string | null }[];
@@ -38,6 +40,7 @@ const {
   values: v = {},
   lastAction = '',
   referenceHistory = [],
+  plannedLabId = null,
 } = Astro.props;
 const today = todayCo();
 const isOpen = (action: string) => lastAction === action;
@@ -193,8 +196,9 @@ const isOpen = (action: string) => lastAction === action;
               <label class="label">Laboratorio *</label>
               <select class="input" name="lab_provider_id" required>
                 <option value="">Seleccione…</option>
-                {labs.map((l) => <option value={l.id} selected={v.lab_provider_id === l.id}>{l.name}</option>)}
+                {labs.map((l) => <option value={l.id} selected={(v.lab_provider_id ?? plannedLabId) === l.id}>{l.name}</option>)}
               </select>
+              {plannedLabId && <p class="mt-1 text-xs text-slate-500">Preseleccionado el laboratorio previsto en la venta.</p>}
               {!labs.length && <p class="mt-1 text-xs text-amber-700">No hay laboratorios activos: Dirección los crea en Parámetros.</p>}
             </div>
             <div>

@@ -324,8 +324,9 @@ const marginByOrder = new Map((orderMargins.data ?? []).map((m) => [m.order_id, 
 const realSold = activeOrders.reduce((sum, o) => sum + (o.total_amount ?? 0), 0);
 const buyersCount = new Set(activeOrders.map((o) => o.buyer_document_id)).size;
 const canOrder = hasRole(Astro.locals, 'comercial') && status === 'en_ejecucion';
-const orderLink = (a?: { document_id: string; full_name: string }) =>
-  `/ordenes/nueva?campaign_id=${id}${a ? `&document_type=cc&document_id=${encodeURIComponent(a.document_id)}&full_name=${encodeURIComponent(a.full_name)}` : ''}`;
+// Venta en un solo formulario (campos del Excel de Jornadas); varios productos: formulario completo
+const saleLink = (a?: { id: string }) => `/jornadas/${id}/venta${a ? `?asistente=${a.id}` : ''}`;
+const orderLink = () => `/ordenes/nueva?campaign_id=${id}`;
 const sessionLabel = (sid: string) => {
   const s = sessionRows.find((x) => x.session_id === sid);
   return s ? `${fmtDate(s.session_date)} ${fmtTime(s.start_time)}` : '';
@@ -485,9 +486,10 @@ const sessionLabel = (sid: string) => {
       <section class="card">
         <div class="mb-1 flex items-center justify-between">
           <h2>Asistencia</h2>
-          <span class="text-sm text-slate-500">
+          <span class="flex flex-wrap items-center gap-2 text-sm text-slate-500">
             {attendees.length} registros
             {pendingFollowups > 0 && <> · <a href="/jornadas/seguimiento">{pendingFollowups} pendiente(s) de cierre</a></>}
+            {canOrder && <a class="btn btn-primary btn-sm" href={saleLink()}>Registrar venta</a>}
           </span>
         </div>
         <p class="mb-3 text-xs text-slate-500">Solo datos operativos: no se registran diagnósticos ni historia clínica.</p>
@@ -550,7 +552,7 @@ const sessionLabel = (sid: string) => {
                     <span class="badge badge-green">Compró</span>
                   ) : (
                     <>
-                      {canOrder && <a class="btn btn-sm" href={orderLink(a)}>Registrar orden</a>}
+                      {canOrder && <a class="btn btn-sm" href={saleLink(a)}>Registrar venta</a>}
                       {a.followup_status && (
                         <div class="mt-1">
                           <span class={ATTENDANCE_FOLLOWUP_BADGE[a.followup_status]}>{ATTENDANCE_FOLLOWUP_LABELS[a.followup_status]}</span>
@@ -602,7 +604,8 @@ const sessionLabel = (sid: string) => {
             {hasRole(Astro.locals, 'comercial', 'administracion_cartera') && (
               <a class="btn btn-sm" href={`/ordenes/aval?empresa=${j.company_id}&jornada=${j.id}`}>Aval de la empresa</a>
             )}
-            {canOrder && <a class="btn btn-primary btn-sm" href={orderLink()}>Registrar orden</a>}
+            {canOrder && <a class="btn btn-sm" href={orderLink()}>Venta con varios productos</a>}
+            {canOrder && <a class="btn btn-primary btn-sm" href={saleLink()}>Registrar venta</a>}
           </div>
         </div>
         {beforeExecution && <p class="mb-3 text-sm text-slate-500">Las órdenes se registran con la jornada En ejecución.</p>}
