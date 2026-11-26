@@ -64,12 +64,30 @@ export function fulfillmentActions(
           sent_to_lab_at: date(),
           promised_date: date(),
           lab_order_reference: text(60).optional(),
+          lab_reference_change_reason: text(300).optional(),
           notes: text(1000).optional(),
         }),
         form,
       );
-      await updateProduction(productionId(form), { ...input, lab_order_reference: input.lab_order_reference ?? null, notes: input.notes ?? null });
+      await updateProduction(productionId(form), {
+        ...input,
+        lab_order_reference: input.lab_order_reference ?? null,
+        lab_reference_change_reason: input.lab_reference_change_reason ?? null,
+        notes: input.notes ?? null,
+      });
       return { message: 'Producción actualizada.' };
+    },
+    // Corregir el n.º de pedido con el lente ya recibido (SOE-14): el anterior queda en el historial
+    production_reference: async (form) => {
+      const input = parseForm(
+        z.object({
+          lab_order_reference: z.string({ error: 'Indique el nuevo n.º de pedido' }).max(60),
+          lab_reference_change_reason: z.string({ error: 'Indique el motivo del cambio' }).min(3, { error: 'Indique el motivo del cambio' }).max(300),
+        }),
+        form,
+      );
+      await updateProduction(productionId(form), input);
+      return { message: 'N.º de pedido corregido. El anterior queda en el historial.' };
     },
     production_ready: async (form) => {
       const input = parseForm(z.object({ ready_at: date(), lab_order_reference: text(60).optional() }), form);

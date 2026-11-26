@@ -73,7 +73,7 @@ select lives_ok($$
 $$, 'Operación libera con la referencia del pedido del laboratorio');
 select is((select lab_order_reference from public.v_productions where order_id = pg_temp.ord()), 'LAB-77812',
   'la referencia se ve en el tablero de producción');
-update public.order_productions set lab_order_reference = 'LAB-77812-B' where order_id = pg_temp.ord();
+update public.order_productions set lab_order_reference = 'LAB-77812-B', lab_reference_change_reason = 'El laboratorio reemitió el pedido' where order_id = pg_temp.ord();
 select is((select lab_order_reference from public.order_productions where order_id = pg_temp.ord()), 'LAB-77812-B',
   'Operación corrige la referencia');
 

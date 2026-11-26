@@ -21,6 +21,8 @@ interface Props {
   releaseLabel?: string;
   values?: Record<string, string>;
   lastAction?: string;
+  /** Cambios del n.º de pedido del laboratorio (SOE-14) */
+  referenceHistory?: { old_reference: string; new_reference: string | null; reason: string; changed_at: string; changed_by_name?: string | null }[];
 }
 
 const {
@@ -35,6 +37,7 @@ const {
   releaseLabel = 'Liberar a producción',
   values: v = {},
   lastAction = '',
+  referenceHistory = [],
 } = Astro.props;
 const today = todayCo();
 const isOpen = (action: string) => lastAction === action;
@@ -58,9 +61,43 @@ const isOpen = (action: string) => lastAction === action;
           <div><dt class="label">Fecha de la orden al laboratorio</dt><dd>{fmtDate(p.sent_to_lab_at)}</dd></div>
           <div><dt class="label">Fecha prometida</dt><dd>{fmtDate(p.promised_date)}</dd></div>
           <div><dt class="label">N.º de pedido del laboratorio</dt><dd>{p.lab_order_reference ?? '—'}</dd></div>
-          <div><dt class="label">Recibido en SOE</dt><dd>{fmtDate(p.ready_at)}</dd></div>
+          <div>
+            <dt class="label">Recibido en SOE</dt>
+            <dd>
+              {fmtDate(p.ready_at)}
+              {p.received_by_name && <div class="text-xs text-slate-500">Registró {p.received_by_name} · {fmtDateTime(p.received_recorded_at)}</div>}
+            </dd>
+          </div>
           {p.notes && <div class="col-span-2"><dt class="label">Notas</dt><dd class="whitespace-pre-line">{p.notes}</dd></div>}
         </dl>
+        {referenceHistory.length > 0 && (
+          <details class="text-xs">
+            <summary class="cursor-pointer text-slate-600">Cambios del n.º de pedido ({referenceHistory.length})</summary>
+            <ul class="mt-1 space-y-0.5 text-slate-600">
+              {referenceHistory.map((h) => (
+                <li>{h.old_reference} → {h.new_reference ?? 'sin pedido'} · {h.reason} · {h.changed_by_name ?? '—'}, {fmtDateTime(h.changed_at)}</li>
+              ))}
+            </ul>
+          </details>
+        )}
+        {canOperate && p.status === 'listo_para_entregar' && (
+          <details open={isOpen('production_reference')}>
+            <summary class="cursor-pointer text-brand-700">Corregir n.º de pedido del laboratorio</summary>
+            <form method="post" class="mt-2 flex flex-wrap items-end gap-2">
+              <input type="hidden" name="_action" value="production_reference" />
+              <input type="hidden" name="production_id" value={p.id} />
+              <div>
+                <label class="label">Nuevo n.º de pedido</label>
+                <input class="input" name="lab_order_reference" required maxlength="60" value={v.lab_order_reference ?? p.lab_order_reference ?? ''} />
+              </div>
+              <div class="min-w-48 flex-1">
+                <label class="label">Motivo *</label>
+                <input class="input" name="lab_reference_change_reason" required maxlength="300" value={v.lab_reference_change_reason ?? ''} />
+              </div>
+              <button class="btn btn-sm" type="submit">Guardar</button>
+            </form>
+          </details>
+        )}
 
         {canOperate && p.status === 'en_produccion' && (
           <form method="post" class="flex flex-wrap items-end gap-2 border-t border-slate-100 pt-3">
@@ -113,6 +150,12 @@ const isOpen = (action: string) => lastAction === action;
                 <label class="label">N.º de pedido del laboratorio</label>
                 <input class="input" name="lab_order_reference" maxlength="60" value={p.lab_order_reference ?? ''} />
               </div>
+              {p.lab_order_reference && (
+                <div class="sm:col-span-2">
+                  <label class="label">Motivo si cambia el n.º de pedido</label>
+                  <input class="input" name="lab_reference_change_reason" maxlength="300" placeholder="Obligatorio solo si corrige el pedido" />
+                </div>
+              )}
               <div class="sm:col-span-2">
                 <label class="label">Notas</label>
                 <textarea class="input" name="notes" rows="2">{p.notes ?? ''}</textarea>
