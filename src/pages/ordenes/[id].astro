@@ -4,6 +4,8 @@ import OrderItemFields from '../../components/OrderItemFields.astro';
 import SupportFile from '../../components/SupportFile.astro';
 import { filesRequired, supportHref, supportPathFrom } from '../../lib/supports';
 import ProductionPanel from '../../components/ProductionPanel.astro';
+import FabricationPanel from '../../components/FabricationPanel.astro';
+import { fabricationValues, FABRICATION_PURPOSES, type FabricationPurpose, type FabricationSpec } from '../../lib/fabrication';
 import DeliveriesPanel from '../../components/DeliveriesPanel.astro';
 import { activeLabs, fulfillmentActions } from '../../lib/fulfillment';
 import { itemLabel, loadDeliveries } from '../../lib/deliveries';
@@ -213,6 +215,44 @@ const outcome = await runActions(Astro, {
     );
     return { message: 'Datos del comprador actualizados.' };
   },
+  // Ficha de fabricación (RF-M04-07): la BD decide quién y cuándo, y registra todo
+  sensitive_consent: async (form) => {
+    if (form.get('confirm') !== 'on') throw new FormError('Confirme que el comprador dio la autorización expresa.');
+    const filePath = supportPathFrom(form, 'sensitive_data_consent_file_path', 'compradores');
+    const { data: ord } = await supabase.from('orders').select('buyer_id').eq('id', id).single();
+    ensure(
+      await supabase
+        .from('buyers')
+        .update({ sensitive_data_consent_at: new Date().toISOString(), ...(filePath ? { sensitive_data_consent_file_path: filePath } : {}) })
+        .eq('id', ord!.buyer_id!)
+        .select('id')
+        .single(),
+    );
+    return { message: 'Autorización de datos sensibles registrada.', redirect: `${Astro.url.pathname}#ficha` };
+  },
+  save_fabrication: async (form) => {
+    const itemId = String(form.get('order_item_id') ?? '');
+    let values;
+    try {
+      values = fabricationValues(form);
+    } catch {
+      throw new FormError('Revise los valores numéricos de la ficha.');
+    }
+    const reason = String(form.get('change_reason') ?? '').trim();
+    ensure(await supabase.rpc('save_fabrication_spec', { p_order_item_id: itemId, p_values: values, ...(reason ? { p_change_reason: reason } : {}) }));
+    // Sin el parámetro de lectura: volver a ver la ficha es una consulta nueva y registrada
+    return { message: 'Ficha de fabricación guardada.', redirect: `${Astro.url.pathname}#ficha` };
+  },
+  validate_fabrication: async (form) => {
+    ensure(await supabase.rpc('validate_fabrication_spec', { p_spec_id: String(form.get('spec_id') ?? '') }));
+    return { message: 'Ficha validada.', redirect: `${Astro.url.pathname}#ficha` };
+  },
+  void_fabrication: async (form) => {
+    const reason = String(form.get('void_reason') ?? '').trim();
+    if (!reason) throw new FormError('Indique el motivo de la anulación.');
+    ensure(await supabase.rpc('void_fabrication_spec', { p_spec_id: String(form.get('spec_id') ?? ''), p_reason: reason }));
+    return { message: 'Versión de la ficha anulada.', redirect: `${Astro.url.pathname}#ficha` };
+  },
   // Costos directos: solo Dirección (la BD lo exige). Corregir = versión nueva.
   add_cost: async (form) => {
     const input = parseForm(
@@ -321,7 +361,7 @@ const [items, installments, buyer, agreements, settings, people, productions, de
   o.company_id
     ? supabase.from('v_agreements').select('id, deal_name_branch, status, effective_status, payroll_frequency, max_installments, hr_approval_required, valid_until').eq('company_id', o.company_id)
     : Promise.resolve({ data: [] }),
-  supabase.from('system_settings').select('key, value').in('key', ['max_installments_monthly', 'max_installments_biweekly', 'cash_min_prepayment_pct']),
+  supabase.from('system_settings').select('key, value').in('key', ['max_installments_monthly', 'max_installments_biweekly', 'cash_min_prepayment_pct', 'require_fabrication_spec']),
   supabase
     .from('users_profiles')
     .select('id, full_name')
@@ -409,9 +449,26 @@ const costItemLabel = (itemId: string) => {
 const activeAllocations = (allocations.data ?? []).filter((a) => !a.is_voided);
 const collectedMoney = activeAllocations.reduce((s2, a) => s2 + Number(a.amount_applied ?? 0), 0);
 const collectedWithholding = activeAllocations.reduce((s2, a) => s2 + Number(a.withholding_applied ?? 0), 0);
+
+// Ficha de fabricación: estado sin valores para todos; valores solo al pedirlos (lectura registrada en la BD)
+const fabricationRows = !isCancelled && !o.is_historical_migration
+  ? ((await supabase.rpc('fabrication_spec_status', { p_order_id: id })).data ?? [])
+  : [];
+const fabCanCapture = hasRole(Astro.locals, 'comercial') && o.created_by === Astro.locals.userId && !released && !Astro.locals.viewAs;
+const fabCanOperate = isOps && !Astro.locals.viewAs;
+let fabRevealed: { itemId: string; spec: FabricationSpec | null } | null = null;
+let fabError: string | null = null;
+const revealItem = Astro.url.searchParams.get('ver_ficha');
+const revealPurpose = Astro.url.searchParams.get('finalidad') as FabricationPurpose | null;
+if (revealItem && revealPurpose && FABRICATION_PURPOSES.includes(revealPurpose) && fabricationRows.some((r) => r.order_item_id === revealItem)) {
+  const { data, error: readError } = await supabase.rpc('get_fabrication_spec', { p_order_item_id: revealItem, p_purpose: revealPurpose });
+  if (readError) fabError = readError.message;
+  else fabRevealed = { itemId: revealItem, spec: data as unknown as FabricationSpec | null };
+}
+const fabRequired = setting('require_fabrication_spec') === 1;
 ---
 
-<AppLayout title={`Orden ${orderNumber(o.order_number)}`} error={error}>
+<AppLayout title={`Orden ${orderNumber(o.order_number)}`} error={error ?? fabError}>
   <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
     <div>
       <a href="/ordenes" class="text-sm">← Órdenes</a>
@@ -668,6 +725,25 @@ const collectedWithholding = activeAllocations.reduce((s2, a) => s2 + Number(a.w
               <button class="btn btn-primary" type="submit">Guardar condiciones</button>
             </form>
           </section>
+        )
+      }
+
+      {
+        fabricationRows.length > 0 && (
+          <FabricationPanel
+            orderId={id}
+            rows={fabricationRows}
+            canCapture={fabCanCapture}
+            canOperate={fabCanOperate}
+            released={released}
+            required={fabRequired}
+            hasConsent={!!buyer.data?.sensitive_data_consent_at}
+            consentAt={buyer.data?.sensitive_data_consent_at ?? null}
+            canRecordConsent={hasRole(Astro.locals, 'comercial', 'administracion_cartera') && !Astro.locals.viewAs}
+            revealed={fabRevealed}
+            values={v}
+            lastAction={lastAction}
+          />
         )
       }
 

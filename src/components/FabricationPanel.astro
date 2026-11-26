@@ -1,0 +1,216 @@
+---
+/**
+ * Ficha de fabricación (SRS 1.6 · RF-M04-07, RNF-06).
+ * Dato sensible de salud: la página solo recibe valores cuando el usuario
+ * pulsa «Ver ficha» y la BD autoriza y registra esa lectura
+ * (public.get_fabrication_spec). El estado (versión, validación) no lleva
+ * valores clínicos y se muestra a todo usuario interno.
+ */
+import SupportFile from './SupportFile.astro';
+import { fmtDate, fmtDateTime } from '../lib/format';
+import { EYE_FIELDS, FABRICATION_SOURCE_LABELS, fmtRx, type FabricationSpec, type FabricationStatus } from '../lib/fabrication';
+
+interface Props {
+  orderId: string;
+  rows: FabricationStatus[];
+  /** Comercial que registró la orden (antes de liberar) */
+  canCapture: boolean;
+  /** Operación */
+  canOperate: boolean;
+  released: boolean;
+  required: boolean;
+  hasConsent: boolean;
+  consentAt: string | null;
+  canRecordConsent: boolean;
+  /** Ficha revelada (ítem y valores), si el usuario pidió verla */
+  revealed: { itemId: string; spec: FabricationSpec | null } | null;
+  values: Record<string, string>;
+  lastAction: string;
+}
+
+const { orderId, rows, canCapture, canOperate, released, required, hasConsent, consentAt, canRecordConsent, revealed, values: v, lastAction } =
+  Astro.props;
+const canEditValues = (released ? canOperate : canCapture) && hasConsent;
+const canSee = canOperate || canCapture;
+const purposeFor = (spec: FabricationStatus) => (canOperate ? (spec.validated_at || released ? 'envio_laboratorio' : 'validacion') : 'captura');
+const field = (name: string, spec: FabricationSpec | null | undefined, itemId: string) =>
+  lastAction === 'save_fabrication' && v.order_item_id === itemId ? (v[name] ?? '') : spec ? String(spec[name as keyof FabricationSpec] ?? '') : '';
+---
+
+<section class="card space-y-3 text-sm" id="ficha">
+  <div class="flex flex-wrap items-center justify-between gap-2">
+    <h2>Ficha de fabricación (RX)</h2>
+    <span class="badge">Dato sensible · acceso registrado</span>
+  </div>
+  <p class="text-xs text-slate-500">
+    Solo los parámetros que el laboratorio necesita para fabricar, transcritos de la fórmula de la optómetra. Nada de diagnósticos ni
+    historia clínica. {required ? 'Cada ítem con lente necesita su ficha validada por Operación para liberar la orden.' : 'La ficha no bloquea la liberación (parámetro desactivado).'}
+  </p>
+
+  <p class:list={[hasConsent ? 'text-green-700' : 'text-amber-700']}>
+    {hasConsent ? `✓ Autorización de datos sensibles: ${fmtDateTime(consentAt)}` : '○ Sin autorización de datos sensibles del comprador'}
+  </p>
+  {
+    !hasConsent && canRecordConsent && (
+      <details open={lastAction === 'sensitive_consent'}>
+        <summary class="cursor-pointer text-brand-700">Registrar autorización de datos sensibles</summary>
+        <form method="post" class="mt-2 space-y-2">
+          <input type="hidden" name="_action" value="sensitive_consent" />
+          <label class="flex items-start gap-2">
+            <input type="checkbox" name="confirm" required class="mt-1" />
+            <span>El comprador autorizó de forma expresa que SOE trate su fórmula para fabricar sus lentes (Ley 1581, art. 6). Puede negarse: en ese caso la fórmula va al laboratorio por fuera del CRM.</span>
+          </label>
+          <SupportFile kind="compradores" name="sensitive_data_consent_file_path" label="Soporte firmado (opcional)" compact />
+          <button class="btn btn-sm" type="submit">Registrar autorización</button>
+        </form>
+      </details>
+    )
+  }
+
+  {rows.length === 0 && <p class="text-slate-500">Esta orden no tiene ítems con lente.</p>}
+
+  {
+    rows.map((r) => {
+      const isRevealed = revealed?.itemId === r.order_item_id;
+      const spec = isRevealed ? revealed!.spec : null;
+      return (
+        <div class="space-y-2 rounded-md border border-slate-200 p-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <strong>{r.item_label}</strong>
+            {r.spec_id ? (
+              r.validated_at ? (
+                <span class="badge badge-green">v{r.version} · validada por {r.validated_by_name}</span>
+              ) : (
+                <span class="badge badge-amber">v{r.version} · pendiente de validar</span>
+              )
+            ) : (
+              <span class="badge badge-amber">Sin ficha</span>
+            )}
+          </div>
+          {r.spec_id && (
+            <p class="text-xs text-slate-500">
+              Registrada por {r.created_by_name} el {fmtDateTime(r.created_at)}
+              {r.values_purged_at && ` · valores suprimidos el ${fmtDate(r.values_purged_at)} por plazo de conservación`}
+            </p>
+          )}
+
+          {canSee && r.spec_id && !r.values_purged_at && !isRevealed && (
+            <a class="btn btn-sm" href={`?ver_ficha=${r.order_item_id}&finalidad=${purposeFor(r)}#ficha`}>Ver ficha</a>
+          )}
+
+          {isRevealed && spec && (
+            <div class="space-y-2">
+              <table class="table text-xs">
+                <thead>
+                  <tr><th></th>{EYE_FIELDS.map((f) => <th>{f.label}</th>)}</tr>
+                </thead>
+                <tbody>
+                  <tr><th>OD</th>{EYE_FIELDS.map((f) => <td>{fmtRx(spec[`od_${f.key}` as keyof FabricationSpec], f.kind)}</td>)}</tr>
+                  <tr><th>OI</th>{EYE_FIELDS.map((f) => <td>{fmtRx(spec[`os_${f.key}` as keyof FabricationSpec], f.kind)}</td>)}</tr>
+                </tbody>
+              </table>
+              <p class="text-xs text-slate-600">
+                DP total: {spec.pd_total_mm ?? '—'} · Fecha de la fórmula: {fmtDate(spec.prescription_date)} · Fuente:{' '}
+                {FABRICATION_SOURCE_LABELS[spec.source] ?? spec.source}
+                {spec.technical_notes && <> · Notas: {spec.technical_notes}</>}
+                {spec.change_reason && <> · Última corrección: {spec.change_reason}</>}
+              </p>
+              <div class="flex flex-wrap gap-2">
+                {canOperate && !released && !r.validated_at && (
+                  <form method="post">
+                    <input type="hidden" name="_action" value="validate_fabrication" />
+                    <input type="hidden" name="spec_id" value={r.spec_id} />
+                    <button class="btn btn-sm btn-primary" type="submit">Validar ficha</button>
+                  </form>
+                )}
+                {canOperate && <a class="btn btn-sm" href={`/ordenes/${orderId}/ficha-laboratorio`} target="_blank">Hoja para el laboratorio</a>}
+                <a class="btn btn-sm" href="?#ficha">Ocultar</a>
+              </div>
+            </div>
+          )}
+
+          {canEditValues && (!r.spec_id || isRevealed) && (
+            <details open={(lastAction === 'save_fabrication' && v.order_item_id === r.order_item_id) || (!r.spec_id && canCapture)}>
+              <summary class="cursor-pointer text-brand-700">{r.spec_id ? 'Corregir (versión nueva)' : 'Registrar ficha'}</summary>
+              <form method="post" class="mt-2 space-y-2">
+                <input type="hidden" name="_action" value="save_fabrication" />
+                <input type="hidden" name="order_item_id" value={r.order_item_id} />
+                <div class="overflow-x-auto">
+                  <table class="table text-xs">
+                    <thead><tr><th></th>{EYE_FIELDS.map((f) => <th>{f.label}{f.required && ' *'}</th>)}</tr></thead>
+                    <tbody>
+                      {(['od', 'os'] as const).map((eye) => (
+                        <tr>
+                          <th>{eye === 'od' ? 'OD' : 'OI'}</th>
+                          {EYE_FIELDS.map((f) => (
+                            <td>
+                              <input
+                                class="input w-20"
+                                name={`${eye}_${f.key}`}
+                                type="number"
+                                step={f.step}
+                                min={f.min}
+                                max={f.max}
+                                required={f.required}
+                                value={field(`${eye}_${f.key}`, spec, r.order_item_id)}
+                              />
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div class="grid gap-2 sm:grid-cols-3">
+                  <div>
+                    <label class="label">DP total (mm)</label>
+                    <input class="input" name="pd_total_mm" type="number" step="0.5" min="40" max="80" value={field('pd_total_mm', spec, r.order_item_id)} />
+                  </div>
+                  <div>
+                    <label class="label">Fecha de la fórmula</label>
+                    <input class="input" name="prescription_date" type="date" value={field('prescription_date', spec, r.order_item_id)} />
+                  </div>
+                  <div>
+                    <label class="label">Fuente</label>
+                    <select class="input" name="source">
+                      {Object.entries(FABRICATION_SOURCE_LABELS).map(([value, label]) => (
+                        <option value={value} selected={field('source', spec, r.order_item_id) === value}>{label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label class="label">Notas técnicas de fabricación</label>
+                  <input class="input" name="technical_notes" maxlength="200" placeholder="Solo datos de fabricación, sin diagnósticos" value={field('technical_notes', spec, r.order_item_id)} />
+                </div>
+                {r.spec_id && (
+                  <div>
+                    <label class="label">Motivo de la corrección *</label>
+                    <input class="input" name="change_reason" required maxlength="300" value={lastAction === 'save_fabrication' ? (v.change_reason ?? '') : ''} />
+                  </div>
+                )}
+                <p class="text-xs text-slate-500">Eje solo si hay cilindro. ADD obligatoria en progresivos y bifocales. Pasos de 0.25.</p>
+                <button class="btn btn-primary btn-sm" type="submit">Guardar ficha</button>
+              </form>
+            </details>
+          )}
+
+          {(released ? canOperate : canCapture || canOperate) && r.spec_id && isRevealed && (
+            <details>
+              <summary class="cursor-pointer text-xs text-red-700">Anular esta versión</summary>
+              <form method="post" class="mt-2 flex flex-wrap gap-2">
+                <input type="hidden" name="_action" value="void_fabrication" />
+                <input type="hidden" name="spec_id" value={r.spec_id} />
+                <input class="input flex-1" name="void_reason" required maxlength="300" placeholder="Motivo" />
+                <button class="btn btn-sm btn-danger" type="submit">Anular</button>
+              </form>
+            </details>
+          )}
+
+          {!canSee && r.spec_id && <p class="text-xs text-slate-500">Solo quien registró la orden (antes de liberarla) y Operación ven los valores.</p>}
+          {canSee && !hasConsent && !r.spec_id && <p class="text-xs text-amber-700">Registre primero la autorización de datos sensibles.</p>}
+        </div>
+      );
+    })
+  }
+</section>

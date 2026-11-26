@@ -289,14 +289,14 @@ isOneToOne: false
                   ]
                 },"buyers": {
                   Row: {
-                    "created_at": string,"created_by": string | null,"current_company_id": string | null,"data_consent_at": string | null,"data_consent_by": string | null,"data_consent_file_path": string | null,"document_id": string,"document_type": Database["public"]['Enums']["buyer_document_type"],"email": string | null,"full_name": string,"id": string,"phone": string | null,"updated_at": string
+                    "created_at": string,"created_by": string | null,"current_company_id": string | null,"data_consent_at": string | null,"data_consent_by": string | null,"data_consent_file_path": string | null,"document_id": string,"document_type": Database["public"]['Enums']["buyer_document_type"],"email": string | null,"full_name": string,"id": string,"phone": string | null,"sensitive_data_consent_at": string | null,"sensitive_data_consent_by": string | null,"sensitive_data_consent_file_path": string | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"created_by"?: string | null,"current_company_id"?: string | null,"data_consent_at"?: string | null,"data_consent_by"?: string | null,"data_consent_file_path"?: string | null,"document_id": string,"document_type": Database["public"]['Enums']["buyer_document_type"],"email"?: string | null,"full_name": string,"id"?: string,"phone"?: string | null,"updated_at"?: string
+                    "created_at"?: string,"created_by"?: string | null,"current_company_id"?: string | null,"data_consent_at"?: string | null,"data_consent_by"?: string | null,"data_consent_file_path"?: string | null,"document_id": string,"document_type": Database["public"]['Enums']["buyer_document_type"],"email"?: string | null,"full_name": string,"id"?: string,"phone"?: string | null,"sensitive_data_consent_at"?: string | null,"sensitive_data_consent_by"?: string | null,"sensitive_data_consent_file_path"?: string | null,"updated_at"?: string
                   }
                   Update: {
-                    "created_at"?: string,"created_by"?: string | null,"current_company_id"?: string | null,"data_consent_at"?: string | null,"data_consent_by"?: string | null,"data_consent_file_path"?: string | null,"document_id"?: string,"document_type"?: Database["public"]['Enums']["buyer_document_type"],"email"?: string | null,"full_name"?: string,"id"?: string,"phone"?: string | null,"updated_at"?: string
+                    "created_at"?: string,"created_by"?: string | null,"current_company_id"?: string | null,"data_consent_at"?: string | null,"data_consent_by"?: string | null,"data_consent_file_path"?: string | null,"document_id"?: string,"document_type"?: Database["public"]['Enums']["buyer_document_type"],"email"?: string | null,"full_name"?: string,"id"?: string,"phone"?: string | null,"sensitive_data_consent_at"?: string | null,"sensitive_data_consent_by"?: string | null,"sensitive_data_consent_file_path"?: string | null,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -314,6 +314,12 @@ isOneToOne: false
     },{
       foreignKeyName: "buyers_data_consent_by_fkey"
       columns: ["data_consent_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "buyers_sensitive_data_consent_by_fkey"
+      columns: ["sensitive_data_consent_by"]
 isOneToOne: false
       referencedRelation: "users_profiles"
       referencedColumns: ["id"]
@@ -949,6 +955,154 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"fabrication_spec_access_logs": {
+                  Row: {
+                    "accessed_at": string,"id": string,"order_id": string,"purpose": string,"spec_id": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "accessed_at"?: string,"id"?: string,"order_id": string,"purpose": string,"spec_id": string,"user_id": string
+                  }
+                  Update: {
+                    "accessed_at"?: string,"id"?: string,"order_id"?: string,"purpose"?: string,"spec_id"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "fabrication_spec_access_logs_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "fabrication_spec_access_logs_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_attendance_followups"
+      referencedColumns: ["purchase_order_id"]
+    },{
+      foreignKeyName: "fabrication_spec_access_logs_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_finance_by_order"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "fabrication_spec_access_logs_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_order_margins"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "fabrication_spec_access_logs_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "fabrication_spec_access_logs_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders_to_invoice"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "fabrication_spec_access_logs_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_receivables"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "fabrication_spec_access_logs_spec_id_fkey"
+      columns: ["spec_id"]
+isOneToOne: false
+      referencedRelation: "order_fabrication_specs"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "fabrication_spec_access_logs_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"fabrication_spec_events": {
+                  Row: {
+                    "created_at": string,"event": string,"id": string,"order_id": string,"order_item_id": string,"reason": string | null,"spec_id": string,"user_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"event": string,"id"?: string,"order_id": string,"order_item_id": string,"reason"?: string | null,"spec_id": string,"user_id"?: string | null
+                  }
+                  Update: {
+                    "created_at"?: string,"event"?: string,"id"?: string,"order_id"?: string,"order_item_id"?: string,"reason"?: string | null,"spec_id"?: string,"user_id"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "fabrication_spec_events_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "fabrication_spec_events_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_attendance_followups"
+      referencedColumns: ["purchase_order_id"]
+    },{
+      foreignKeyName: "fabrication_spec_events_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_finance_by_order"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "fabrication_spec_events_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_order_margins"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "fabrication_spec_events_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "fabrication_spec_events_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders_to_invoice"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "fabrication_spec_events_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_receivables"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "fabrication_spec_events_order_item_id_fkey"
+      columns: ["order_item_id"]
+isOneToOne: false
+      referencedRelation: "order_items"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "fabrication_spec_events_order_item_id_fkey"
+      columns: ["order_item_id"]
+isOneToOne: false
+      referencedRelation: "v_order_item_delivery"
+      referencedColumns: ["order_item_id"]
+    },{
+      foreignKeyName: "fabrication_spec_events_spec_id_fkey"
+      columns: ["spec_id"]
+isOneToOne: false
+      referencedRelation: "order_fabrication_specs"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "fabrication_spec_events_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"lab_providers": {
                   Row: {
                     "active": boolean,"contact_info": string | null,"created_at": string,"id": string,"name": string,"updated_at": string
@@ -1177,6 +1331,98 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "v_order_item_delivery"
       referencedColumns: ["order_item_id","order_id"]
+    }
+                  ]
+                },"order_fabrication_specs": {
+                  Row: {
+                    "change_reason": string | null,"created_at": string,"created_by": string,"id": string,"is_voided": boolean,"od_add": number | null,"od_axis": number | null,"od_cylinder": number | null,"od_height_mm": number | null,"od_pd_mm": number | null,"od_sphere": number | null,"order_id": string,"order_item_id": string,"os_add": number | null,"os_axis": number | null,"os_cylinder": number | null,"os_height_mm": number | null,"os_pd_mm": number | null,"os_sphere": number | null,"pd_total_mm": number | null,"prescription_date": string | null,"replaces_id": string | null,"source": string,"superseded_at": string | null,"technical_notes": string | null,"validated_at": string | null,"validated_by": string | null,"values_purged_at": string | null,"version": number,"void_reason": string | null,"voided_at": string | null,"voided_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "change_reason"?: string | null,"created_at"?: string,"created_by": string,"id"?: string,"is_voided"?: boolean,"od_add"?: number | null,"od_axis"?: number | null,"od_cylinder"?: number | null,"od_height_mm"?: number | null,"od_pd_mm"?: number | null,"od_sphere"?: number | null,"order_id": string,"order_item_id": string,"os_add"?: number | null,"os_axis"?: number | null,"os_cylinder"?: number | null,"os_height_mm"?: number | null,"os_pd_mm"?: number | null,"os_sphere"?: number | null,"pd_total_mm"?: number | null,"prescription_date"?: string | null,"replaces_id"?: string | null,"source": string,"superseded_at"?: string | null,"technical_notes"?: string | null,"validated_at"?: string | null,"validated_by"?: string | null,"values_purged_at"?: string | null,"version": number,"void_reason"?: string | null,"voided_at"?: string | null,"voided_by"?: string | null
+                  }
+                  Update: {
+                    "change_reason"?: string | null,"created_at"?: string,"created_by"?: string,"id"?: string,"is_voided"?: boolean,"od_add"?: number | null,"od_axis"?: number | null,"od_cylinder"?: number | null,"od_height_mm"?: number | null,"od_pd_mm"?: number | null,"od_sphere"?: number | null,"order_id"?: string,"order_item_id"?: string,"os_add"?: number | null,"os_axis"?: number | null,"os_cylinder"?: number | null,"os_height_mm"?: number | null,"os_pd_mm"?: number | null,"os_sphere"?: number | null,"pd_total_mm"?: number | null,"prescription_date"?: string | null,"replaces_id"?: string | null,"source"?: string,"superseded_at"?: string | null,"technical_notes"?: string | null,"validated_at"?: string | null,"validated_by"?: string | null,"values_purged_at"?: string | null,"version"?: number,"void_reason"?: string | null,"voided_at"?: string | null,"voided_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "order_fabrication_specs_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_fabrication_specs_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_fabrication_specs_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_attendance_followups"
+      referencedColumns: ["purchase_order_id"]
+    },{
+      foreignKeyName: "order_fabrication_specs_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_finance_by_order"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "order_fabrication_specs_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_order_margins"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "order_fabrication_specs_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_fabrication_specs_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders_to_invoice"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_fabrication_specs_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_receivables"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_fabrication_specs_order_item_id_fkey"
+      columns: ["order_item_id"]
+isOneToOne: false
+      referencedRelation: "order_items"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_fabrication_specs_order_item_id_fkey"
+      columns: ["order_item_id"]
+isOneToOne: false
+      referencedRelation: "v_order_item_delivery"
+      referencedColumns: ["order_item_id"]
+    },{
+      foreignKeyName: "order_fabrication_specs_replaces_id_fkey"
+      columns: ["replaces_id"]
+isOneToOne: false
+      referencedRelation: "order_fabrication_specs"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_fabrication_specs_validated_by_fkey"
+      columns: ["validated_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_fabrication_specs_voided_by_fkey"
+      columns: ["voided_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
     }
                   ]
                 },"order_installments": {
@@ -2956,10 +3202,18 @@ isOneToOne: false
 "excel_import_validate_sheet":
 { Args: { "p_sheet_id": string }; Returns: undefined
                            },
+"fabrication_spec_status":
+{ Args: { "p_order_id": string }; Returns: {
+              "created_at": string,"created_by_name": string,"item_label": string,"item_type": Database["public"]['Enums']["order_item_type"],"order_item_id": string,"spec_id": string,"validated_at": string,"validated_by_name": string,"values_purged_at": string,"version": number
+            }[]
+                           },
 "find_company_duplicates":
 { Args: { "p_name": string,"p_nit"?: string }; Returns: {
               "id": string,"is_nit_provisional": boolean,"match_reason": string,"name": string,"nit": string,"similarity": number
             }[]
+                           },
+"get_fabrication_spec":
+{ Args: { "p_order_item_id": string,"p_purpose": string }; Returns: Json
                            },
 "log_support_access":
 { Args: { "p_path": string }; Returns: undefined
@@ -2975,6 +3229,15 @@ isOneToOne: false
                            },
 "reschedule_campaign_session":
 { Args: { "p_end_time": string,"p_expected_updated_at"?: string,"p_location_detail": string,"p_reason": string,"p_session_date": string,"p_session_id": string,"p_start_time": string }; Returns: undefined
+                           },
+"save_fabrication_spec":
+{ Args: { "p_change_reason"?: string,"p_order_item_id": string,"p_values": Json }; Returns: string
+                           },
+"validate_fabrication_spec":
+{ Args: { "p_spec_id": string }; Returns: undefined
+                           },
+"void_fabrication_spec":
+{ Args: { "p_reason": string,"p_spec_id": string }; Returns: undefined
                            }
           }
           Enums: {

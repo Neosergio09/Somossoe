@@ -13,6 +13,8 @@ update public.users_profiles set role = 'direccion', active = true where email =
 update public.users_profiles set role = 'comercial', active = true where email = 'comercial@test.co';
 update public.users_profiles set role = 'administracion_cartera', active = true where email = 'admin@test.co';
 update public.users_profiles set role = 'operacion', active = true where email = 'operacion@test.co';
+-- Estas pruebas no cubren la ficha de fabricación (ver 024): sin candado de RX
+update public.system_settings set value = 0 where key = 'require_fabrication_spec';
 
 insert into public.lab_providers (id, name, active) values
   ('11111111-0000-0000-0000-000000000001', 'Lab Activo', true),
