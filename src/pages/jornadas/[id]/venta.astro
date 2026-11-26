@@ -1,0 +1,352 @@
+---
+/**
+ * «Registrar venta» de la jornada en un solo formulario, con los campos del
+ * Excel «SOE - JORNADAS (nuevo)»: Fecha, Nombre, Cédula, Teléfono, Valor
+ * venta, Medio de pago, Cuotas, RX OD/OI y ADD, Tipo de lente, Laboratorio y
+ * Montura. N.º de orden y saldo los calcula el sistema; llegada, entrega y
+ * costos se registran después en la orden. Sin abono: la empresa responde
+ * por el comprador. public.register_campaign_sale guarda asistencia,
+ * comprador, orden y RX en una sola transacción.
+ */
+import AppLayout from '../../../layouts/AppLayout.astro';
+import RxFields from '../../../components/RxFields.astro';
+import { denyUnless, userRoles } from '../../../lib/auth';
+import { cop, fmtDate, fmtTime } from '../../../lib/format';
+import { checkbox, date, ensure, FormError, int, parseForm, runActions, text, uuid, z } from '../../../lib/forms';
+import { ITEM_TYPE_LABELS, PAYMENT_MODALITY_LABELS, PAYROLL_LABELS } from '../../../lib/labels';
+import { itemFabricationValues } from '../../../lib/fabrication';
+import { orderNumber } from '../../../lib/orders';
+
+const { id } = Astro.params;
+const denied = denyUnless(Astro, `/jornadas/${id}`, 'comercial');
+if (denied) return denied;
+
+const { supabase } = Astro.locals;
+// RX: solo el rol Comercial real (el superadmin no recibe la ficha, RF-M04-07)
+const canRx = userRoles(Astro.locals).includes('comercial') && !Astro.locals.viewAs;
+
+const { data: j } = await supabase.from('v_campaigns').select('*').eq('id', id!).maybeSingle();
+if (!j) return new Response('Jornada no encontrada', { status: 404 });
+
+const outcome = await runActions(Astro, {
+  sale: async (form) => {
+    const input = parseForm(
+      z.object({
+        session_id: uuid(),
+        full_name: text(150),
+        document_id: z.string().transform((s) => s.toUpperCase().replace(/[\s.-]/g, '')).pipe(
+          z.string().regex(/^[0-9A-Z]{4,15}$/, { error: 'entre 4 y 15 letras o números' }),
+        ),
+        phone: text(25).optional(),
+        data_consent: checkbox(),
+        item_type: z.enum(['gafas_completas', 'lentes', 'montura', 'otro']),
+        lens_type: text(150).optional(),
+        frame_description: text(300).optional(),
+        unit_price: int().min(0),
+        payment_modality: z.enum(['contado', 'nomina_empresa']),
+        installments_count: int().min(1).optional(),
+        first_due_date: date().optional(),
+        employee_auth_received: checkbox(),
+        hr_approval_received: checkbox(),
+        planned_lab_provider_id: uuid().optional(),
+        sensitive_consent: checkbox(),
+        notes: text(2000).optional(),
+      }),
+      form,
+    );
+    if (!input.data_consent) throw new FormError('El comprador debe autorizar el tratamiento de sus datos personales.');
+    const payroll = input.payment_modality === 'nomina_empresa';
+    if (payroll && (!input.installments_count || !input.first_due_date)) {
+      throw new FormError('Con descuento de nómina indique las cuotas y la fecha de la primera cuota.');
+    }
+    if (!input.lens_type && !input.frame_description) {
+      throw new FormError('Escriba el tipo de lente o la montura.');
+    }
+    const withLens = input.item_type === 'gafas_completas' || input.item_type === 'lentes';
+    let spec: ReturnType<typeof itemFabricationValues> = null;
+    if (canRx && withLens) {
+      try {
+        spec = itemFabricationValues(Object.fromEntries([...form.entries()].map(([k, v]) => [k, String(v).trim()])));
+      } catch {
+        throw new FormError('Revise los valores del RX (solo números).');
+      }
+    }
+    if (spec && !input.sensitive_consent) {
+      const { data: b } = await supabase
+        .from('buyers')
+        .select('sensitive_data_consent_at')
+        .eq('document_type', 'cc')
+        .eq('document_id', input.document_id)
+        .maybeSingle();
+      if (!b?.sensitive_data_consent_at) {
+        throw new FormError('Para guardar el RX marque la autorización de datos sensibles, o deje el RX vacío y regístrelo después en la orden.');
+      }
+    }
+    const orderId = ensure(
+      await supabase.rpc('register_campaign_sale', {
+        p_campaign_id: id!,
+        p_sale: {
+          session_id: input.session_id,
+          document_type: 'cc',
+          document_id: input.document_id,
+          full_name: input.full_name,
+          phone: input.phone ?? null,
+          data_consent: true,
+          payment_modality: input.payment_modality,
+          installments_count: payroll ? (input.installments_count ?? null) : null,
+          first_due_date: payroll ? (input.first_due_date ?? null) : null,
+          employee_auth_received: payroll && input.employee_auth_received,
+          hr_approval_received: payroll && input.hr_approval_received,
+          planned_lab_provider_id: input.planned_lab_provider_id ?? null,
+          notes: input.notes ?? null,
+        },
+        p_items: [
+          {
+            item_type: input.item_type,
+            lens_type: input.lens_type ?? null,
+            frame_description: input.frame_description ?? null,
+            quantity: 1,
+            unit_price: input.unit_price,
+          },
+        ],
+        ...(spec ? { p_specs: [spec] } : {}),
+        p_sensitive_consent: canRx && input.sensitive_consent,
+      }),
+    );
+    const { data: o } = await supabase.from('orders').select('order_number').eq('id', orderId).maybeSingle();
+    return {
+      message: `Venta ${orderNumber(o?.order_number)} registrada: ${input.full_name}, ${cop(input.unit_price)}${spec ? ', con RX' : ''}. Puede registrar la siguiente.`,
+      redirect: `/jornadas/${id}/venta?sesion=${input.session_id}&ultima=${orderId}`,
+    };
+  },
+});
+if (outcome?.kind === 'redirect') return outcome.response;
+const error = outcome?.kind === 'error' ? outcome.error : null;
+const v: Record<string, string> = outcome?.kind === 'error' ? outcome.values : {};
+
+const params = Astro.url.searchParams;
+const attendeeId = params.get('asistente');
+const [sessions, agreement, labs, settings, attendee, lastOrder] = await Promise.all([
+  supabase.from('v_campaign_calendar').select('session_id, session_date, start_time').eq('campaign_id', id!).order('session_date').order('start_time'),
+  supabase.from('v_agreements').select('status, max_installments, payroll_frequency, hr_approval_required').eq('id', j.agreement_id!).maybeSingle(),
+  supabase.from('lab_providers').select('id, name').eq('active', true).order('name'),
+  supabase.from('system_settings').select('key, value').in('key', ['max_installments_monthly', 'max_installments_biweekly']),
+  attendeeId
+    ? supabase.from('campaign_attendance').select('full_name, document_id, session_id').eq('id', attendeeId).eq('campaign_id', id!).maybeSingle()
+    : Promise.resolve({ data: null }),
+  params.get('ultima')
+    ? supabase.from('v_orders').select('id, order_number, buyer_name, total_amount').eq('id', params.get('ultima')!).maybeSingle()
+    : Promise.resolve({ data: null }),
+]);
+const sessionList = sessions.data ?? [];
+const att = attendee.data;
+const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+const defaultSession =
+  v.session_id ??
+  att?.session_id ??
+  params.get('sesion') ??
+  sessionList.find((s) => s.session_date === today)?.session_id ??
+  sessionList[0]?.session_id;
+
+const ag = agreement.data;
+const payrollOk = ag?.status === 'aprobado';
+const settingMax = Number(
+  settings.data?.find((s) => s.key === (ag?.payroll_frequency === 'mensual' ? 'max_installments_monthly' : 'max_installments_biweekly'))?.value ?? 1,
+);
+const maxInstallments = payrollOk ? Math.min(ag?.max_installments ?? 1, settingMax) : 1;
+// Primera cuota sugerida: un periodo de nómina después de hoy (editable)
+const firstDue = (() => {
+  const d = new Date(`${today}T12:00:00`);
+  d.setDate(d.getDate() + (ag?.payroll_frequency === 'quincenal' ? 15 : 30));
+  return d.toISOString().slice(0, 10);
+})();
+const modality = v.payment_modality ?? (payrollOk ? 'nomina_empresa' : 'contado');
+const itemType = v.item_type ?? 'gafas_completas';
+const canSell = j.status === 'en_ejecucion';
+---
+
+<AppLayout title={`Registrar venta · ${j.company_name}`} error={error}>
+  <a href={`/jornadas/${id}`} class="text-sm">← Jornada</a>
+  <h1 class="mb-1">Registrar venta</h1>
+  <p class="mb-4 text-sm text-slate-600">
+    {j.company_name} · {j.deal_name_branch} · {j.city_name}
+    <span class="text-slate-500"> · la venta hereda empresa, sede y convenio de la jornada.</span>
+  </p>
+
+  {
+    lastOrder.data && (
+      <p class="mb-4 text-sm">
+        Última venta: <a href={`/ordenes/${lastOrder.data.id}`}>{orderNumber(lastOrder.data.order_number)}</a> · {lastOrder.data.buyer_name} ·{' '}
+        {cop(lastOrder.data.total_amount)}
+      </p>
+    )
+  }
+
+  {
+    !canSell ? (
+      <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        Las ventas se registran con la jornada En ejecución. Inicie la jornada desde su ficha.
+      </div>
+    ) : !sessionList.length ? (
+      <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">La jornada no tiene sesiones (fechas).</div>
+    ) : (
+      <form method="post" class="space-y-4" id="sale-form">
+        <input type="hidden" name="_action" value="sale" />
+
+        <section class="card space-y-3">
+          <h2>Comprador</h2>
+          <div class="grid gap-2 sm:grid-cols-4">
+            <div>
+              <label class="label" for="session_id">Fecha *</label>
+              <select class="input" id="session_id" name="session_id" required>
+                {sessionList.map((s) => (
+                  <option value={s.session_id!} selected={s.session_id === defaultSession}>
+                    {fmtDate(s.session_date)} {fmtTime(s.start_time)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label class="label" for="document_id">Cédula *</label>
+              <input class="input" id="document_id" name="document_id" required inputmode="numeric" value={v.document_id ?? att?.document_id ?? ''} autofocus={!att} />
+            </div>
+            <div>
+              <label class="label" for="full_name">Nombre *</label>
+              <input class="input" id="full_name" name="full_name" required value={v.full_name ?? att?.full_name ?? ''} />
+            </div>
+            <div>
+              <label class="label" for="phone">Teléfono</label>
+              <input class="input" id="phone" name="phone" type="tel" value={v.phone ?? ''} />
+            </div>
+          </div>
+          <label class="flex items-start gap-2 text-sm">
+            <input type="checkbox" name="data_consent" required class="mt-1" checked={v.data_consent === 'on'} />
+            <span>El comprador autoriza el tratamiento de sus datos personales (Ley 1581 de 2012). *</span>
+          </label>
+          <p class="text-xs text-slate-500">Si la cédula ya existe se usa el mismo comprador y queda como atendido en la jornada, sin duplicarlo.</p>
+        </section>
+
+        <section class="card space-y-3">
+          <h2>Venta</h2>
+          <div class="grid gap-2 sm:grid-cols-4">
+            <div>
+              <label class="label" for="item_type">Producto *</label>
+              <select class="input" id="item_type" name="item_type" data-item-type>
+                {(['gafas_completas', 'lentes', 'montura', 'otro'] as const).map((t) => (
+                  <option value={t} selected={itemType === t}>{ITEM_TYPE_LABELS[t]}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label class="label" for="lens_type">Tipo de lente</label>
+              <input class="input" id="lens_type" name="lens_type" value={v.lens_type ?? ''} placeholder="Monofocal, progresivo…" />
+            </div>
+            <div>
+              <label class="label" for="frame_description">Montura</label>
+              <input class="input" id="frame_description" name="frame_description" value={v.frame_description ?? ''} placeholder="Marca, referencia, color" />
+            </div>
+            <div>
+              <label class="label" for="unit_price">Valor venta (COP) *</label>
+              <input class="input" id="unit_price" name="unit_price" type="number" min="0" step="1" required value={v.unit_price ?? ''} />
+            </div>
+            <div>
+              <label class="label" for="payment_modality">Medio de pago *</label>
+              <select class="input" id="payment_modality" name="payment_modality">
+                <option value="nomina_empresa" selected={modality === 'nomina_empresa'} disabled={!payrollOk}>
+                  {PAYMENT_MODALITY_LABELS.nomina_empresa}{!payrollOk ? ' (sin convenio activo)' : ''}
+                </option>
+                <option value="contado" selected={modality === 'contado'}>{PAYMENT_MODALITY_LABELS.contado}</option>
+              </select>
+            </div>
+            <div data-payroll>
+              <label class="label" for="installments_count">Cuotas *</label>
+              <input class="input" id="installments_count" name="installments_count" type="number" min="1" max={maxInstallments} value={v.installments_count ?? maxInstallments} />
+              <p class="mt-1 text-xs text-slate-500">
+                Hasta {maxInstallments}{ag?.payroll_frequency && ` · nómina ${PAYROLL_LABELS[ag.payroll_frequency].toLowerCase()}`}
+              </p>
+            </div>
+            <div data-payroll>
+              <label class="label" for="first_due_date">Primera cuota *</label>
+              <input class="input" id="first_due_date" name="first_due_date" type="date" value={v.first_due_date ?? firstDue} />
+            </div>
+            <div>
+              <label class="label" for="planned_lab_provider_id">Laboratorio</label>
+              <select class="input" id="planned_lab_provider_id" name="planned_lab_provider_id">
+                <option value="">Sin definir</option>
+                {(labs.data ?? []).map((l) => <option value={l.id} selected={v.planned_lab_provider_id === l.id}>{l.name}</option>)}
+              </select>
+              <p class="mt-1 text-xs text-slate-500">Previsto: Operación lo confirma al liberar.</p>
+            </div>
+          </div>
+          <div class="space-y-1" data-payroll>
+            <label class="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="employee_auth_received" checked={v.employee_auth_received === 'on'} />
+              Autorización de descuento firmada por el empleado recibida
+            </label>
+            {ag?.hr_approval_required && (
+              <label class="flex items-center gap-2 text-sm">
+                <input type="checkbox" name="hr_approval_received" checked={v.hr_approval_received === 'on'} />
+                La empresa ya aprobó esta venta (aval de RRHH)
+              </label>
+            )}
+          </div>
+        </section>
+
+        {canRx && (
+          <section class="card space-y-3" data-rx-section>
+            <h2>RX</h2>
+            <label class="flex items-start gap-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
+              <input type="checkbox" name="sensitive_consent" class="mt-1" checked={v.sensitive_consent === 'on'} data-rx-consent />
+              <span>
+                El comprador autoriza de forma expresa que SOE trate su fórmula para fabricar sus lentes (Ley 1581, art. 6).
+                <span class="text-slate-500">Si no autoriza, la venta se guarda sin RX.</span>
+              </span>
+            </label>
+            <RxFields values={v} />
+          </section>
+        )}
+
+        <section class="card">
+          <label class="label" for="notes">Notas</label>
+          <textarea class="input" id="notes" name="notes" rows="2">{v.notes}</textarea>
+        </section>
+
+        <div class="flex gap-2">
+          <button class="btn btn-primary" type="submit">Guardar venta</button>
+          <a class="btn" href={`/jornadas/${id}`}>Volver a la jornada</a>
+        </div>
+      </form>
+    )
+  }
+</AppLayout>
+
+<script>
+  const form = document.getElementById('sale-form') as HTMLFormElement | null;
+  if (form) {
+    const modality = form.querySelector<HTMLSelectElement>('#payment_modality')!;
+    const itemType = form.querySelector<HTMLSelectElement>('[data-item-type]')!;
+    const consent = form.querySelector<HTMLInputElement>('[data-rx-consent]');
+    const rxSection = form.querySelector<HTMLElement>('[data-rx-section]');
+    const refresh = () => {
+      const payroll = modality.value === 'nomina_empresa';
+      form.querySelectorAll<HTMLElement>('[data-payroll]').forEach((el) => (el.hidden = !payroll));
+      form.querySelectorAll<HTMLInputElement>('#installments_count, #first_due_date').forEach((el) => (el.required = payroll));
+      if (rxSection) {
+        const withLens = itemType.value === 'gafas_completas' || itemType.value === 'lentes';
+        rxSection.hidden = !withLens;
+        const block = rxSection.querySelector<HTMLElement>('[data-rx]')!;
+        const allowed = !!consent?.checked;
+        const active = withLens && allowed;
+        if (consent) consent.disabled = !withLens;
+        block.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select').forEach((el) => (el.disabled = !active));
+        const locked = block.querySelector<HTMLElement>('[data-rx-locked]');
+        if (locked) locked.hidden = allowed;
+        const filled = [...block.querySelectorAll<HTMLInputElement>('[data-rx-value]')].some((el) => el.value.trim() !== '');
+        block.querySelectorAll<HTMLInputElement>('[data-rx-required]').forEach((el) => (el.required = active && filled));
+      }
+    };
+    form.addEventListener('input', refresh);
+    form.addEventListener('change', refresh);
+    refresh();
+  }
+</script>
