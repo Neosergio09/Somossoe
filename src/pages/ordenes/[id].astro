@@ -437,6 +437,14 @@ const deliveryRows = itemList.map((i) => {
   return { order_item_id: i.id, item_type: i.item_type, label: itemLabel(i), quantity: i.quantity, delivered, pending: i.quantity - delivered };
 });
 const hasDeliveries = deliveries.records.length > 0;
+// SOE-14: cambios del n.º de pedido del laboratorio
+const referenceHistory = production
+  ? ((await supabase
+      .from('production_reference_history')
+      .select('old_reference, new_reference, reason, changed_at, changer:users_profiles!production_reference_history_changed_by_fkey(full_name)')
+      .eq('production_id', production.id!)
+      .order('changed_at')).data ?? []).map((h) => ({ ...h, changed_by_name: h.changer?.full_name ?? null }))
+  : [];
 // M06: facturas de Alegra vinculadas
 const activeLinks = (invoiceLinks.data ?? []).filter((l) => !l.invoice_voided);
 const billedTotal = activeLinks.reduce((sum, l) => sum + Number(l.amount_assigned ?? 0), 0);
@@ -795,6 +803,7 @@ const fabRequired = setting('require_fabrication_spec') === 1;
             hasDeliveries={hasDeliveries}
             values={v}
             lastAction={lastAction}
+            referenceHistory={referenceHistory}
           />
         )
       }
@@ -1008,6 +1017,38 @@ const fabRequired = setting('require_fabrication_spec') === 1;
     </div>
 
     <div class="space-y-4">
+      {
+        (production || hasDeliveries) && (
+          <section class="card space-y-2 text-sm">
+            <h2>Seguimiento</h2>
+            <p class="text-xs text-slate-500">Tres hechos distintos: recibir el lente no es entregarlo, y entregar no es facturar ni cobrar.</p>
+            <ol class="space-y-2">
+              <li class:list={[production ? 'text-green-700' : 'text-slate-500']}>
+                {production ? '✓' : '○'} <strong>Pedido enviado al laboratorio</strong>
+                {production && (
+                  <div class="text-xs text-slate-600">
+                    {production.lab_name} · {fmtDate(production.sent_to_lab_at)}{production.lab_order_reference && ` · pedido ${production.lab_order_reference}`} · liberó {production.released_by_name ?? '—'}
+                  </div>
+                )}
+              </li>
+              <li class:list={[production?.ready_at ? 'text-green-700' : 'text-slate-500']}>
+                {production?.ready_at ? '✓' : '○'} <strong>Lente recibido en SOE</strong>
+                {production?.ready_at ? (
+                  <div class="text-xs text-slate-600">{fmtDate(production.ready_at)}{production.received_by_name && ` · registró ${production.received_by_name}`}</div>
+                ) : production && (
+                  <div class="text-xs text-slate-600">Prometido para {fmtDate(production.promised_date)}</div>
+                )}
+              </li>
+              <li class:list={[o.ops_status === 'entrega_completa' ? 'text-green-700' : hasDeliveries ? 'text-amber-700' : 'text-slate-500']}>
+                {o.ops_status === 'entrega_completa' ? '✓' : '○'} <strong>{o.ops_status === 'entrega_parcial' ? 'Entregado parcialmente' : 'Entregado al comprador'}</strong>
+                {deliveries.records.map((d) => (
+                  <div class="text-xs text-slate-600">{fmtDate(d.delivered_at)} · recibió {d.receiver_name} · {d.items}{d.delivered_by_name && ` · entregó ${d.delivered_by_name}`}{!d.evidence_file_path && ' · sin evidencia adjunta'}</div>
+                ))}
+              </li>
+            </ol>
+          </section>
+        )
+      }
       <section class="card space-y-3 text-sm">
         <h2>Requisitos (Etapa 07 → 08)</h2>
         <ul class="space-y-1">

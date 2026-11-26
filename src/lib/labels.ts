@@ -206,7 +206,7 @@ export const DOC_STATUS_BADGE: Record<Enums['order_doc_status'], string> = {
 export const OPS_STATUS_LABELS: Record<Enums['order_ops_status'], string> = {
   pendiente_liberar: 'Pendiente de liberar',
   en_produccion: 'En producción',
-  listo_para_entregar: 'Listo para entregar',
+  listo_para_entregar: 'Recibido en SOE (por entregar)',
   entrega_parcial: 'Entrega parcial',
   entrega_completa: 'Entrega completa',
 };

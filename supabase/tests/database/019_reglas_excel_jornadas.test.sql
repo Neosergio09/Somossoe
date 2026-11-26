@@ -165,7 +165,7 @@ $$, 'P0001', null, 'un lente recibido no se queda sin pedido');
 update public.order_productions set status = 'cancelada', cancel_reason = 'Error del laboratorio'
 where id = pg_temp.prod('Ana');
 select lives_ok($$
-  update public.order_productions set lab_order_reference = '053' where id = pg_temp.prod('Laura')
+  update public.order_productions set lab_order_reference = '053', lab_reference_change_reason = 'Pedido corregido por el laboratorio' where id = pg_temp.prod('Laura')
 $$, 'una producción cancelada libera su número de pedido');
 
 -- ================= 3. Días en laboratorio =================

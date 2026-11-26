@@ -1619,14 +1619,14 @@ isOneToOne: false
                   ]
                 },"order_productions": {
                   Row: {
-                    "cancel_reason": string | null,"created_at": string,"id": string,"lab_order_reference": string | null,"lab_provider_id": string,"notes": string | null,"order_id": string,"promised_date": string,"ready_at": string | null,"released_at": string,"released_by": string | null,"sent_to_lab_at": string,"status": Database["public"]['Enums']["production_status"],"updated_at": string,"warranty_id": string | null
+                    "cancel_reason": string | null,"created_at": string,"id": string,"lab_order_reference": string | null,"lab_provider_id": string,"lab_reference_change_reason": string | null,"notes": string | null,"order_id": string,"promised_date": string,"ready_at": string | null,"received_by": string | null,"received_recorded_at": string | null,"released_at": string,"released_by": string | null,"sent_to_lab_at": string,"status": Database["public"]['Enums']["production_status"],"updated_at": string,"warranty_id": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "cancel_reason"?: string | null,"created_at"?: string,"id"?: string,"lab_order_reference"?: string | null,"lab_provider_id": string,"notes"?: string | null,"order_id": string,"promised_date": string,"ready_at"?: string | null,"released_at"?: string,"released_by"?: string | null,"sent_to_lab_at"?: string,"status"?: Database["public"]['Enums']["production_status"],"updated_at"?: string,"warranty_id"?: string | null
+                    "cancel_reason"?: string | null,"created_at"?: string,"id"?: string,"lab_order_reference"?: string | null,"lab_provider_id": string,"lab_reference_change_reason"?: string | null,"notes"?: string | null,"order_id": string,"promised_date": string,"ready_at"?: string | null,"received_by"?: string | null,"received_recorded_at"?: string | null,"released_at"?: string,"released_by"?: string | null,"sent_to_lab_at"?: string,"status"?: Database["public"]['Enums']["production_status"],"updated_at"?: string,"warranty_id"?: string | null
                   }
                   Update: {
-                    "cancel_reason"?: string | null,"created_at"?: string,"id"?: string,"lab_order_reference"?: string | null,"lab_provider_id"?: string,"notes"?: string | null,"order_id"?: string,"promised_date"?: string,"ready_at"?: string | null,"released_at"?: string,"released_by"?: string | null,"sent_to_lab_at"?: string,"status"?: Database["public"]['Enums']["production_status"],"updated_at"?: string,"warranty_id"?: string | null
+                    "cancel_reason"?: string | null,"created_at"?: string,"id"?: string,"lab_order_reference"?: string | null,"lab_provider_id"?: string,"lab_reference_change_reason"?: string | null,"notes"?: string | null,"order_id"?: string,"promised_date"?: string,"ready_at"?: string | null,"received_by"?: string | null,"received_recorded_at"?: string | null,"released_at"?: string,"released_by"?: string | null,"sent_to_lab_at"?: string,"status"?: Database["public"]['Enums']["production_status"],"updated_at"?: string,"warranty_id"?: string | null
                   }
                   Relationships: [
                     {
@@ -1676,6 +1676,12 @@ isOneToOne: false
       columns: ["order_id"]
 isOneToOne: false
       referencedRelation: "v_receivables"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_productions_received_by_fkey"
+      columns: ["received_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
       referencedColumns: ["id"]
     },{
       foreignKeyName: "order_productions_released_by_fkey"
@@ -2032,6 +2038,80 @@ isOneToOne: false
       columns: ["responsible_user_id"]
 isOneToOne: false
       referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"production_reference_history": {
+                  Row: {
+                    "changed_at": string,"changed_by": string | null,"id": string,"new_reference": string | null,"old_reference": string,"order_id": string,"production_id": string,"reason": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "changed_at"?: string,"changed_by"?: string | null,"id"?: string,"new_reference"?: string | null,"old_reference": string,"order_id": string,"production_id": string,"reason": string
+                  }
+                  Update: {
+                    "changed_at"?: string,"changed_by"?: string | null,"id"?: string,"new_reference"?: string | null,"old_reference"?: string,"order_id"?: string,"production_id"?: string,"reason"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "production_reference_history_changed_by_fkey"
+      columns: ["changed_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "production_reference_history_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "production_reference_history_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_attendance_followups"
+      referencedColumns: ["purchase_order_id"]
+    },{
+      foreignKeyName: "production_reference_history_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_finance_by_order"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "production_reference_history_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_order_margins"
+      referencedColumns: ["order_id"]
+    },{
+      foreignKeyName: "production_reference_history_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "production_reference_history_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_orders_to_invoice"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "production_reference_history_order_id_fkey"
+      columns: ["order_id"]
+isOneToOne: false
+      referencedRelation: "v_receivables"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "production_reference_history_production_id_fkey"
+      columns: ["production_id"]
+isOneToOne: false
+      referencedRelation: "order_productions"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "production_reference_history_production_id_fkey"
+      columns: ["production_id"]
+isOneToOne: false
+      referencedRelation: "v_productions"
       referencedColumns: ["id"]
     }
                   ]
@@ -3060,7 +3140,7 @@ isOneToOne: false
                   ]
                 },"v_productions": {
                   Row: {
-                    "buyer_document_id": string,"buyer_id": string,"buyer_name": string,"cancel_reason": string | null,"city_name": string | null,"company_id": string | null,"company_name": string | null,"days_in_lab": number | null,"days_since_received": number | null,"id": string,"is_overdue": boolean | null,"lab_name": string,"lab_order_reference": string | null,"lab_provider_id": string,"notes": string | null,"ops_status": Database["public"]['Enums']["order_ops_status"],"order_id": string,"order_number": number,"promised_date": string,"ready_at": string | null,"released_at": string,"released_by": string | null,"released_by_name": string | null,"sent_to_lab_at": string,"status": Database["public"]['Enums']["production_status"],"warranty_id": string | null
+                    "buyer_document_id": string,"buyer_id": string,"buyer_name": string,"cancel_reason": string | null,"city_name": string | null,"company_id": string | null,"company_name": string | null,"days_in_lab": number | null,"days_since_received": number | null,"id": string,"is_overdue": boolean | null,"lab_name": string,"lab_order_reference": string | null,"lab_provider_id": string,"notes": string | null,"ops_status": Database["public"]['Enums']["order_ops_status"],"order_id": string,"order_number": number,"promised_date": string,"ready_at": string | null,"received_by": string | null,"received_by_name": string | null,"received_recorded_at": string | null,"reference_changes": number | null,"released_at": string,"released_by": string | null,"released_by_name": string | null,"sent_to_lab_at": string,"status": Database["public"]['Enums']["production_status"],"warranty_id": string | null
                   }
                   ComputedFields: never
                   Relationships: [
@@ -3111,6 +3191,12 @@ isOneToOne: false
       columns: ["order_id"]
 isOneToOne: false
       referencedRelation: "v_receivables"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "order_productions_received_by_fkey"
+      columns: ["received_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
       referencedColumns: ["id"]
     },{
       foreignKeyName: "order_productions_released_by_fkey"
