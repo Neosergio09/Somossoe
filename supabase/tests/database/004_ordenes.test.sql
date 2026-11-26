@@ -189,8 +189,8 @@ select throws_ok($$
   update public.orders set requirements_verified = true where id = pg_temp.payroll_order()
 $$, '42501', null, 'comercial no verifica requisitos');
 select lives_ok($$
-  update public.orders set employee_auth_received = true, hr_approval_received = true
-  where id = pg_temp.payroll_order()
+  update public.orders set employee_auth_received = true where id = pg_temp.payroll_order();
+  select public.record_company_approval(array[pg_temp.payroll_order()], 'aprobada', private.today_co(), 'Listado RRHH');
 $$, 'comercial registra la autorización del empleado y el aval de RRHH');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000a1');

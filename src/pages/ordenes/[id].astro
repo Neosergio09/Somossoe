@@ -155,19 +155,41 @@ const outcome = await runActions(Astro, {
     return { message: 'Condiciones de pago actualizadas.' };
   },
   update_supports: async (form) => {
-    const input = parseForm(z.object({ employee_auth_received: checkbox(), hr_approval_received: checkbox() }), form);
+    const input = parseForm(z.object({ employee_auth_received: checkbox() }), form);
     const authFile = supportPathFrom(form, 'employee_auth_file_path', 'ordenes');
-    const hrFile = supportPathFrom(form, 'hr_approval_file_path', 'ordenes');
-    // Adjuntar marca el soporte como recibido (lo hace la BD); sin archivo nuevo se conserva el anterior
-    await updateOrderVersioned(
-      {
-        ...input,
-        ...(authFile ? { employee_auth_file_path: authFile } : {}),
-        ...(hrFile ? { hr_approval_file_path: hrFile } : {}),
-      },
+    // Adjuntar marca el soporte como recibido (lo hace la BD); sin archivo nuevo se conserva el anterior.
+    // El aval de la empresa se registra aparte, como decisión (record_company_approval).
+    await updateOrderVersioned({ ...input, ...(authFile ? { employee_auth_file_path: authFile } : {}) }, form);
+    return { message: 'Soportes actualizados.' };
+  },
+  company_decision: async (form) => {
+    const input = parseForm(
+      z.object({
+        decision: z.enum(['aprobada', 'rechazada']),
+        decided_on: date(),
+        reference: text(200).optional(),
+        reason: text(500).optional(),
+      }),
       form,
     );
-    return { message: 'Soportes actualizados.' };
+    const filePath = supportPathFrom(form, 'file_path', 'ordenes');
+    ensure(
+      await supabase.rpc('record_company_approval', {
+        p_order_ids: [id],
+        p_decision: input.decision,
+        p_decided_on: input.decided_on,
+        ...(input.reference ? { p_reference: input.reference } : {}),
+        ...(filePath ? { p_file_path: filePath } : {}),
+        ...(input.reason ? { p_reason: input.reason } : {}),
+      }),
+    );
+    return { message: input.decision === 'aprobada' ? 'Aval de la empresa registrado.' : 'Rechazo de la empresa registrado.' };
+  },
+  void_company_decision: async (form) => {
+    const reason = String(form.get('void_reason') ?? '').trim();
+    if (!reason) throw new FormError('Indique el motivo de la anulación.');
+    ensure(await supabase.rpc('void_company_approval', { p_approval_id: String(form.get('approval_id') ?? ''), p_reason: reason }));
+    return { message: 'Decisión anulada.' };
   },
   verify: async () => {
     await updateOrder({ requirements_verified: true });
@@ -449,6 +471,19 @@ const costItemLabel = (itemId: string) => {
 const activeAllocations = (allocations.data ?? []).filter((a) => !a.is_voided);
 const collectedMoney = activeAllocations.reduce((s2, a) => s2 + Number(a.amount_applied ?? 0), 0);
 const collectedWithholding = activeAllocations.reduce((s2, a) => s2 + Number(a.withholding_applied ?? 0), 0);
+
+// Aval de la empresa (SOE-17): historial de decisiones
+const needsCompanyApproval = isPayroll && o.hr_approval_required !== false && !o.is_historical_migration;
+const approvalRows = needsCompanyApproval
+  ? ((await supabase
+      .from('order_company_approvals')
+      .select('*, recorder:users_profiles!order_company_approvals_recorded_by_fkey(full_name)')
+      .eq('order_id', id)
+      .order('seq', { ascending: false })).data ?? [])
+  : [];
+const lastApproval = approvalRows.find((r) => !r.is_voided) ?? null;
+const canDecide = !isCancelled && !released && needsCompanyApproval && (isAdmin || isCreator) && !Astro.locals.viewAs;
+const canVoidDecision = (r: { recorded_by: string | null }) => canDecide && (isAdmin || r.recorded_by === Astro.locals.userId);
 
 // Ficha de fabricación: estado sin valores para todos; valores solo al pedirlos (lectura registrada en la BD)
 const fabricationRows = !isCancelled && !o.is_historical_migration
@@ -987,12 +1022,6 @@ const fabRequired = setting('require_fabrication_spec') === 1;
               <input type="hidden" name={VERSION_FIELD} value={o.updated_at ?? ''} />
               <label class="flex items-center gap-2"><input type="checkbox" name="employee_auth_received" checked={!!o.employee_auth_received} /> Autorización firmada del empleado recibida</label>
               <SupportFile kind="ordenes" name="employee_auth_file_path" label="Archivo de la autorización" current={o.employee_auth_file_path} required={requireFiles} compact />
-              {o.hr_approval_required !== false && (
-                <>
-                  <label class="flex items-center gap-2"><input type="checkbox" name="hr_approval_received" checked={!!o.hr_approval_received} /> Aval de RRHH recibido</label>
-                  <SupportFile kind="ordenes" name="hr_approval_file_path" label="Archivo del aval de RRHH" current={o.hr_approval_file_path} compact />
-                </>
-              )}
               <button class="btn w-full" type="submit">Guardar soportes</button>
               <p class="text-xs text-slate-500">{requireFiles ? 'Se exige el archivo de cada soporte.' : 'Puede marcar el soporte recibido en papel o adjuntar el archivo.'}</p>
             </form>
@@ -1019,6 +1048,84 @@ const fabRequired = setting('require_fabrication_spec') === 1;
         }
         {!isAdmin && !verified && !isCancelled && <p class="text-xs text-slate-500">Administración / Cartera verifica los requisitos.</p>}
       </section>
+
+      {
+        needsCompanyApproval && (
+          <section class="card space-y-3 text-sm" id="aval">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <h2>Aval de la empresa</h2>
+              {o.company_approval_decision === 'aprobada' ? (
+                <span class="badge badge-green">Aprobada · {fmtDate(o.company_approval_on)}</span>
+              ) : o.company_approval_decision === 'rechazada' ? (
+                <span class="badge badge-red">Rechazada · {fmtDate(o.company_approval_on)}</span>
+              ) : (
+                <span class="badge badge-amber">Pendiente de la empresa</span>
+              )}
+            </div>
+            {o.company_approval_decision === 'rechazada' && lastApproval && (
+              <p class="text-red-700">
+                Motivo: {lastApproval.reason}. La orden no se verifica ni se libera. Puede anularla, pasarla a contado o registrar una
+                nueva aprobación si la empresa cambia su decisión.
+              </p>
+            )}
+            {!o.company_approval_decision && (
+              <p class="text-slate-600">La venta queda registrada; no se envía al laboratorio hasta que la empresa la apruebe.</p>
+            )}
+            {approvalRows.length > 0 && (
+              <ul class="space-y-1 text-xs">
+                {approvalRows.map((r) => (
+                  <li class:list={[r.is_voided && 'text-slate-400 line-through']}>
+                    <strong>{r.decision === 'aprobada' ? 'Aprobada' : 'Rechazada'}</strong> el {fmtDate(r.decided_on)}
+                    {r.reference && ` · ${r.reference}`}
+                    {r.reason && ` · ${r.reason}`}
+                    {r.batch_id && ' · por listado'}
+                    {r.file_path && (
+                      <>
+                        {' · '}
+                        <a href={supportHref(r.file_path)} target="_blank" rel="noopener">soporte</a>
+                      </>
+                    )}
+                    <span class="text-slate-500"> — {r.recorder?.full_name ?? 'registro anterior'}, {fmtDateTime(r.recorded_at)}</span>
+                    {r.is_voided && <span class="no-underline"> (anulada: {r.void_reason})</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {lastApproval && canVoidDecision(lastApproval) && (
+              <details>
+                <summary class="cursor-pointer text-xs text-red-700">Anular la última decisión (registrada por error)</summary>
+                <form method="post" class="mt-2 flex flex-wrap gap-2">
+                  <input type="hidden" name="_action" value="void_company_decision" />
+                  <input type="hidden" name="approval_id" value={lastApproval.id} />
+                  <input class="input flex-1" name="void_reason" required maxlength="300" placeholder="Motivo" />
+                  <button class="btn btn-sm btn-danger" type="submit">Anular</button>
+                </form>
+              </details>
+            )}
+            {canDecide && (
+              <details open={lastAction === 'company_decision'}>
+                <summary class="cursor-pointer text-brand-700">Registrar decisión de la empresa</summary>
+                <form method="post" class="mt-2 space-y-2">
+                  <input type="hidden" name="_action" value="company_decision" />
+                  <div class="flex gap-4">
+                    <label class="flex items-center gap-1"><input type="radio" name="decision" value="aprobada" checked={v.decision !== 'rechazada'} /> Aprobada</label>
+                    <label class="flex items-center gap-1"><input type="radio" name="decision" value="rechazada" checked={v.decision === 'rechazada'} /> Rechazada</label>
+                  </div>
+                  <label class="label">Fecha en que la empresa lo comunicó</label>
+                  <input class="input" type="date" name="decided_on" required max={todayCo()} value={v.decided_on ?? todayCo()} />
+                  <label class="label">Referencia (listado, correo)</label>
+                  <input class="input" name="reference" maxlength="200" value={v.reference ?? ''} />
+                  <label class="label">Motivo (obligatorio si rechaza)</label>
+                  <input class="input" name="reason" maxlength="500" value={v.reason ?? ''} />
+                  <SupportFile kind="ordenes" name="file_path" label="Soporte" required={requireFiles} compact />
+                  <button class="btn w-full" type="submit">Guardar decisión</button>
+                </form>
+                <p class="mt-1 text-xs text-slate-500">Para varias órdenes a la vez use <a href={`/ordenes/aval?empresa=${o.company_id}`}>aval por listado</a>.</p>
+              </details>
+            )}
+          </section>
+        )
+      }
 
       {
         o.payment_modality === 'contado' && (o.prepayment_exception_reason || canException) && (

@@ -152,6 +152,8 @@ const tasksByRole: Record<string, Task[]> = {
     t(s.vender.quietas, plural(s.vender.quietas, 'oportunidad quieta', 'oportunidades quietas'), 'Sin interacción reciente o con acción vencida', '/?paso=vender', 'warn'),
     t(s.jornada.en_ejecucion, plural(s.jornada.en_ejecucion, 'jornada en ejecución', 'jornadas en ejecución'), 'Registre asistencia y órdenes', '/?paso=jornada', 'ok'),
     t(s.orden.por_verificar, plural(s.orden.por_verificar, 'orden pendiente de soportes', 'órdenes pendientes de soportes'), 'Complete autorizaciones y avales', '/?paso=orden', 'warn'),
+    t(s.orden.sin_aval ?? 0, plural(s.orden.sin_aval ?? 0, 'venta de nómina sin aval de la empresa', 'ventas de nómina sin aval de la empresa'), 'Registre el listado que envía la empresa', '/ordenes/aval', 'warn'),
+    t(s.orden.aval_rechazado ?? 0, plural(s.orden.aval_rechazado ?? 0, 'orden rechazada por la empresa', 'órdenes rechazadas por la empresa'), 'Anúlela, pásela a contado o espere nueva aprobación', '/ordenes/aval?estado=rechazada', 'danger'),
   ],
   operacion: [
     t(s.producir.atrasadas, plural(s.producir.atrasadas, 'producción atrasada', 'producciones atrasadas'), 'Pasó la fecha prometida por el laboratorio', '/?paso=producir', 'danger'),
@@ -161,6 +163,7 @@ const tasksByRole: Record<string, Task[]> = {
   ],
   administracion_cartera: [
     t(s.orden.por_verificar, plural(s.orden.por_verificar, 'orden por verificar', 'órdenes por verificar'), 'Requisitos de la Etapa 07', '/?paso=orden', 'warn'),
+    t(s.orden.sin_aval ?? 0, plural(s.orden.sin_aval ?? 0, 'venta de nómina sin aval de la empresa', 'ventas de nómina sin aval de la empresa'), 'Registre el listado que envía la empresa', '/ordenes/aval', 'warn'),
     t(s.cobrar.vencidas, plural(s.cobrar.vencidas, 'cuota vencida', 'cuotas vencidas'), `${cop(s.cobrar.monto_vencido)} pendientes`, '/?paso=cobrar', 'danger'),
     t(s.cobrar.pagos_sin_asignar, plural(s.cobrar.pagos_sin_asignar, 'pago con saldo sin asignar', 'pagos con saldo sin asignar'), 'Repártalos entre las órdenes', '/recaudo', 'warn'),
     t(s.facturar.sin_factura, plural(s.facturar.sin_factura, 'orden sin factura', 'órdenes sin factura'), 'Vincule la factura de Alegra', '/?paso=facturar', 'warn'),
