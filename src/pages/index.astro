@@ -214,65 +214,7 @@ const dot: Record<Tone, string> = { ok: 'bg-teal-500', warn: 'bg-amber-500', dan
     <p class="max-w-sm text-sm text-slate-600">Cada paso muestra cuántos casos esperan. Toque un paso para ver su lista.</p>
   </div>
 
-  <section aria-label="El circuito" class="mb-5 rounded-3xl bg-ink px-3 pt-5 pb-4 sm:px-5 sm:pt-6">
-    <ol
-      class="relative grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:[grid-template-columns:repeat(var(--steps),minmax(0,1fr))]"
-      style={`--steps: ${steps.length}`}
-    >
-      <li aria-hidden="true" class="pointer-events-none absolute top-7 right-[7%] left-[7%] hidden h-0.5 bg-white/15 lg:block"></li>
-      {steps.map((st) => {
-        const on = st.id === current.id;
-        return (
-          <li class="relative">
-            <a
-              href={`/?paso=${st.id}`}
-              aria-current={on ? 'step' : undefined}
-              class:list={[
-                'flex h-full flex-col items-center gap-1 rounded-2xl border px-1.5 pb-3.5 text-center hover:no-underline',
-                on ? 'border-accent bg-white/10' : 'border-transparent hover:bg-white/5',
-              ]}
-            >
-              <span
-                class:list={[
-                  'mb-2 flex h-14 w-14 items-center justify-center rounded-full border-[3px] border-ink',
-                  on ? 'bg-accent text-ink shadow-[0_0_0_3px_var(--color-accent)]' : 'bg-ink-soft text-slate-200 shadow-[0_0_0_2px_#2c4280]',
-                ]}
-              >
-                <Icon name={st.icon} size={22} />
-              </span>
-              <span class="text-[13px] font-semibold tracking-wide text-slate-300 uppercase">{st.label}</span>
-              <span class="font-display text-[28px] leading-tight font-bold text-slate-50">{st.count}</span>
-              <span class="text-xs text-slate-400">{st.unit}</span>
-              <span class:list={['mt-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold', chip[st.tone]]}>{st.detail}</span>
-            </a>
-          </li>
-        );
-      })}
-    </ol>
-  </section>
-
-  <section class="card mb-5" aria-live="polite">
-    <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-      <h2 class="text-xl">{current.label} · {current.count} {current.unit}</h2>
-      <a href={current.href} class="text-sm font-semibold">Abrir {current.module} →</a>
-    </div>
-    <ul>
-      {rows.map((r) => (
-        <li class="border-t border-slate-100 first:border-t-0">
-          <a href={r.href} class="flex flex-wrap items-center gap-3 py-3 text-slate-900 hover:no-underline hover:[&_.t]:underline">
-            <span class="flex min-w-[240px] flex-1 flex-col gap-0.5">
-              <span class="t text-[15px] font-semibold">{r.title}</span>
-              <span class="text-[13px] text-slate-600">{r.meta}</span>
-            </span>
-            <span class:list={['rounded-full px-2.5 py-1 text-xs font-semibold', tag[r.tone]]}>{r.tag}</span>
-          </a>
-        </li>
-      ))}
-      {!rows.length && <li class="py-4 text-sm text-slate-500">Nada pendiente en este paso.</li>}
-    </ul>
-  </section>
-
-  <div class="grid gap-4 lg:grid-cols-3">
+  <div class="mb-5 grid gap-4 lg:grid-cols-3">
     <section class="card flex flex-col gap-3">
       <div class="flex items-center justify-between gap-2">
         <h2 class="text-lg">Para ti</h2>
@@ -351,4 +293,64 @@ const dot: Record<Tone, string> = { ok: 'bg-teal-500', warn: 'bg-amber-500', dan
       {!alerts.length && <p class="text-sm text-slate-500">Sin alertas: todo dentro de lo esperado.</p>}
     </section>
   </div>
+
+  <section aria-label="El circuito" class="mb-5 rounded-3xl bg-ink px-3 pt-5 pb-4 sm:px-5 sm:pt-6">
+    <ol
+      class="relative grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:[grid-template-columns:repeat(var(--steps),minmax(0,1fr))]"
+      style={`--steps: ${steps.length}`}
+    >
+      <li aria-hidden="true" class="pointer-events-none absolute top-7 right-[7%] left-[7%] hidden h-0.5 bg-white/15 lg:block"></li>
+      {steps.map((st) => {
+        const on = st.id === current.id;
+        return (
+          <li class="relative">
+            <a
+              href={`/?paso=${st.id}`}
+              aria-current={on ? 'step' : undefined}
+              class:list={[
+                'flex h-full flex-col items-center gap-1 rounded-2xl border px-1.5 pb-3.5 text-center hover:no-underline',
+                on ? 'border-accent bg-white/10' : 'border-transparent hover:bg-white/5',
+              ]}
+            >
+              <span
+                class:list={[
+                  'mb-2 flex h-14 w-14 items-center justify-center rounded-full border-[3px] border-ink',
+                  on ? 'bg-accent text-ink shadow-[0_0_0_3px_var(--color-accent)]' : 'bg-ink-soft text-slate-200 shadow-[0_0_0_2px_#2c4280]',
+                ]}
+              >
+                <Icon name={st.icon} size={22} />
+              </span>
+              <span class="text-[13px] font-semibold tracking-wide text-slate-300 uppercase">{st.label}</span>
+              <span class="font-display text-[28px] leading-tight font-bold text-slate-50">{st.count}</span>
+              <span class="text-xs text-slate-400">{st.unit}</span>
+              <span class:list={['mt-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold', chip[st.tone]]}>{st.detail}</span>
+            </a>
+          </li>
+        );
+      })}
+    </ol>
+  </section>
+
+  <section class="card mb-5" aria-live="polite">
+    <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+      <h2 class="text-xl">{current.label} · {current.count} {current.unit}</h2>
+      <a href={current.href} class="text-sm font-semibold">Abrir {current.module} →</a>
+    </div>
+    <ul>
+      {rows.map((r) => (
+        <li class="border-t border-slate-100 first:border-t-0">
+          <a href={r.href} class="flex flex-wrap items-center gap-3 py-3 text-slate-900 hover:no-underline hover:[&_.t]:underline">
+            <span class="flex min-w-[240px] flex-1 flex-col gap-0.5">
+              <span class="t text-[15px] font-semibold">{r.title}</span>
+              <span class="text-[13px] text-slate-600">{r.meta}</span>
+            </span>
+            <span class:list={['rounded-full px-2.5 py-1 text-xs font-semibold', tag[r.tone]]}>{r.tag}</span>
+          </a>
+        </li>
+      ))}
+      {!rows.length && <li class="py-4 text-sm text-slate-500">Nada pendiente en este paso.</li>}
+    </ul>
+  </section>
+
+
 </AppLayout>
