@@ -1,0 +1,8 @@
+---
+/** Catálogo buscable de tipos de lente (N26-11). Lo mantiene SOE en Catálogos. */
+import { catalogNames } from '../lib/options';
+
+const names = await catalogNames(Astro.locals.supabase, 'tipo_lente');
+---
+
+<datalist id="lens-type-options">{names.map((name) => <option value={name} />)}</datalist>

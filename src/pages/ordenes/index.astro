@@ -20,6 +20,8 @@ const { supabase } = Astro.locals;
 const status = Astro.url.searchParams.get('estado') ?? '';
 const modality = Astro.url.searchParams.get('modalidad') ?? '';
 const q = safeSearch(Astro.url.searchParams.get('q'));
+const lab = Astro.url.searchParams.get('laboratorio') ?? '';
+const lens = safeSearch(Astro.url.searchParams.get('lente'));
 
 let query = supabase.from('v_orders').select('*').order('created_at', { ascending: false }).limit(300);
 if (status === 'anuladas') query = query.eq('is_cancelled', true);
@@ -28,17 +30,22 @@ else {
   if (status) query = query.eq('doc_status', status as 'pendiente_soportes' | 'requisitos_verificados');
 }
 if (modality) query = query.eq('payment_modality', modality as 'contado' | 'nomina_empresa');
+if (/^[0-9a-f-]{36}$/.test(lab)) query = query.eq('lab_provider_id', lab);
+if (lens) query = query.ilike('lens_types', `%${lens}%`);
 if (q) {
   const num = /^#?0*(\d{1,9})$/.exec(q)?.[1];
   query = num
     ? query.or(`order_number.eq.${num},buyer_document_id.ilike.%${q}%`)
     : query.or(`buyer_name.ilike.%${q}%,buyer_document_id.ilike.%${q}%,company_name.ilike.%${q}%`);
 }
-const { data: orders } = await query;
+const [{ data: orders }, { data: labs }] = await Promise.all([
+  query,
+  supabase.from('lab_providers').select('id, name').order('name'),
+]);
 
 const tabs: [string, string][] = [['', 'Activas'], ...Object.entries(DOC_STATUS_LABELS), ['anuladas', 'Anuladas']];
 const link = (params: Record<string, string>) => {
-  const u = new URLSearchParams({ ...(status && { estado: status }), ...(modality && { modalidad: modality }), ...(q && { q }), ...params });
+  const u = new URLSearchParams({ ...(status && { estado: status }), ...(modality && { modalidad: modality }), ...(lab && { laboratorio: lab }), ...(lens && { lente: lens }), ...(q && { q }), ...params });
   for (const [k, val] of [...u.entries()]) if (!val) u.delete(k);
   return `?${u}`;
 };
@@ -74,6 +81,11 @@ const link = (params: Record<string, string>) => {
         <option value="">Toda modalidad</option>
         {Object.entries(PAYMENT_MODALITY_LABELS).map(([value, label]) => <option value={value} selected={modality === value}>{label}</option>)}
       </select>
+      <select class="input w-auto" name="laboratorio">
+        <option value="">Todo laboratorio</option>
+        {labs?.map((l) => <option value={l.id} selected={lab === l.id}>{l.name}</option>)}
+      </select>
+      <input class="input w-40" name="lente" value={lens} placeholder="Tipo de lente" />
       <input class="input w-56" name="q" value={q} placeholder="N.º, comprador, documento o empresa" />
       <button class="btn" type="submit">Buscar</button>
     </form>
@@ -87,6 +99,7 @@ const link = (params: Record<string, string>) => {
           <th>Comprador</th>
           <th>Origen</th>
           <th>Modalidad</th>
+          <th>Lente · laboratorio</th>
           <th class="text-right">Valor</th>
           <th>Documental</th>
           <th>Operativo</th>
@@ -114,6 +127,10 @@ const link = (params: Record<string, string>) => {
                 {PAYMENT_MODALITY_LABELS[o.payment_modality!]}
                 {o.installments_count && ` · ${o.installments_count} cuotas`}
               </td>
+              <td class="text-xs">
+                {o.lens_types ?? <span class="text-slate-400">Sin lente</span>}
+                <div class="text-slate-500">{o.lab_name ?? 'Laboratorio sin asignar'}</div>
+              </td>
               <td class="text-right whitespace-nowrap">{cop(o.total_amount)}</td>
               <td>
                 {o.is_cancelled ? <span class="badge badge-red">Anulada</span> : <span class={DOC_STATUS_BADGE[o.doc_status!]}>{DOC_STATUS_LABELS[o.doc_status!]}</span>}
@@ -124,7 +141,7 @@ const link = (params: Record<string, string>) => {
             </tr>
           ))
         }
-        {!orders?.length && <tr><td colspan="9" class="py-6 text-center text-slate-500">No hay órdenes.</td></tr>}
+        {!orders?.length && <tr><td colspan="10" class="py-6 text-center text-slate-500">No hay órdenes.</td></tr>}
       </tbody>
     </table>
   </div>

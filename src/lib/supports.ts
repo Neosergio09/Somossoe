@@ -7,11 +7,11 @@ export const SUPPORT_TYPES: Record<string, string> = {
   'image/png': 'png',
   'image/webp': 'webp',
 };
-export const SUPPORT_KINDS = ['convenios', 'compradores', 'ordenes', 'entregas', 'garantias', 'pagos', 'retenciones'] as const;
+export const SUPPORT_KINDS = ['convenios', 'compradores', 'ordenes', 'entregas', 'garantias', 'pagos', 'retenciones', 'propuestas'] as const;
 export type SupportKind = (typeof SUPPORT_KINDS)[number];
 
 /** Ruta válida de un soporte: {tipo}/{uuid usuario}/{uuid}.{ext} */
-const PATH_RE = /^(convenios|compradores|ordenes|entregas|garantias|pagos|retenciones)\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(pdf|jpg|png|webp)$/;
+const PATH_RE = /^(convenios|compradores|ordenes|entregas|garantias|pagos|retenciones|propuestas)\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(pdf|jpg|png|webp)$/;
 
 export function isSupportPath(value: string | null | undefined, kind?: SupportKind): value is string {
   return !!value && PATH_RE.test(value) && (!kind || value.startsWith(`${kind}/`));

@@ -362,7 +362,7 @@ const previousDocs = allDocs.filter((d) => d.superseded_at);
         }
         {
           canUpload && (
-            <form method="post" class="mt-3 flex flex-wrap items-end gap-2">
+            <form method="post" class="mt-3 flex flex-wrap items-start gap-2">
               <input type="hidden" name="_action" value="add_document" />
               <div class="min-w-48 flex-1">
                 <label class="label">Nombre del documento</label>
@@ -379,7 +379,11 @@ const previousDocs = allDocs.filter((d) => d.superseded_at);
               <div class="min-w-64 flex-1">
                 <SupportFile kind="convenios" name="file_path" label="Archivo" required={requireFiles} />
               </div>
-              <button class="btn" type="submit">Registrar documento</button>
+              {/* N26-08: el botón se alinea con los campos, no con el texto del límite de tamaño */}
+              <div>
+                <span class="label invisible" aria-hidden="true">Acción</span>
+                <button class="btn" type="submit">Registrar documento</button>
+              </div>
             </form>
           )
         }

@@ -95,6 +95,7 @@ const filterUrl = (patch: Record<string, string>) => {
           data-column
           data-stage={col.stage}
           data-droppable={col.droppable ? 'true' : 'false'}
+          data-automatic={AUTOMATIC.has(col.stage) ? 'true' : undefined}
         >
           <header class="mb-2 px-1">
             <h2 class="text-sm">
@@ -197,6 +198,7 @@ const filterUrl = (patch: Record<string, string>) => {
     x: number;
     y: number;
     over: HTMLElement | null;
+    automatic: HTMLElement | null;
     origin: { list: HTMLElement; next: Element | null };
   };
 
@@ -260,6 +262,7 @@ const filterUrl = (patch: Record<string, string>) => {
       x,
       y,
       over: null,
+      automatic: null,
       origin: { list: card.parentElement as HTMLElement, next: card.nextElementSibling },
     };
     card.classList.add('opacity-40');
@@ -289,13 +292,31 @@ const filterUrl = (patch: Record<string, string>) => {
     if (!active) return;
     const col = columnAt(active.x, active.y);
     active.over = canDropOn(col) ? col : null;
+    active.automatic = col?.dataset.automatic === 'true' && col.dataset.stage !== active.card.dataset.stage ? col : null;
     highlight(active.over);
   }
 
-  function endDrag(): { card: HTMLElement; target: HTMLElement | null; origin: Active['origin'] } | null {
+  // N26-09: soltar en una etapa automática explica por qué no se mueve
+  const AUTOMATIC_REASONS: Record<string, string> = {
+    jornada_en_ejecucion:
+      '«Jornada en Ejecución» no se mueve a mano: la oportunidad llega sola cuando se inicia una de sus jornadas. Requisitos: estar en Convenio Firmado, tener la jornada creada por Operación y marcarla «En ejecución».',
+    facturacion_cerrada:
+      '«Facturación Cerrada» no se mueve a mano: llega sola cuando todas las jornadas cierran operación y todas sus órdenes tienen la factura vinculada.',
+  };
+  function explainAutomatic(card: HTMLElement, stage: string) {
+    if (!errorBox) return alert(AUTOMATIC_REASONS[stage]);
+    const link = document.createElement('a');
+    link.href = `/oportunidades/${card.dataset.dealId}`;
+    link.textContent = 'Abrir la oportunidad y revisar sus jornadas';
+    errorBox.replaceChildren(document.createTextNode(`${AUTOMATIC_REASONS[stage] ?? 'Esta etapa avanza automáticamente.'} `), link);
+    errorBox.hidden = false;
+    errorBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function endDrag(): { card: HTMLElement; target: HTMLElement | null; origin: Active['origin']; automatic: HTMLElement | null } | null {
     if (!active) return null;
     cancelAnimationFrame(raf);
-    const { card, ghost, over, origin } = active;
+    const { card, ghost, over, origin, automatic } = active;
     ghost.remove();
     card.classList.remove('opacity-40');
     document.body.classList.remove('select-none');
@@ -304,7 +325,7 @@ const filterUrl = (patch: Record<string, string>) => {
     active = null;
     suppressClick = true;
     setTimeout(() => (suppressClick = false), 0);
-    return { card, target: over, origin };
+    return { card, target: over, origin, automatic };
   }
 
   async function move(card: HTMLElement, target: HTMLElement, origin: Active['origin']) {
@@ -387,6 +408,7 @@ const filterUrl = (patch: Record<string, string>) => {
     clearPending();
     const result = endDrag();
     if (result?.target) move(result.card, result.target, result.origin);
+    else if (result?.automatic) explainAutomatic(result.card, result.automatic.dataset.stage!);
   });
 
   document.addEventListener('pointercancel', () => {

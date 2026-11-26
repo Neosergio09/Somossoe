@@ -1,4 +1,5 @@
 ---
+import LensTypeOptions from '../../../components/LensTypeOptions.astro';
 /**
  * «Registrar venta» de la jornada en un solo formulario, con los campos del
  * Excel «SOE - JORNADAS (nuevo)»: Fecha, Nombre, Cédula, Teléfono, Valor
@@ -239,7 +240,7 @@ const canSell = j.status === 'en_ejecucion';
             </div>
             <div>
               <label class="label" for="lens_type">Tipo de lente</label>
-              <input class="input" id="lens_type" name="lens_type" value={v.lens_type ?? ''} placeholder="Monofocal, progresivo…" />
+              <input class="input" id="lens_type" name="lens_type" value={v.lens_type ?? ''} list="lens-type-options" autocomplete="off" placeholder="Escriba para buscar" />
             </div>
             <div>
               <label class="label" for="frame_description">Montura</label>
@@ -318,6 +319,7 @@ const canSell = j.status === 'en_ejecucion';
       </form>
     )
   }
+  <LensTypeOptions />
 </AppLayout>
 
 <script>

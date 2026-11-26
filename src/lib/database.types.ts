@@ -543,6 +543,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"catalog_items": {
+                  Row: {
+                    "active": boolean,"created_at": string,"created_by": string | null,"id": string,"kind": string,"name": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "active"?: boolean,"created_at"?: string,"created_by"?: string | null,"id"?: string,"kind": string,"name": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "active"?: boolean,"created_at"?: string,"created_by"?: string | null,"id"?: string,"kind"?: string,"name"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "catalog_items_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"cities": {
                   Row: {
                     "active": boolean,"created_at": string,"id": string,"is_operational": boolean,"name": string,"updated_at": string
@@ -629,14 +649,14 @@ isOneToOne: false
                   ]
                 },"company_branches": {
                   Row: {
-                    "address": string | null,"city_id": string | null,"city_other": string | null,"company_id": string,"created_at": string,"id": string,"is_main": boolean,"name": string,"updated_at": string
+                    "address": string | null,"city_id": string | null,"city_other": string | null,"company_id": string,"created_at": string,"id": string,"is_main": boolean,"name": string,"name_auto": boolean,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "address"?: string | null,"city_id"?: string | null,"city_other"?: string | null,"company_id": string,"created_at"?: string,"id"?: string,"is_main"?: boolean,"name": string,"updated_at"?: string
+                    "address"?: string | null,"city_id"?: string | null,"city_other"?: string | null,"company_id": string,"created_at"?: string,"id"?: string,"is_main"?: boolean,"name"?: string,"name_auto"?: boolean,"updated_at"?: string
                   }
                   Update: {
-                    "address"?: string | null,"city_id"?: string | null,"city_other"?: string | null,"company_id"?: string,"created_at"?: string,"id"?: string,"is_main"?: boolean,"name"?: string,"updated_at"?: string
+                    "address"?: string | null,"city_id"?: string | null,"city_other"?: string | null,"company_id"?: string,"created_at"?: string,"id"?: string,"is_main"?: boolean,"name"?: string,"name_auto"?: boolean,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -687,14 +707,14 @@ isOneToOne: false
                   ]
                 },"deal_interaction_logs": {
                   Row: {
-                    "created_at": string,"deal_id": string,"id": string,"interaction_note": string,"interaction_type": Database["public"]['Enums']["interaction_type"],"user_id": string
+                    "created_at": string,"deal_id": string,"id": string,"interaction_note": string,"interaction_type": Database["public"]['Enums']["interaction_type"],"occurred_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"deal_id": string,"id"?: string,"interaction_note": string,"interaction_type": Database["public"]['Enums']["interaction_type"],"user_id"?: string
+                    "created_at"?: string,"deal_id": string,"id"?: string,"interaction_note": string,"interaction_type": Database["public"]['Enums']["interaction_type"],"occurred_at"?: string,"user_id"?: string
                   }
                   Update: {
-                    "created_at"?: string,"deal_id"?: string,"id"?: string,"interaction_note"?: string,"interaction_type"?: Database["public"]['Enums']["interaction_type"],"user_id"?: string
+                    "created_at"?: string,"deal_id"?: string,"id"?: string,"interaction_note"?: string,"interaction_type"?: Database["public"]['Enums']["interaction_type"],"occurred_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -731,16 +751,48 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
-                },"deals_opportunities": {
+                },"deal_proposals": {
                   Row: {
-                    "assigned_user_id": string,"average_ticket_t_snapshot": number,"branch_id": string | null,"city_id": string,"company_id": string,"conversion_rate_c_snapshot": number,"created_at": string,"created_by": string | null,"deal_name_branch": string,"estimated_billing_amount": number | null,"estimated_close_date": string | null,"id": string,"last_interaction_at": string | null,"last_interaction_note": string | null,"last_interaction_type": Database["public"]['Enums']["interaction_type"] | null,"lost_substatus": Database["public"]['Enums']["lost_substatus"] | null,"next_action": string | null,"next_action_due_date": string | null,"next_action_owner_id": string | null,"origin_code": string,"payroll_frequency": Database["public"]['Enums']["payroll_frequency"] | null,"primary_contact_id": string | null,"reached_agreement_at": string | null,"stage": Database["public"]['Enums']["deal_stage"],"target_employees_n": number | null,"tentative_campaign_date": string | null,"updated_at": string
+                    "created_at": string,"deal_id": string,"document_name": string,"file_path": string | null,"id": string,"no_file_reason": string | null,"sent_on": string,"uploaded_by": string,"version": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "assigned_user_id": string,"average_ticket_t_snapshot": number,"branch_id"?: string | null,"city_id": string,"company_id": string,"conversion_rate_c_snapshot": number,"created_at"?: string,"created_by"?: string | null,"deal_name_branch": string,"estimated_billing_amount"?: never,"estimated_close_date"?: string | null,"id"?: string,"last_interaction_at"?: string | null,"last_interaction_note"?: string | null,"last_interaction_type"?: Database["public"]['Enums']["interaction_type"] | null,"lost_substatus"?: Database["public"]['Enums']["lost_substatus"] | null,"next_action"?: string | null,"next_action_due_date"?: string | null,"next_action_owner_id"?: string | null,"origin_code": string,"payroll_frequency"?: Database["public"]['Enums']["payroll_frequency"] | null,"primary_contact_id"?: string | null,"reached_agreement_at"?: string | null,"stage"?: Database["public"]['Enums']["deal_stage"],"target_employees_n"?: number | null,"tentative_campaign_date"?: string | null,"updated_at"?: string
+                    "created_at"?: string,"deal_id": string,"document_name": string,"file_path"?: string | null,"id"?: string,"no_file_reason"?: string | null,"sent_on"?: string,"uploaded_by"?: string,"version"?: number
                   }
                   Update: {
-                    "assigned_user_id"?: string,"average_ticket_t_snapshot"?: number,"branch_id"?: string | null,"city_id"?: string,"company_id"?: string,"conversion_rate_c_snapshot"?: number,"created_at"?: string,"created_by"?: string | null,"deal_name_branch"?: string,"estimated_billing_amount"?: never,"estimated_close_date"?: string | null,"id"?: string,"last_interaction_at"?: string | null,"last_interaction_note"?: string | null,"last_interaction_type"?: Database["public"]['Enums']["interaction_type"] | null,"lost_substatus"?: Database["public"]['Enums']["lost_substatus"] | null,"next_action"?: string | null,"next_action_due_date"?: string | null,"next_action_owner_id"?: string | null,"origin_code"?: string,"payroll_frequency"?: Database["public"]['Enums']["payroll_frequency"] | null,"primary_contact_id"?: string | null,"reached_agreement_at"?: string | null,"stage"?: Database["public"]['Enums']["deal_stage"],"target_employees_n"?: number | null,"tentative_campaign_date"?: string | null,"updated_at"?: string
+                    "created_at"?: string,"deal_id"?: string,"document_name"?: string,"file_path"?: string | null,"id"?: string,"no_file_reason"?: string | null,"sent_on"?: string,"uploaded_by"?: string,"version"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "deal_proposals_deal_id_fkey"
+      columns: ["deal_id"]
+isOneToOne: false
+      referencedRelation: "deals_opportunities"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "deal_proposals_deal_id_fkey"
+      columns: ["deal_id"]
+isOneToOne: false
+      referencedRelation: "v_deals_board"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "deal_proposals_uploaded_by_fkey"
+      columns: ["uploaded_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"deals_opportunities": {
+                  Row: {
+                    "assigned_user_id": string,"average_ticket_t_snapshot": number,"branch_id": string | null,"city_id": string,"company_id": string,"conversion_rate_c_snapshot": number,"created_at": string,"created_by": string | null,"deal_name_branch": string,"estimated_billing_amount": number | null,"estimated_close_date": string | null,"id": string,"last_interaction_at": string | null,"last_interaction_note": string | null,"last_interaction_type": Database["public"]['Enums']["interaction_type"] | null,"lost_substatus": Database["public"]['Enums']["lost_substatus"] | null,"next_action": string | null,"next_action_due_date": string | null,"next_action_owner_id": string | null,"origin_code": string,"payroll_frequency": Database["public"]['Enums']["payroll_frequency"] | null,"payroll_frequency_note": string | null,"primary_contact_id": string | null,"reached_agreement_at": string | null,"stage": Database["public"]['Enums']["deal_stage"],"target_employees_n": number | null,"tentative_campaign_date": string | null,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "assigned_user_id": string,"average_ticket_t_snapshot": number,"branch_id"?: string | null,"city_id": string,"company_id": string,"conversion_rate_c_snapshot": number,"created_at"?: string,"created_by"?: string | null,"deal_name_branch": string,"estimated_billing_amount"?: never,"estimated_close_date"?: string | null,"id"?: string,"last_interaction_at"?: string | null,"last_interaction_note"?: string | null,"last_interaction_type"?: Database["public"]['Enums']["interaction_type"] | null,"lost_substatus"?: Database["public"]['Enums']["lost_substatus"] | null,"next_action"?: string | null,"next_action_due_date"?: string | null,"next_action_owner_id"?: string | null,"origin_code": string,"payroll_frequency"?: Database["public"]['Enums']["payroll_frequency"] | null,"payroll_frequency_note"?: string | null,"primary_contact_id"?: string | null,"reached_agreement_at"?: string | null,"stage"?: Database["public"]['Enums']["deal_stage"],"target_employees_n"?: number | null,"tentative_campaign_date"?: string | null,"updated_at"?: string
+                  }
+                  Update: {
+                    "assigned_user_id"?: string,"average_ticket_t_snapshot"?: number,"branch_id"?: string | null,"city_id"?: string,"company_id"?: string,"conversion_rate_c_snapshot"?: number,"created_at"?: string,"created_by"?: string | null,"deal_name_branch"?: string,"estimated_billing_amount"?: never,"estimated_close_date"?: string | null,"id"?: string,"last_interaction_at"?: string | null,"last_interaction_note"?: string | null,"last_interaction_type"?: Database["public"]['Enums']["interaction_type"] | null,"lost_substatus"?: Database["public"]['Enums']["lost_substatus"] | null,"next_action"?: string | null,"next_action_due_date"?: string | null,"next_action_owner_id"?: string | null,"origin_code"?: string,"payroll_frequency"?: Database["public"]['Enums']["payroll_frequency"] | null,"payroll_frequency_note"?: string | null,"primary_contact_id"?: string | null,"reached_agreement_at"?: string | null,"stage"?: Database["public"]['Enums']["deal_stage"],"target_employees_n"?: number | null,"tentative_campaign_date"?: string | null,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -1222,6 +1274,18 @@ isOneToOne: false
       referencedRelation: "lab_providers"
       referencedColumns: ["id"]
     },{
+      foreignKeyName: "order_costs_lab_provider_id_fkey"
+      columns: ["lab_provider_id"]
+isOneToOne: false
+      referencedRelation: "v_orders"
+      referencedColumns: ["lab_provider_id"]
+    },{
+      foreignKeyName: "order_costs_lab_provider_id_fkey"
+      columns: ["lab_provider_id"]
+isOneToOne: false
+      referencedRelation: "v_warranties"
+      referencedColumns: ["lab_provider_id"]
+    },{
       foreignKeyName: "order_costs_order_id_fkey"
       columns: ["order_id"]
 isOneToOne: false
@@ -1636,6 +1700,18 @@ isOneToOne: false
       referencedRelation: "lab_providers"
       referencedColumns: ["id"]
     },{
+      foreignKeyName: "order_productions_lab_provider_id_fkey"
+      columns: ["lab_provider_id"]
+isOneToOne: false
+      referencedRelation: "v_orders"
+      referencedColumns: ["lab_provider_id"]
+    },{
+      foreignKeyName: "order_productions_lab_provider_id_fkey"
+      columns: ["lab_provider_id"]
+isOneToOne: false
+      referencedRelation: "v_warranties"
+      referencedColumns: ["lab_provider_id"]
+    },{
       foreignKeyName: "order_productions_order_id_fkey"
       columns: ["order_id"]
 isOneToOne: false
@@ -1787,6 +1863,18 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "lab_providers"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "orders_planned_lab_provider_id_fkey"
+      columns: ["planned_lab_provider_id"]
+isOneToOne: false
+      referencedRelation: "v_orders"
+      referencedColumns: ["lab_provider_id"]
+    },{
+      foreignKeyName: "orders_planned_lab_provider_id_fkey"
+      columns: ["planned_lab_provider_id"]
+isOneToOne: false
+      referencedRelation: "v_warranties"
+      referencedColumns: ["lab_provider_id"]
     },{
       foreignKeyName: "orders_prepayment_exception_by_fkey"
       columns: ["prepayment_exception_by"]
@@ -1992,6 +2080,18 @@ isOneToOne: false
       referencedRelation: "lab_providers"
       referencedColumns: ["id"]
     },{
+      foreignKeyName: "post_sale_warranties_credit_note_lab_provider_id_fkey"
+      columns: ["credit_note_lab_provider_id"]
+isOneToOne: false
+      referencedRelation: "v_orders"
+      referencedColumns: ["lab_provider_id"]
+    },{
+      foreignKeyName: "post_sale_warranties_credit_note_lab_provider_id_fkey"
+      columns: ["credit_note_lab_provider_id"]
+isOneToOne: false
+      referencedRelation: "v_warranties"
+      referencedColumns: ["lab_provider_id"]
+    },{
       foreignKeyName: "post_sale_warranties_opened_by_fkey"
       columns: ["opened_by"]
 isOneToOne: false
@@ -2179,6 +2279,18 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "lab_providers"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "users_profiles_lab_provider_id_fkey"
+      columns: ["lab_provider_id"]
+isOneToOne: false
+      referencedRelation: "v_orders"
+      referencedColumns: ["lab_provider_id"]
+    },{
+      foreignKeyName: "users_profiles_lab_provider_id_fkey"
+      columns: ["lab_provider_id"]
+isOneToOne: false
+      referencedRelation: "v_warranties"
+      referencedColumns: ["lab_provider_id"]
     }
                   ]
                 }
@@ -2647,6 +2759,18 @@ isOneToOne: false
       referencedRelation: "lab_providers"
       referencedColumns: ["id"]
     },{
+      foreignKeyName: "order_costs_lab_provider_id_fkey"
+      columns: ["lab_provider_id"]
+isOneToOne: false
+      referencedRelation: "v_orders"
+      referencedColumns: ["lab_provider_id"]
+    },{
+      foreignKeyName: "order_costs_lab_provider_id_fkey"
+      columns: ["lab_provider_id"]
+isOneToOne: false
+      referencedRelation: "v_warranties"
+      referencedColumns: ["lab_provider_id"]
+    },{
       foreignKeyName: "order_costs_order_id_fkey"
       columns: ["order_id"]
 isOneToOne: false
@@ -2854,7 +2978,7 @@ isOneToOne: false
                   ]
                 },"v_orders": {
                   Row: {
-                    "accounting_status": Database["public"]['Enums']["order_accounting_status"],"agreement_id": string | null,"balance_due": number,"branch_id": string | null,"branch_name": string | null,"buyer_document_id": string,"buyer_document_type": Database["public"]['Enums']["buyer_document_type"],"buyer_id": string,"buyer_name": string,"campaign_id": string | null,"campaign_status": Database["public"]['Enums']["campaign_status"] | null,"cancel_reason": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"city_id": string | null,"city_name": string | null,"collection_responsible": Database["public"]['Enums']["collection_responsible"],"collection_status": Database["public"]['Enums']["order_collection_status"],"company_approval_decision": string | null,"company_approval_on": string | null,"company_id": string | null,"company_name": string | null,"created_at": string,"created_by": string | null,"created_by_name": string | null,"deal_id": string | null,"deal_name_branch": string | null,"doc_status": Database["public"]['Enums']["order_doc_status"],"employee_auth_file_path": string | null,"employee_auth_received": boolean,"first_due_date": string | null,"historical_collected_before_migration": number,"historical_delivered_at": string | null,"historical_delivery_receiver": string | null,"historical_reference": string | null,"historical_stage": Database["public"]['Enums']["historical_stage"] | null,"hr_approval_file_path": string | null,"hr_approval_received": boolean,"hr_approval_required": boolean | null,"id": string,"installment_periodicity": Database["public"]['Enums']["payroll_frequency"] | null,"installments_count": number | null,"is_cancelled": boolean,"is_historical_migration": boolean,"items_count": number | null,"missing_requirements": (string)[] | null,"notes": string | null,"ops_status": Database["public"]['Enums']["order_ops_status"],"order_number": number,"payment_modality": Database["public"]['Enums']["payment_modality"],"prepayment_exception_at": string | null,"prepayment_exception_by": string | null,"prepayment_exception_reason": string | null,"release_blockers": (string)[] | null,"requirements_verified": boolean,"requirements_verified_at": string | null,"requirements_verified_by": string | null,"total_amount": number,"updated_at": string
+                    "accounting_status": Database["public"]['Enums']["order_accounting_status"],"agreement_id": string | null,"balance_due": number,"branch_id": string | null,"branch_name": string | null,"buyer_document_id": string,"buyer_document_type": Database["public"]['Enums']["buyer_document_type"],"buyer_id": string,"buyer_name": string,"campaign_id": string | null,"campaign_status": Database["public"]['Enums']["campaign_status"] | null,"cancel_reason": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"city_id": string | null,"city_name": string | null,"collection_responsible": Database["public"]['Enums']["collection_responsible"],"collection_status": Database["public"]['Enums']["order_collection_status"],"company_approval_decision": string | null,"company_approval_on": string | null,"company_id": string | null,"company_name": string | null,"created_at": string,"created_by": string | null,"created_by_name": string | null,"deal_id": string | null,"deal_name_branch": string | null,"doc_status": Database["public"]['Enums']["order_doc_status"],"employee_auth_file_path": string | null,"employee_auth_received": boolean,"first_due_date": string | null,"historical_collected_before_migration": number,"historical_delivered_at": string | null,"historical_delivery_receiver": string | null,"historical_reference": string | null,"historical_stage": Database["public"]['Enums']["historical_stage"] | null,"hr_approval_file_path": string | null,"hr_approval_received": boolean,"hr_approval_required": boolean | null,"id": string,"installment_periodicity": Database["public"]['Enums']["payroll_frequency"] | null,"installments_count": number | null,"is_cancelled": boolean,"is_historical_migration": boolean,"items_count": number | null,"lab_name": string | null,"lab_provider_id": string | null,"lens_types": string | null,"missing_requirements": (string)[] | null,"notes": string | null,"ops_status": Database["public"]['Enums']["order_ops_status"],"order_number": number,"payment_modality": Database["public"]['Enums']["payment_modality"],"prepayment_exception_at": string | null,"prepayment_exception_by": string | null,"prepayment_exception_reason": string | null,"release_blockers": (string)[] | null,"requirements_verified": boolean,"requirements_verified_at": string | null,"requirements_verified_by": string | null,"total_amount": number,"updated_at": string
                   }
                   ComputedFields: never
                   Relationships: [
@@ -3157,6 +3281,18 @@ isOneToOne: false
       referencedRelation: "lab_providers"
       referencedColumns: ["id"]
     },{
+      foreignKeyName: "order_productions_lab_provider_id_fkey"
+      columns: ["lab_provider_id"]
+isOneToOne: false
+      referencedRelation: "v_orders"
+      referencedColumns: ["lab_provider_id"]
+    },{
+      foreignKeyName: "order_productions_lab_provider_id_fkey"
+      columns: ["lab_provider_id"]
+isOneToOne: false
+      referencedRelation: "v_warranties"
+      referencedColumns: ["lab_provider_id"]
+    },{
       foreignKeyName: "order_productions_order_id_fkey"
       columns: ["order_id"]
 isOneToOne: false
@@ -3258,11 +3394,17 @@ isOneToOne: false
                   ]
                 },"v_warranties": {
                   Row: {
-                    "buyer_document_id": string,"buyer_name": string,"closed_at": string | null,"closed_by": string | null,"closed_by_name": string | null,"company_name": string | null,"created_at": string,"credit_note_amount": number | null,"credit_note_lab_name": string | null,"credit_note_lab_provider_id": string | null,"credit_note_reference": string | null,"credit_note_status": Database["public"]['Enums']["credit_note_status"],"credit_note_updated_at": string | null,"description": string,"evidence_received": boolean,"id": string,"incident_type": Database["public"]['Enums']["warranty_incident_type"],"opened_by": string | null,"opened_by_name": string | null,"order_id": string,"order_number": number,"resolution": string | null,"responsible_name": string,"responsible_user_id": string,"status": Database["public"]['Enums']["warranty_status"],"updated_at": string
+                    "buyer_document_id": string,"buyer_name": string,"buyer_phone": string | null,"closed_at": string | null,"closed_by": string | null,"closed_by_name": string | null,"company_id": string | null,"company_name": string | null,"created_at": string,"credit_note_amount": number | null,"credit_note_lab_name": string | null,"credit_note_lab_provider_id": string | null,"credit_note_reference": string | null,"credit_note_status": Database["public"]['Enums']["credit_note_status"],"credit_note_updated_at": string | null,"days_open": number | null,"description": string,"evidence_received": boolean,"id": string,"incident_type": Database["public"]['Enums']["warranty_incident_type"],"is_overdue": boolean | null,"lab_name": string | null,"lab_provider_id": string | null,"opened_by": string | null,"opened_by_name": string | null,"order_id": string,"order_number": number,"production_ready_at": string | null,"promised_date": string | null,"resolution": string | null,"responsible_name": string,"responsible_user_id": string,"status": Database["public"]['Enums']["warranty_status"],"updated_at": string
                   }
                   ComputedFields: never
                   Relationships: [
                     {
+      foreignKeyName: "orders_company_id_fkey"
+      columns: ["company_id"]
+isOneToOne: false
+      referencedRelation: "companies"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "post_sale_warranties_closed_by_fkey"
       columns: ["closed_by"]
 isOneToOne: false
@@ -3274,6 +3416,18 @@ isOneToOne: false
 isOneToOne: false
       referencedRelation: "lab_providers"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "post_sale_warranties_credit_note_lab_provider_id_fkey"
+      columns: ["credit_note_lab_provider_id"]
+isOneToOne: false
+      referencedRelation: "v_orders"
+      referencedColumns: ["lab_provider_id"]
+    },{
+      foreignKeyName: "post_sale_warranties_credit_note_lab_provider_id_fkey"
+      columns: ["credit_note_lab_provider_id"]
+isOneToOne: false
+      referencedRelation: "v_warranties"
+      referencedColumns: ["lab_provider_id"]
     },{
       foreignKeyName: "post_sale_warranties_opened_by_fkey"
       columns: ["opened_by"]
