@@ -58,9 +58,26 @@ const NUMERIC = ['pd_total_mm', ...['od', 'os'].flatMap((eye) => EYE_FIELDS.map(
 
 /** Valores del formulario → JSON para public.save_fabrication_spec (vacío = null). */
 export function fabricationValues(form: FormData): Record<string, number | string | null> {
+  return fabricationValuesFrom((key) => form.get(key)?.toString());
+}
+
+/** Prefijo de los campos RX dentro de un ítem de la nueva orden: items[0][rx_od_sphere] */
+export const ITEM_RX_PREFIX = 'rx_';
+
+/**
+ * RX capturado en un ítem de la nueva orden (fila de itemRows): null si no
+ * se llenó ningún valor de la fórmula (la fuente sola no cuenta).
+ */
+export function itemFabricationValues(row: Record<string, string>): Record<string, number | string | null> | null {
+  const get = (key: string) => row[`${ITEM_RX_PREFIX}${key}`];
+  const filled = [...NUMERIC, 'technical_notes', 'prescription_date'].some((key) => (get(key) ?? '').trim() !== '');
+  return filled ? fabricationValuesFrom(get) : null;
+}
+
+function fabricationValuesFrom(get: (key: string) => string | undefined): Record<string, number | string | null> {
   const out: Record<string, number | string | null> = {};
   for (const key of NUMERIC) {
-    const raw = String(form.get(key) ?? '').trim().replace(',', '.');
+    const raw = String(get(key) ?? '').trim().replace(',', '.');
     if (raw === '') {
       out[key] = null;
       continue;
@@ -70,7 +87,7 @@ export function fabricationValues(form: FormData): Record<string, number | strin
     out[key] = n;
   }
   for (const key of ['technical_notes', 'prescription_date', 'source']) {
-    const raw = String(form.get(key) ?? '').trim();
+    const raw = String(get(key) ?? '').trim();
     out[key] = raw === '' ? null : raw;
   }
   return out;
