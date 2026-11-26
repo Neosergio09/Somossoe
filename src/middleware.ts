@@ -33,7 +33,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     context.locals.userId = userId;
     const { data: profile } = await supabase
       .from('users_profiles')
-      .select('id, full_name, email, role, active')
+      .select('id, full_name, email, role, extra_roles, active')
       .eq('id', userId)
       .maybeSingle();
     context.locals.profile = profile;
@@ -43,7 +43,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     if (profile?.active && canUseViewAs(profile.role) && isViewAsRole(viewAs)) {
       context.locals.realRole = profile.role;
       context.locals.viewAs = viewAs;
-      context.locals.profile = { ...profile, role: viewAs };
+      context.locals.profile = { ...profile, role: viewAs, extra_roles: [] };
     }
   }
 

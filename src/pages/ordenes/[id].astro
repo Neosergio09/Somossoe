@@ -383,8 +383,8 @@ const canInvoice = isAdmin && !isCancelled && verified && o.accounting_status !=
 const canSeeCollection = hasRole(Astro.locals, 'administracion_cartera', 'direccion', 'comercial', 'socio');
 
 // Costos y diferencia: solo Dirección (edita) y Socio (consulta)
-const canViewCosts = hasRole(Astro.locals, 'direccion', 'socio');
-const canEditCosts = hasRole(Astro.locals, 'direccion');
+const canViewCosts = hasRole(Astro.locals, 'direccion', 'socio', 'costos');
+const canEditCosts = hasRole(Astro.locals, 'direccion', 'costos');
 const [costRows, margin] = canViewCosts
   ? await Promise.all([
       supabase.from('v_order_costs').select('*').eq('order_id', id).order('created_at'),

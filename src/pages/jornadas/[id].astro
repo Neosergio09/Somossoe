@@ -312,7 +312,7 @@ const openWarranties = orderList.length
   : 0;
 
 // Costos y márgenes: solo Dirección y Socio (la BD no los entrega a otros roles)
-const canViewCosts = hasRole(Astro.locals, 'direccion', 'socio');
+const canViewCosts = hasRole(Astro.locals, 'direccion', 'socio', 'costos');
 const [campaignMargin, orderMargins] = canViewCosts
   ? await Promise.all([
       supabase.from('v_campaign_margins').select('*').eq('campaign_id', id).maybeSingle(),

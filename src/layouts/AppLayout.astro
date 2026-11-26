@@ -8,6 +8,7 @@ import CommandPalette from '../components/CommandPalette.astro';
 import { takeFlash } from '../lib/flash';
 import { canUseViewAs, hasRole } from '../lib/auth';
 import { ROLE_LABELS } from '../lib/labels';
+import { rolesLabel } from '../lib/profiles';
 import { loadSummary, MONEY_ROLES } from '../lib/circuit';
 import { VIEW_AS_ROLES } from '../lib/viewAs';
 import { canSeeModule, type ModuleKey } from '../lib/modules';
@@ -173,7 +174,7 @@ const initial = (profile?.full_name ?? '?').trim().charAt(0).toUpperCase();
               <span class="flex min-w-0 flex-1 flex-col leading-tight lg:group-data-[collapsed=true]:hidden">
                 <span class="truncate text-[13px] font-medium text-slate-50">{profile!.full_name}</span>
                 <span class="truncate text-xs text-slate-400">
-                  {viewAs ? `${ROLE_LABELS[Astro.locals.realRole ?? 'direccion']} · como ${ROLE_LABELS[viewAs]}` : profile!.role ? ROLE_LABELS[profile!.role] : ''}
+                  {viewAs ? `${ROLE_LABELS[Astro.locals.realRole ?? 'direccion']} · como ${ROLE_LABELS[viewAs]}` : rolesLabel(profile!.role, profile!.extra_roles)}
                 </span>
               </span>
               <form method="post" action="/logout" class="lg:group-data-[collapsed=true]:hidden">
