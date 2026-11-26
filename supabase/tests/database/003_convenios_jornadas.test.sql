@@ -75,54 +75,25 @@ select lives_ok($$
           'quincenal', 8, private.today_co() - 1, private.today_co() + 365)
 $$, 'comercial crea el convenio en Borrador');
 
+-- SRS 1.6: se activa sin aprobación previa si cumple los requisitos
 select throws_ok($$
-  update public.agreements_convenios set status = 'pendiente_aprobacion' where id = pg_temp.marisol_agreement()
-$$, 'P0001', null, 'no se envía a aprobación sin el convenio firmado');
+  update public.agreements_convenios set status = 'aprobado' where id = pg_temp.marisol_agreement()
+$$, 'P0001', null, 'no se activa sin el convenio firmado');
 
 select lives_ok($$
   insert into public.agreement_documents (agreement_id, document_name, document_type)
   values (pg_temp.marisol_agreement(), 'Convenio firmado Marisol', 'convenio_firmado')
-$$, 'se registra el convenio firmado sin archivo (R2 pendiente)');
+$$, 'se registra el convenio firmado sin archivo');
 
-select lives_ok($$
+select throws_ok($$
+  update public.agreements_convenios set status = 'aprobado' where id = pg_temp.marisol_agreement()
+$$, 'P0001', 'Faltan requisitos para activar el convenio: archivo PDF del convenio firmado',
+  'activar exige el archivo aunque require_document_files = 0');
+
+select throws_ok($$
   update public.agreements_convenios set status = 'pendiente_aprobacion' where id = pg_temp.marisol_agreement()
-$$, 'comercial envía el convenio a aprobación');
+$$, 'P0001', null, 'sin el parámetro de aprobación ya no se envía a aprobación');
 
-select throws_ok($$
-  update public.agreements_convenios set status = 'aprobado' where id = pg_temp.marisol_agreement()
-$$, '42501', null, 'comercial no aprueba convenios');
-select throws_ok($$
-  update public.agreements_convenios set documents_verified = true where id = pg_temp.marisol_agreement()
-$$, '42501', null, 'comercial no verifica la documentación');
-
--- ---------------- Convenio: Dirección y Administración ----------------
-select pg_temp.login('00000000-0000-0000-0000-0000000000d1');
-select throws_ok($$
-  update public.agreements_convenios set status = 'aprobado' where id = pg_temp.marisol_agreement()
-$$, 'P0001', null, 'Dirección no aprueba sin documentación verificada');
-
-select pg_temp.login('00000000-0000-0000-0000-0000000000a1');
-select lives_ok($$
-  update public.agreements_convenios set documents_verified = true where id = pg_temp.marisol_agreement()
-$$, 'Administración verifica la documentación');
-
-select pg_temp.login('00000000-0000-0000-0000-0000000000d1');
-select lives_ok($$
-  update public.agreements_convenios set status = 'aprobado' where id = pg_temp.marisol_agreement()
-$$, 'Dirección aprueba el convenio');
-select is(
-  (select approved_by from public.agreements_convenios where id = pg_temp.marisol_agreement()),
-  '00000000-0000-0000-0000-0000000000d1'::uuid,
-  'queda registrado quién aprobó'
-);
-
-select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
-select throws_ok($$
-  update public.agreements_convenios set max_installments = 6 where id = pg_temp.marisol_agreement()
-$$, 'P0001', null, 'un convenio aprobado no se modifica');
-select throws_ok($$
-  delete from public.agreement_documents where agreement_id = pg_temp.marisol_agreement()
-$$, 'P0001', null, 'los documentos de un convenio aprobado no se eliminan');
 reset role;
 insert into storage.objects (bucket_id, name, owner_id)
 values ('soportes', 'convenios/00000000-0000-0000-0000-0000000000c1/marisol.pdf', '00000000-0000-0000-0000-0000000000c1');
@@ -130,7 +101,37 @@ set local role authenticated;
 select lives_ok($$
   update public.agreement_documents set file_path = 'convenios/00000000-0000-0000-0000-0000000000c1/marisol.pdf'
   where agreement_id = pg_temp.marisol_agreement()
-$$, 'se puede completar el archivo pendiente de un convenio aprobado');
+$$, 'comercial adjunta el PDF del convenio firmado');
+
+select lives_ok($$
+  update public.agreements_convenios set status = 'aprobado' where id = pg_temp.marisol_agreement()
+$$, 'comercial activa el convenio');
+select is(
+  (select approved_by from public.agreements_convenios where id = pg_temp.marisol_agreement()),
+  '00000000-0000-0000-0000-0000000000c1'::uuid,
+  'queda registrado quién lo activó'
+);
+select is(
+  (select reviewed_at from public.agreements_convenios where id = pg_temp.marisol_agreement()),
+  null,
+  'queda pendiente de la revisión posterior de Dirección'
+);
+
+select throws_ok($$
+  update public.agreements_convenios set max_installments = 6 where id = pg_temp.marisol_agreement()
+$$, 'P0001', null, 'las condiciones de un convenio activo no se modifican');
+select throws_ok($$
+  delete from public.agreement_documents where agreement_id = pg_temp.marisol_agreement()
+$$, 'P0001', null, 'los documentos de un convenio activo no se eliminan');
+select throws_ok($$
+  update public.agreements_convenios set reviewed_at = now() where id = pg_temp.marisol_agreement()
+$$, '42501', null, 'comercial no marca la revisión de Dirección');
+
+select pg_temp.login('00000000-0000-0000-0000-0000000000d1');
+select lives_ok($$
+  update public.agreements_convenios set reviewed_at = now() where id = pg_temp.marisol_agreement()
+$$, 'Dirección revisa el convenio activado');
+select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
 
 -- ---------------- Oportunidad → Convenio Firmado ----------------
 select throws_ok($$
@@ -253,15 +254,13 @@ $$, 'P0001', null, 'la captura no se reabre sin motivo');
 
 -- ---------------- Archivo obligatorio cuando R2 esté activo ----------------
 select pg_temp.login('00000000-0000-0000-0000-0000000000d1');
-update public.system_settings set value = 1 where key = 'require_document_files';
+update public.system_settings set value = 1 where key = 'agreement_requires_direction_approval';
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
 insert into public.agreements_convenios (company_id, payroll_frequency, max_installments)
 values ((select id from public.companies where name = 'Andina Ejemplo'), 'mensual', 4);
-insert into public.agreement_documents (agreement_id, document_name, document_type)
-select id, 'Convenio Andina', 'convenio_firmado' from public.agreements_convenios where status = 'borrador';
 select throws_ok($$
-  update public.agreements_convenios set status = 'pendiente_aprobacion' where status = 'borrador'
-$$, 'P0001', null, 'con require_document_files = 1 se exige el archivo del convenio firmado');
+  update public.agreements_convenios set status = 'aprobado' where status = 'borrador'
+$$, 'P0001', null, 'con agreement_requires_direction_approval = 1 no se activa sin aprobación de Dirección');
 
 select * from finish();
 rollback;

@@ -36,7 +36,7 @@ const outcome = await runActions(Astro, {
     }
     const agreement = ensure(await supabase.from('agreements_convenios').insert(input).select('id').single());
     return {
-      message: 'Convenio creado en Borrador. Registre el convenio firmado y envíelo a aprobación.',
+      message: 'Convenio creado en Borrador. Cargue el PDF del convenio firmado y actívelo.',
       redirect: `/convenios/${agreement.id}`,
     };
   },
@@ -85,7 +85,7 @@ const defaultFrequency = v.payroll_frequency ?? deals.data?.find((d) => d.id ===
         <p class="text-sm">
           Empresa: <a href={`/empresas/${selectedCompany}`}>{company.data?.name}</a>
           {company.data?.is_nit_provisional && (
-            <span class="badge badge-amber ml-2">NIT provisional: Administración debe confirmarlo antes de la aprobación</span>
+            <span class="badge badge-amber ml-2">NIT provisional: confírmelo en la ficha de la empresa antes de activar el convenio</span>
           )}
         </p>
         <div class="grid-form">

@@ -73,7 +73,7 @@ export const AREA_LABELS: Record<Enums['contact_area'], string> = {
 export const AGREEMENT_STATUS_LABELS: Record<string, string> = {
   borrador: 'Borrador',
   pendiente_aprobacion: 'Pendiente de aprobación',
-  aprobado: 'Aprobado',
+  aprobado: 'Activo',
   vencido: 'Vencido',
   cancelado: 'Cancelado',
 };

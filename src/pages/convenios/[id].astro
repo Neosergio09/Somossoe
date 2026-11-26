@@ -3,7 +3,7 @@ import AppLayout from '../../layouts/AppLayout.astro';
 import SupportFile from '../../components/SupportFile.astro';
 import { filesRequired, supportHref, supportPathFrom } from '../../lib/supports';
 import { hasRole, isOwnerComercial } from '../../lib/auth';
-import { fmtDate, fmtDateTime } from '../../lib/format';
+import { fmtDate, fmtDateTime, todayCo } from '../../lib/format';
 import { checkbox, date, ensure, FormError, int, nullify, parseForm, runActions, text, uuid, z } from '../../lib/forms';
 import {
   AGREEMENT_STATUS_BADGE,
@@ -12,10 +12,22 @@ import {
   PAYROLL_LABELS,
 } from '../../lib/labels';
 
+// SRS 1.6 · RF-M01-03: el convenio se activa al cumplir requisitos (sin
+// aprobación previa) y Dirección lo revisa después. Con el parámetro
+// agreement_requires_direction_approval = 1 vuelve el flujo con aprobación.
+
 const { supabase } = Astro.locals;
 const id = Astro.params.id!;
 
-async function setStatus(patch: { status?: 'borrador' | 'pendiente_aprobacion' | 'aprobado' | 'cancelado'; documents_verified?: boolean; cancel_reason?: string }) {
+type AgreementPatch = {
+  status?: 'borrador' | 'pendiente_aprobacion' | 'aprobado' | 'cancelado';
+  documents_verified?: boolean;
+  cancel_reason?: string;
+  reviewed_at?: string;
+  valid_until?: string;
+  validity_extension_reason?: string;
+};
+async function patchAgreement(patch: AgreementPatch) {
   ensure(await supabase.from('agreements_convenios').update(patch).eq('id', id).select('id').single());
 }
 
@@ -48,6 +60,32 @@ const outcome = await runActions(Astro, {
     ensure(await supabase.from('agreement_documents').insert({ ...input, file_path: filePath, agreement_id: id }));
     return { message: filePath ? 'Documento registrado con su archivo.' : 'Documento registrado.' };
   },
+  replace_document: async (form) => {
+    const input = parseForm(
+      z.object({ replaces_id: uuid(), document_name: text(200), replace_reason: text(300).min(3, { error: 'Indique el motivo' }) }),
+      form,
+    );
+    const filePath = supportPathFrom(form, 'file_path', 'convenios');
+    if (!filePath) throw new FormError('Adjunte el archivo de la nueva versión.');
+    const { data: previous } = await supabase
+      .from('agreement_documents')
+      .select('document_type')
+      .eq('id', input.replaces_id)
+      .eq('agreement_id', id)
+      .maybeSingle();
+    if (!previous) throw new FormError('El documento que quiere reemplazar no existe.');
+    ensure(
+      await supabase.from('agreement_documents').insert({
+        agreement_id: id,
+        document_name: input.document_name,
+        document_type: previous.document_type,
+        file_path: filePath,
+        replaces_id: input.replaces_id,
+        replace_reason: input.replace_reason,
+      }),
+    );
+    return { message: 'Nueva versión registrada. La anterior se conserva en el historial.' };
+  },
   attach_document: async (form) => {
     const docId = String(form.get('document_id') ?? '');
     const filePath = supportPathFrom(form, 'file_path', 'convenios');
@@ -60,30 +98,46 @@ const outcome = await runActions(Astro, {
     ensure(await supabase.from('agreement_documents').delete().eq('id', docId).eq('agreement_id', id).select('id').single());
     return { message: 'Documento eliminado.' };
   },
+  activate: async () => {
+    await patchAgreement({ status: 'aprobado' });
+    return { message: 'Convenio activado. Ya se pueden programar jornadas y registrar ventas por nómina.' };
+  },
   send: async () => {
-    await setStatus({ status: 'pendiente_aprobacion' });
+    await patchAgreement({ status: 'pendiente_aprobacion' });
     return { message: 'Convenio enviado a aprobación.' };
   },
   back_to_draft: async () => {
-    await setStatus({ status: 'borrador' });
+    await patchAgreement({ status: 'borrador' });
     return { message: 'El convenio volvió a Borrador.' };
   },
   verify: async () => {
-    await setStatus({ documents_verified: true });
+    await patchAgreement({ documents_verified: true });
     return { message: 'Documentación verificada.' };
   },
   unverify: async () => {
-    await setStatus({ documents_verified: false });
+    await patchAgreement({ documents_verified: false });
     return { message: 'Se retiró la verificación de la documentación.' };
   },
   approve: async () => {
-    await setStatus({ status: 'aprobado' });
+    await patchAgreement({ status: 'aprobado' });
     return { message: 'Convenio aprobado.' };
+  },
+  review: async () => {
+    await patchAgreement({ reviewed_at: new Date().toISOString() });
+    return { message: 'Convenio marcado como revisado.' };
+  },
+  extend: async (form) => {
+    const input = parseForm(
+      z.object({ valid_until: date(), validity_extension_reason: text(300).min(3, { error: 'Indique el motivo' }) }),
+      form,
+    );
+    await patchAgreement(input);
+    return { message: 'Vigencia prorrogada.' };
   },
   cancel: async (form) => {
     const reason = String(form.get('cancel_reason') ?? '').trim();
     if (!reason) throw new FormError('Indique el motivo de la cancelación.');
-    await setStatus({ status: 'cancelado', cancel_reason: reason });
+    await patchAgreement({ status: 'cancelado', cancel_reason: reason });
     return { message: 'Convenio cancelado.' };
   },
 });
@@ -93,15 +147,23 @@ const error = outcome?.kind === 'error' ? outcome.error : null;
 const { data: a } = await supabase.from('v_agreements').select('*').eq('id', id).maybeSingle();
 if (!a) return new Response('Convenio no encontrado', { status: 404 });
 
-const [docs, people, deals, company] = await Promise.all([
+const [docs, people, deals, company, approvalSetting] = await Promise.all([
   supabase.from('agreement_documents').select('*, users_profiles(full_name)').eq('agreement_id', id).order('uploaded_at'),
-  supabase.from('users_profiles').select('id, full_name').in('id', [a.documents_verified_by, a.approved_by].filter((x): x is string => !!x)),
+  supabase
+    .from('users_profiles')
+    .select('id, full_name')
+    .in(
+      'id',
+      [a.documents_verified_by, a.approved_by, a.reviewed_by, a.validity_extended_by, a.cancelled_by].filter((x): x is string => !!x),
+    ),
   supabase.from('deals_opportunities').select('id, deal_name_branch').eq('company_id', a.company_id!).neq('stage', 'cierre_perdido').order('deal_name_branch'),
   supabase.from('companies').select('is_nit_provisional, assigned_user_id').eq('id', a.company_id!).maybeSingle(),
+  supabase.from('system_settings').select('value').eq('key', 'agreement_requires_direction_approval').maybeSingle(),
 ]);
 const personName = (uid: string | null) => people.data?.find((p) => p.id === uid)?.full_name ?? '—';
 
 const status = a.status!;
+const needsApproval = Number(approvalSetting.data?.value ?? 0) === 1;
 const requireFiles = await filesRequired(supabase);
 const editable = status === 'borrador' || status === 'pendiente_aprobacion';
 // Comercial solo gestiona convenios de sus empresas (o de empresas sin ejecutivo)
@@ -109,6 +171,19 @@ const isComercial = isOwnerComercial(Astro.locals, company.data?.assigned_user_i
 const isAdmin = hasRole(Astro.locals, 'administracion_cartera');
 const isDireccion = hasRole(Astro.locals, 'direccion');
 const canEdit = editable && (isComercial || isAdmin);
+const canUpload = (isComercial || isAdmin) && status !== 'cancelado';
+
+// Requisitos que exige la base para activar (RF-M01-03)
+const today = todayCo();
+const nitOk = !company.data?.is_nit_provisional;
+const fileOk = !!a.has_signed_file;
+const validityOk = !!a.valid_from && !!a.valid_until && a.valid_until >= today;
+const ready = nitOk && fileOk && validityOk;
+const canActivate =
+  !needsApproval && (status === 'borrador' || status === 'pendiente_aprobacion') && (isComercial || isAdmin || isDireccion);
+const allDocs = docs.data ?? [];
+const currentDocs = allDocs.filter((d) => !d.superseded_at);
+const previousDocs = allDocs.filter((d) => d.superseded_at);
 ---
 
 <AppLayout title="Convenio" error={error}>
@@ -120,9 +195,12 @@ const canEdit = editable && (isComercial || isAdmin);
         {a.deal_id ? <a href={`/oportunidades/${a.deal_id}`}>{a.deal_name_branch}</a> : 'Convenio marco (todas las sedes)'}
       </p>
     </div>
-    <span class={`${AGREEMENT_STATUS_BADGE[a.effective_status ?? 'borrador']} text-sm`}>
-      {AGREEMENT_STATUS_LABELS[a.effective_status ?? 'borrador']}
-    </span>
+    <div class="flex flex-wrap items-center gap-2">
+      {status === 'aprobado' && !a.reviewed_at && <span class="badge badge-amber text-sm">Por revisar (Dirección)</span>}
+      <span class={`${AGREEMENT_STATUS_BADGE[a.effective_status ?? 'borrador']} text-sm`}>
+        {AGREEMENT_STATUS_LABELS[a.effective_status ?? 'borrador']}
+      </span>
+    </div>
   </div>
 
   <div class="grid gap-4 lg:grid-cols-3">
@@ -136,6 +214,13 @@ const canEdit = editable && (isComercial || isAdmin);
           <div><dt class="label">Vigente desde</dt><dd>{fmtDate(a.valid_from)}</dd></div>
           <div><dt class="label">Vigente hasta</dt><dd>{fmtDate(a.valid_until)}</dd></div>
           <div class="col-span-full"><dt class="label">Condiciones acordadas</dt><dd class="whitespace-pre-line">{a.payroll_conditions ?? '—'}</dd></div>
+          {
+            a.validity_extended_at && (
+              <div class="col-span-full text-xs text-slate-600">
+                Vigencia prorrogada por {personName(a.validity_extended_by)} el {fmtDateTime(a.validity_extended_at)}: {a.validity_extension_reason}
+              </div>
+            )
+          }
         </dl>
         {
           canEdit && (
@@ -174,25 +259,49 @@ const canEdit = editable && (isComercial || isAdmin);
             </details>
           )
         }
+        {
+          status === 'aprobado' && (isAdmin || isDireccion) && (
+            <details class="mt-4">
+              <summary class="cursor-pointer text-sm font-medium text-brand-700">Prorrogar vigencia</summary>
+              <form method="post" class="mt-3 grid-form">
+                <input type="hidden" name="_action" value="extend" />
+                <div>
+                  <label class="label">Nueva fecha final</label>
+                  <input class="input" name="valid_until" type="date" required min={a.valid_until ?? today} />
+                </div>
+                <div class="sm:col-span-2">
+                  <label class="label">Motivo</label>
+                  <input class="input" name="validity_extension_reason" required maxlength="300" placeholder="Ej. Renovación firmada por la empresa" />
+                </div>
+                <div class="sm:col-span-2"><button class="btn btn-primary" type="submit">Prorrogar</button></div>
+              </form>
+            </details>
+          )
+        }
       </section>
 
       <section class="card">
         <h2 class="mb-1">Documentación del cliente</h2>
         <p class="mb-3 text-xs text-slate-500">
-          Los archivos se guardan en almacenamiento privado y se abren con un enlace temporal.
-          {requireFiles ? ' Cada documento debe tener su archivo para aprobar el convenio.' : ' Mientras no se exija el archivo, se puede registrar el documento recibido en papel.'}
+          Los archivos se guardan en almacenamiento privado y se abren con un enlace temporal. Para activar el convenio, el convenio
+          firmado debe tener su archivo PDF.
+          {status === 'aprobado' && ' Con el convenio activo, los documentos no se borran: una corrección se carga como versión nueva.'}
+          {!requireFiles && status !== 'aprobado' && ' Los demás documentos pueden registrarse recibidos en papel.'}
         </p>
         <table class="table">
           <thead><tr><th>Documento</th><th>Tipo</th><th>Archivo</th><th>Registrado</th><th></th></tr></thead>
           <tbody>
-            {docs.data?.map((d) => (
+            {currentDocs.map((d) => (
               <tr>
-                <td>{d.document_name}</td>
+                <td>
+                  {d.document_name}
+                  {d.replace_reason && <div class="text-xs text-slate-500">Versión nueva: {d.replace_reason}</div>}
+                </td>
                 <td>{DOCUMENT_TYPE_LABELS[d.document_type]}</td>
                 <td>
                   {d.file_path ? (
                     <a class="badge badge-green" href={supportHref(d.file_path)} target="_blank" rel="noopener">Ver archivo</a>
-                  ) : (isComercial || isAdmin) && status !== 'cancelado' ? (
+                  ) : canUpload ? (
                     <form method="post" class="min-w-48 space-y-1">
                       <input type="hidden" name="_action" value="attach_document" />
                       <input type="hidden" name="document_id" value={d.id} />
@@ -204,7 +313,7 @@ const canEdit = editable && (isComercial || isAdmin);
                   )}
                 </td>
                 <td class="text-xs text-slate-500">{fmtDateTime(d.uploaded_at)} · {d.users_profiles?.full_name}</td>
-                <td>
+                <td class="space-y-1">
                   {canEdit && (
                     <form method="post">
                       <input type="hidden" name="_action" value="delete_document" />
@@ -212,14 +321,47 @@ const canEdit = editable && (isComercial || isAdmin);
                       <button class="btn btn-sm btn-danger" type="submit">Eliminar</button>
                     </form>
                   )}
+                  {canUpload && (
+                    <details>
+                      <summary class="cursor-pointer text-xs text-brand-700">Nueva versión</summary>
+                      <form method="post" class="mt-2 min-w-56 space-y-2">
+                        <input type="hidden" name="_action" value="replace_document" />
+                        <input type="hidden" name="replaces_id" value={d.id} />
+                        <input class="input" name="document_name" required value={d.document_name} />
+                        <input class="input" name="replace_reason" required maxlength="300" placeholder="Motivo (ej. otrosí, escaneo legible)" />
+                        <SupportFile kind="convenios" name="file_path" label="Archivo" required compact />
+                        <button class="btn btn-sm" type="submit">Guardar versión</button>
+                      </form>
+                    </details>
+                  )}
                 </td>
               </tr>
             ))}
-            {!docs.data?.length && <tr><td colspan="5" class="text-slate-500">Sin documentos registrados.</td></tr>}
+            {!currentDocs.length && <tr><td colspan="5" class="text-slate-500">Sin documentos registrados.</td></tr>}
           </tbody>
         </table>
         {
-          (isComercial || isAdmin) && status !== 'cancelado' && (
+          previousDocs.length > 0 && (
+            <details class="mt-3 text-sm">
+              <summary class="cursor-pointer text-slate-600">Versiones anteriores ({previousDocs.length})</summary>
+              <ul class="mt-2 space-y-1 text-xs text-slate-600">
+                {previousDocs.map((d) => (
+                  <li>
+                    {d.document_name} · {DOCUMENT_TYPE_LABELS[d.document_type]} · cargado {fmtDateTime(d.uploaded_at)} · reemplazado {fmtDateTime(d.superseded_at)}
+                    {d.file_path && (
+                      <>
+                        {' · '}
+                        <a href={supportHref(d.file_path)} target="_blank" rel="noopener">Ver archivo</a>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )
+        }
+        {
+          canUpload && (
             <form method="post" class="mt-3 flex flex-wrap items-end gap-2">
               <input type="hidden" name="_action" value="add_document" />
               <div class="min-w-48 flex-1">
@@ -229,7 +371,9 @@ const canEdit = editable && (isComercial || isAdmin);
               <div>
                 <label class="label">Tipo</label>
                 <select class="input" name="document_type">
-                  {Object.entries(DOCUMENT_TYPE_LABELS).map(([value, label]) => <option value={value}>{label}</option>)}
+                  {Object.entries(DOCUMENT_TYPE_LABELS)
+                    .filter(([value]) => status !== 'aprobado' || value !== 'convenio_firmado')
+                    .map(([value, label]) => <option value={value}>{label}</option>)}
                 </select>
               </div>
               <div class="min-w-64 flex-1">
@@ -243,33 +387,62 @@ const canEdit = editable && (isComercial || isAdmin);
     </div>
 
     <section class="card space-y-4 text-sm">
-      <h2>Aprobación</h2>
+      <h2>{needsApproval ? 'Aprobación' : 'Activación'}</h2>
       <ol class="space-y-2">
-        <li class:list={[a.has_signed_document ? 'text-green-700' : 'text-slate-500']}>
-          {a.has_signed_document ? '✓' : '○'} Convenio firmado registrado
+        <li class:list={[nitOk ? 'text-green-700' : 'text-amber-700']}>
+          {nitOk ? '✓ NIT en firme' : (
+            <>○ NIT provisional: confírmelo en la <a href={`/empresas/${a.company_id}`}>ficha de la empresa</a></>
+          )}
         </li>
-        <li class:list={[status !== 'borrador' ? 'text-green-700' : 'text-slate-500']}>
-          {status !== 'borrador' ? '✓' : '○'} Enviado a aprobación
+        <li class:list={[fileOk ? 'text-green-700' : 'text-slate-500']}>
+          {fileOk ? '✓' : '○'} Convenio firmado con archivo PDF
         </li>
-        <li class:list={[!company.data?.is_nit_provisional ? 'text-green-700' : 'text-amber-700']}>
-          {!company.data?.is_nit_provisional ? '✓ NIT en firme' : '○ NIT provisional (lo confirma Administración en la ficha de la empresa)'}
+        <li class:list={[validityOk ? 'text-green-700' : 'text-slate-500']}>
+          {validityOk ? '✓' : '○'} Vigencia completa y no vencida
         </li>
-        <li class:list={[a.documents_verified ? 'text-green-700' : 'text-slate-500']}>
-          {a.documents_verified ? `✓ Documentación verificada · ${personName(a.documents_verified_by)}` : '○ Documentación verificada por Administración'}
-        </li>
+        {
+          needsApproval && (
+            <>
+              <li class:list={[status !== 'borrador' ? 'text-green-700' : 'text-slate-500']}>
+                {status !== 'borrador' ? '✓' : '○'} Enviado a aprobación
+              </li>
+              <li class:list={[a.documents_verified ? 'text-green-700' : 'text-slate-500']}>
+                {a.documents_verified ? `✓ Documentación verificada · ${personName(a.documents_verified_by)}` : '○ Documentación verificada por Administración'}
+              </li>
+            </>
+          )
+        }
         <li class:list={[a.approved_at ? 'text-green-700' : 'text-slate-500']}>
-          {a.approved_at ? `✓ Aprobado · ${personName(a.approved_by)} · ${fmtDateTime(a.approved_at)}` : '○ Aprobado por Dirección'}
+          {a.approved_at
+            ? `✓ Activo · ${a.activated_by_migration ? 'activado por migración' : personName(a.approved_by)} · ${fmtDateTime(a.approved_at)}`
+            : needsApproval ? '○ Aprobado por Dirección' : '○ Activado'}
         </li>
+        {
+          a.approved_at && (
+            <li class:list={[a.reviewed_at ? 'text-green-700' : 'text-amber-700']}>
+              {a.reviewed_at ? `✓ Revisado por Dirección · ${personName(a.reviewed_by)} · ${fmtDateTime(a.reviewed_at)}` : '○ Pendiente de revisión de Dirección'}
+            </li>
+          )
+        }
       </ol>
 
       <div class="space-y-2">
         {
-          status === 'borrador' && (isComercial || isAdmin) && (
+          canActivate && (
+            <form method="post">
+              <input type="hidden" name="_action" value="activate" />
+              <button class="btn btn-primary w-full" disabled={!ready}>Activar convenio</button>
+              {!ready && <p class="mt-1 text-xs text-slate-500">Complete los requisitos para activarlo.</p>}
+            </form>
+          )
+        }
+        {
+          needsApproval && status === 'borrador' && (isComercial || isAdmin) && (
             <form method="post"><input type="hidden" name="_action" value="send" /><button class="btn btn-primary w-full">Enviar a aprobación</button></form>
           )
         }
         {
-          status === 'pendiente_aprobacion' && isAdmin && (
+          needsApproval && status === 'pendiente_aprobacion' && isAdmin && (
             <form method="post">
               <input type="hidden" name="_action" value={a.documents_verified ? 'unverify' : 'verify'} />
               <button class:list={['btn w-full', !a.documents_verified && 'btn-primary']}>
@@ -279,7 +452,7 @@ const canEdit = editable && (isComercial || isAdmin);
           )
         }
         {
-          status === 'pendiente_aprobacion' && isDireccion && (
+          needsApproval && status === 'pendiente_aprobacion' && isDireccion && (
             <form method="post"><input type="hidden" name="_action" value="approve" /><button class="btn btn-primary w-full">Aprobar convenio</button></form>
           )
         }
@@ -289,19 +462,29 @@ const canEdit = editable && (isComercial || isAdmin);
           )
         }
         {
+          status === 'aprobado' && !a.reviewed_at && isDireccion && (
+            <form method="post">
+              <input type="hidden" name="_action" value="review" />
+              <button class="btn btn-primary w-full">Marcar como revisado</button>
+              <p class="mt-1 text-xs text-slate-500">Revise el PDF firmado y las condiciones. Si algo no corresponde, cancélelo con el motivo.</p>
+            </form>
+          )
+        }
+        {
           status !== 'cancelado' && isDireccion && (
             <details>
               <summary class="cursor-pointer text-red-700">Cancelar convenio</summary>
               <form method="post" class="mt-2 space-y-2">
                 <input type="hidden" name="_action" value="cancel" />
                 <textarea class="input" name="cancel_reason" rows="2" required placeholder="Motivo" />
+                <p class="text-xs text-slate-500">No admitirá nuevas jornadas ni órdenes por nómina. Las órdenes ya verificadas siguen su curso; las de nómina sin verificar quedan bloqueadas.</p>
                 <button class="btn btn-danger w-full">Confirmar cancelación</button>
               </form>
             </details>
           )
         }
-        {status === 'cancelado' && <p class="text-red-700">Cancelado: {a.cancel_reason}</p>}
-        {status === 'aprobado' && <p class="text-slate-500">Un convenio aprobado no se modifica. Si cambian las condiciones, registre uno nuevo.</p>}
+        {status === 'cancelado' && <p class="text-red-700">Cancelado por {personName(a.cancelled_by)}: {a.cancel_reason}</p>}
+        {status === 'aprobado' && <p class="text-slate-500">Un convenio activo no cambia sus condiciones. Si cambian, registre uno nuevo.</p>}
       </div>
     </section>
   </div>

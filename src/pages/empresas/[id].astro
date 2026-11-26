@@ -169,6 +169,10 @@ const canCreate = isOwner;
 // Comercial solo puede dejarse a sí mismo como ejecutivo (o dejarla sin asignar)
 const assignableUsers = isAdmin ? users : users.filter((u) => u.id === Astro.locals.userId);
 const othersCompany = hasRole(Astro.locals, 'comercial') && !isOwner;
+// SRS 1.6: el ejecutivo también confirma el NIT en firme; con convenio activo solo Administración lo cambia
+const hasActiveAgreement = (agreements.data ?? []).some((a) => a.effective_status === 'aprobado' || a.effective_status === 'vencido');
+const canConfirmNit = isAdmin || isOwner;
+const canReopenNit = isAdmin || (isOwner && !hasActiveAgreement);
 const nitDisplay = company.nit ? `${company.nit}${company.nit_dv != null ? `-${company.nit_dv}` : ''}` : 'Sin NIT';
 ---
 
@@ -279,7 +283,7 @@ const nitDisplay = company.nit ? `${company.nit}${company.nit_dv != null ? `-${c
       }
 
       {
-        isAdmin && (
+        (company.is_nit_provisional ? canConfirmNit : canReopenNit) && (
           <div class="mt-4 border-t border-slate-200 pt-4">
             {company.is_nit_provisional ? (
               <form method="post" class="flex flex-wrap items-end gap-2">
