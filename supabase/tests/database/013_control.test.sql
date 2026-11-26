@@ -15,6 +15,8 @@ update public.users_profiles set role = 'direccion', active = true where email =
 update public.users_profiles set role = 'comercial', active = true where email = 'comercial@test.co';
 update public.users_profiles set role = 'administracion_cartera', active = true where email = 'admin@test.co';
 update public.users_profiles set role = 'operacion', active = true where email = 'operacion@test.co';
+-- Estas pruebas no cubren la ficha de fabricación (ver 024): sin candado de RX
+update public.system_settings set value = 0 where key = 'require_fabrication_spec';
 update public.users_profiles set role = 'socio', active = true where email = 'socio@test.co';
 
 insert into public.companies (id, name, nit, nit_dv, is_nit_provisional, sector, payroll_frequency, assigned_user_id)

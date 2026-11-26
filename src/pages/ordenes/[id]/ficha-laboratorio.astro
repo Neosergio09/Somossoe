@@ -1,0 +1,77 @@
+---
+/**
+ * Hoja de fabricación para el laboratorio (SRS 1.6 · RF-M04-07).
+ * Solo Operación. Cada apertura queda registrada con la finalidad
+ * «envío al laboratorio». El CRM no envía la hoja: Operación la entrega
+ * por el canal autorizado.
+ */
+import AppLayout from '../../../layouts/AppLayout.astro';
+import { hasRole } from '../../../lib/auth';
+import { fmtDate, fmtDateTime } from '../../../lib/format';
+import { orderNumber } from '../../../lib/orders';
+import { EYE_FIELDS, FABRICATION_SOURCE_LABELS, fmtRx, type FabricationSpec } from '../../../lib/fabrication';
+
+const id = Astro.params.id!;
+if (!hasRole(Astro.locals, 'operacion') || Astro.locals.viewAs) return Astro.redirect(`/ordenes/${id}`);
+const { supabase } = Astro.locals;
+
+const { data: o } = await supabase.from('v_orders').select('id, order_number, buyer_name, company_name').eq('id', id).maybeSingle();
+if (!o) return new Response('Orden no encontrada', { status: 404 });
+const [{ data: rows }, { data: production }] = await Promise.all([
+  supabase.rpc('fabrication_spec_status', { p_order_id: id }),
+  supabase.from('v_productions').select('lab_name, lab_order_reference').eq('order_id', id).is('warranty_id', null).neq('status', 'cancelada').maybeSingle(),
+]);
+
+const sheets: { label: string; spec: FabricationSpec | null; error: string | null; validated: boolean }[] = [];
+for (const r of rows ?? []) {
+  if (!r.spec_id || r.values_purged_at) {
+    sheets.push({ label: r.item_label, spec: null, error: r.values_purged_at ? 'Valores suprimidos por plazo de conservación' : 'Sin ficha', validated: false });
+    continue;
+  }
+  const { data, error } = await supabase.rpc('get_fabrication_spec', { p_order_item_id: r.order_item_id, p_purpose: 'envio_laboratorio' });
+  sheets.push({ label: r.item_label, spec: (data as unknown as FabricationSpec) ?? null, error: error?.message ?? null, validated: !!r.validated_at });
+}
+---
+
+<AppLayout title={`Ficha para laboratorio · ${orderNumber(o.order_number)}`} bare>
+  <main class="mx-auto max-w-3xl space-y-4 p-6 text-sm">
+    <div class="flex items-start justify-between gap-3 print:hidden">
+      <a href={`/ordenes/${id}#ficha`}>← Volver a la orden</a>
+      <button class="btn btn-primary" onclick="window.print()">Imprimir</button>
+    </div>
+    <header>
+      <h1 class="text-xl">Orden de fabricación {orderNumber(o.order_number)}</h1>
+      <p>
+        {o.buyer_name}{o.company_name && ` · ${o.company_name}`}<br />
+        Laboratorio: {production?.lab_name ?? 'sin liberar'}{production?.lab_order_reference && ` · Pedido ${production.lab_order_reference}`}
+      </p>
+      <p class="text-xs text-slate-500">Generada el {fmtDateTime(new Date().toISOString())}. Documento con datos sensibles: entréguelo solo al laboratorio por el canal autorizado.</p>
+    </header>
+    {
+      sheets.map((sh) => (
+        <section class="space-y-2 rounded-md border border-slate-300 p-3">
+          <h2 class="text-base">{sh.label}</h2>
+          {sh.spec ? (
+            <>
+              {!sh.validated && <p class="font-medium text-amber-700">Ficha sin validar por Operación.</p>}
+              <table class="table text-xs">
+                <thead><tr><th></th>{EYE_FIELDS.map((f) => <th>{f.label}</th>)}</tr></thead>
+                <tbody>
+                  <tr><th>OD</th>{EYE_FIELDS.map((f) => <td>{fmtRx(sh.spec![`od_${f.key}` as keyof FabricationSpec], f.kind)}</td>)}</tr>
+                  <tr><th>OI</th>{EYE_FIELDS.map((f) => <td>{fmtRx(sh.spec![`os_${f.key}` as keyof FabricationSpec], f.kind)}</td>)}</tr>
+                </tbody>
+              </table>
+              <p class="text-xs">
+                DP total: {sh.spec.pd_total_mm ?? '—'} · Fórmula del {fmtDate(sh.spec.prescription_date)} ·{' '}
+                {FABRICATION_SOURCE_LABELS[sh.spec.source] ?? sh.spec.source} · Versión {sh.spec.version}
+                {sh.spec.technical_notes && <><br />Notas técnicas: {sh.spec.technical_notes}</>}
+              </p>
+            </>
+          ) : (
+            <p class="text-amber-700">{sh.error}</p>
+          )}
+        </section>
+      ))
+    }
+  </main>
+</AppLayout>
