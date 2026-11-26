@@ -34,7 +34,7 @@ const { data: company } = await supabase.from('companies').select('*').eq('id', 
 if (!company) return new Response('Empresa no encontrada', { status: 404 });
 
 const canSeeMoney = hasRole(Astro.locals, 'administracion_cartera', 'direccion', 'comercial', 'socio');
-const canSeeCosts = hasRole(Astro.locals, 'direccion', 'socio');
+const canSeeCosts = hasRole(Astro.locals, 'direccion', 'socio', 'costos');
 const canSeeTimeline = hasRole(Astro.locals, 'administracion_cartera', 'direccion', 'socio');
 
 // Filtro de órdenes por los 4 estados independientes

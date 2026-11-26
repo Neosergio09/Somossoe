@@ -6,6 +6,8 @@ export type CircuitSummary = {
   convenios_por_aprobar: number;
   /** Convenios activados que Dirección aún no revisa (SRS 1.6). */
   convenios_por_revisar: number;
+  /** Órdenes no anuladas con costos incompletos (solo quien ve costos). */
+  costos_incompletos: number;
   jornada: { en_ejecucion: number; por_ejecutar: number; captura_cerrada: number };
   orden: { por_verificar: number; por_liberar: number };
   producir: { en_lab: number; atrasadas: number };
@@ -26,6 +28,7 @@ export const EMPTY_SUMMARY: CircuitSummary = {
   vender: { abiertas: 0, quietas: 0 },
   convenios_por_aprobar: 0,
   convenios_por_revisar: 0,
+  costos_incompletos: 0,
   jornada: { en_ejecucion: 0, por_ejecutar: 0, captura_cerrada: 0 },
   orden: { por_verificar: 0, por_liberar: 0 },
   producir: { en_lab: 0, atrasadas: 0 },

@@ -11,6 +11,7 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   direccion: 'Dirección',
   socio: 'Socio (consulta)',
   superadmin: 'Super administrador',
+  costos: 'Costos (auxiliar contable)',
   proveedor_lab: 'Laboratorio',
 };
 

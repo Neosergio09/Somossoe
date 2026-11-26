@@ -6,7 +6,7 @@ import type { AppRole } from './labels';
 export const VIEW_AS_COOKIE = 'view_as';
 
 /** Roles que se pueden previsualizar (Laboratorio no tiene pantallas propias). */
-export const VIEW_AS_ROLES: AppRole[] = ['comercial', 'operacion', 'administracion_cartera', 'socio'];
+export const VIEW_AS_ROLES: AppRole[] = ['comercial', 'operacion', 'administracion_cartera', 'costos', 'socio'];
 
 export function isViewAsRole(value: unknown): value is AppRole {
   return typeof value === 'string' && (VIEW_AS_ROLES as string[]).includes(value);

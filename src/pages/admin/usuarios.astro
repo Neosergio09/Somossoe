@@ -4,12 +4,39 @@ import { hasRole } from '../../lib/auth';
 import { fmtDateTime } from '../../lib/format';
 import { checkbox, ensure, FormError, parseForm, runActions, text, uuid, z } from '../../lib/forms';
 import { ROLE_LABELS, type AppRole } from '../../lib/labels';
+import { EXTRA_ROLE_OPTIONS, PROFILES, profileOf, rolesLabel, type ProfileKey } from '../../lib/profiles';
 import { createSupabaseAdminClient } from '../../lib/supabase';
 
 if (!hasRole(Astro.locals, 'direccion')) return Astro.redirect('/');
 
 const { supabase } = Astro.locals;
 const roles = Object.keys(ROLE_LABELS) as [AppRole, ...AppRole[]];
+
+// SRS 1.6 §3.3: se elige un perfil visible (plantilla de roles) o un rol
+// principal con roles adicionales. «perfil:gestion» | «rol:operacion»
+const accessValues = [
+  ...Object.keys(PROFILES).map((k) => `perfil:${k}`),
+  ...roles.map((r) => `rol:${r}`),
+] as [string, ...string[]];
+function resolveAccess(value: string, form: FormData): { role: AppRole; extra: AppRole[] } {
+  const [kind, key] = value.split(':');
+  if (kind === 'perfil') {
+    const p = PROFILES[key as ProfileKey];
+    return { role: p.role, extra: [...p.extra] };
+  }
+  const role = key as AppRole;
+  const extra = form
+    .getAll('extra_roles')
+    .map(String)
+    .filter((r): r is AppRole => (EXTRA_ROLE_OPTIONS as string[]).includes(r) && r !== role);
+  // Dirección, Socio, Super administrador y Laboratorio no combinan roles
+  const combinable = (EXTRA_ROLE_OPTIONS as string[]).includes(role);
+  return { role, extra: combinable ? extra : [] };
+}
+const accessOf = (role: AppRole | null, extra: AppRole[]) => {
+  const key = profileOf(role, extra);
+  return key ? `perfil:${key}` : role ? `rol:${role}` : '';
+};
 
 const outcome = await runActions(Astro, {
   create_user: async (form) => {
@@ -18,12 +45,13 @@ const outcome = await runActions(Astro, {
         full_name: text(150),
         email: z.email({ error: 'Correo inválido' }),
         password: z.string().min(10, { error: 'mínimo 10 caracteres' }),
-        role: z.enum(roles),
+        access: z.enum(accessValues, { error: 'Seleccione un perfil o rol' }),
         lab_provider_id: uuid().optional(),
       }),
       form,
     );
-    if (input.role === 'proveedor_lab' && !input.lab_provider_id) {
+    const { role, extra } = resolveAccess(input.access, form);
+    if (role === 'proveedor_lab' && !input.lab_provider_id) {
       throw new FormError('Un usuario de laboratorio necesita un laboratorio asignado.');
     }
     // Solo Dirección llega aquí (comprobado arriba); la clave secreta no sale del servidor.
@@ -44,25 +72,26 @@ const outcome = await runActions(Astro, {
     ensure(
       await supabase
         .from('users_profiles')
-        .update({ role: input.role, active: true, lab_provider_id: input.lab_provider_id ?? null })
+        .update({ role, extra_roles: extra, active: true, lab_provider_id: role === 'proveedor_lab' ? (input.lab_provider_id ?? null) : null })
         .eq('id', data.user.id)
         .select('id')
         .single(),
     );
-    return { message: `Usuario ${input.email} creado y activado como ${ROLE_LABELS[input.role]}.` };
+    return { message: `Usuario ${input.email} creado y activado como ${rolesLabel(role, extra)}.` };
   },
   update_user: async (form) => {
     const input = parseForm(
       z.object({
         user_id: uuid(),
         full_name: text(150),
-        role: z.enum(roles).optional(),
+        access: z.enum(accessValues).optional(),
         lab_provider_id: uuid().optional(),
         active: checkbox(),
       }),
       form,
     );
-    if (input.user_id === Astro.locals.userId && (!input.active || (input.role !== 'direccion' && input.role !== 'superadmin'))) {
+    const { role, extra } = input.access ? resolveAccess(input.access, form) : { role: null, extra: [] as AppRole[] };
+    if (input.user_id === Astro.locals.userId && (!input.active || (role !== 'direccion' && role !== 'superadmin'))) {
       throw new FormError('No puede desactivarse ni quitarse a sí mismo el rol de Dirección o Super administrador.');
     }
     ensure(
@@ -70,8 +99,9 @@ const outcome = await runActions(Astro, {
         .from('users_profiles')
         .update({
           full_name: input.full_name,
-          role: input.role ?? null,
-          lab_provider_id: input.role === 'proveedor_lab' ? (input.lab_provider_id ?? null) : null,
+          role,
+          extra_roles: extra,
+          lab_provider_id: role === 'proveedor_lab' ? (input.lab_provider_id ?? null) : null,
           active: input.active,
         })
         .eq('id', input.user_id)
@@ -102,9 +132,14 @@ const [{ data: users }, { data: labs }] = await Promise.all([
       <div><label class="label">Correo</label><input class="input" name="email" type="email" required value={v.email} /></div>
       <div><label class="label">Contraseña temporal</label><input class="input" name="password" type="text" minlength="10" required autocomplete="off" /></div>
       <div>
-        <label class="label">Rol</label>
-        <select class="input" name="role">
-          {roles.map((r) => <option value={r} selected={v.role === r}>{ROLE_LABELS[r]}</option>)}
+        <label class="label">Perfil o rol</label>
+        <select class="input" name="access">
+          <optgroup label="Perfiles">
+            {Object.entries(PROFILES).map(([k, p]) => <option value={`perfil:${k}`} selected={v.access === `perfil:${k}`}>{p.label}</option>)}
+          </optgroup>
+          <optgroup label="Roles">
+            {roles.map((r) => <option value={`rol:${r}`} selected={v.access === `rol:${r}`}>{ROLE_LABELS[r]}</option>)}
+          </optgroup>
         </select>
       </div>
       <button class="btn btn-primary" type="submit">Crear y activar</button>
@@ -119,11 +154,17 @@ const [{ data: users }, { data: labs }] = await Promise.all([
       ) : null}
     </form>
     <p class="mt-2 text-xs text-slate-500">Comparta la contraseña temporal por un canal seguro.</p>
+    <ul class="mt-2 space-y-0.5 text-xs text-slate-500">
+      {Object.values(PROFILES).map((p) => (
+        <li><strong>{p.label}</strong> ({rolesLabel(p.role, [])}{p.extra.length ? ` + ${p.extra.map((r) => ROLE_LABELS[r]).join(' + ')}` : ''}): {p.description}</li>
+      ))}
+      <li>Los permisos se suman por rol y los aplica la base de datos; el perfil es solo una plantilla.</li>
+    </ul>
   </section>
 
   <section class="card overflow-x-auto p-0">
     <table class="table">
-      <thead><tr><th>Usuario</th><th>Rol</th><th>Laboratorio</th><th>Activo</th><th>Alta</th><th></th></tr></thead>
+      <thead><tr><th>Usuario</th><th>Perfil o rol</th><th>Laboratorio</th><th>Activo</th><th>Alta</th><th></th></tr></thead>
       <tbody>
         {
           users?.map((u) => (
@@ -136,10 +177,32 @@ const [{ data: users }, { data: labs }] = await Promise.all([
                     <input class="input" name="full_name" value={u.full_name} required />
                     <div class="mt-1 text-xs text-slate-500">{u.email}</div>
                   </div>
-                  <select class="input" name="role">
-                    <option value="">Sin rol</option>
-                    {roles.map((r) => <option value={r} selected={u.role === r}>{ROLE_LABELS[r]}</option>)}
-                  </select>
+                  <div>
+                    <select class="input" name="access">
+                      <option value="">Sin rol</option>
+                      <optgroup label="Perfiles">
+                        {Object.entries(PROFILES).map(([k, p]) => (
+                          <option value={`perfil:${k}`} selected={accessOf(u.role, u.extra_roles) === `perfil:${k}`}>{p.label}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="Roles">
+                        {roles.map((r) => <option value={`rol:${r}`} selected={accessOf(u.role, u.extra_roles) === `rol:${r}`}>{ROLE_LABELS[r]}</option>)}
+                      </optgroup>
+                    </select>
+                    <details class="mt-1 text-xs">
+                      <summary class="cursor-pointer text-slate-600">
+                        {u.extra_roles.length ? `Adicionales: ${u.extra_roles.map((r) => ROLE_LABELS[r]).join(', ')}` : 'Roles adicionales'}
+                      </summary>
+                      <div class="mt-1 space-y-0.5">
+                        {EXTRA_ROLE_OPTIONS.map((r) => (
+                          <label class="flex items-center gap-1">
+                            <input type="checkbox" name="extra_roles" value={r} checked={u.extra_roles.includes(r)} /> {ROLE_LABELS[r]}
+                          </label>
+                        ))}
+                        <p class="text-slate-500">Se aplican con un rol (no con un perfil).</p>
+                      </div>
+                    </details>
+                  </div>
                   <select class="input" name="lab_provider_id">
                     <option value="">—</option>
                     {labs?.map((l) => <option value={l.id} selected={u.lab_provider_id === l.id}>{l.name}</option>)}

@@ -12,11 +12,20 @@ export function canUseViewAs(role: AppRole | null | undefined): boolean {
   return role === 'direccion' || role === 'superadmin';
 }
 
-/** Para mostrar u ocultar controles; la autorización real la hace la BD (RLS). */
+/** Rol principal más roles adicionales del usuario activo (SRS 1.6 §3.3). */
+export function userRoles(locals: App.Locals): AppRole[] {
+  const p = locals.profile;
+  if (!p?.active || !p.role) return [];
+  return [p.role, ...(p.extra_roles ?? [])];
+}
+
+/**
+ * Para mostrar u ocultar controles: verdadero si alguno de los roles del
+ * usuario coincide (igual que private.has_role). La autorización real la hace la BD (RLS).
+ */
 export function hasRole(locals: App.Locals, ...roles: AppRole[]): boolean {
-  const role = locals.profile?.role;
-  if (!role || !locals.profile?.active) return false;
-  return role === 'superadmin' || roles.includes(role);
+  const mine = userRoles(locals);
+  return mine.includes('superadmin') || mine.some((r) => roles.includes(r));
 }
 
 /**

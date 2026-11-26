@@ -15,6 +15,8 @@ declare global {
         full_name: string;
         email: string;
         role: AppRole | null;
+        /** Roles adicionales (SRS 1.6 §3.3): los permisos son la unión con `role` */
+        extra_roles: AppRole[];
         active: boolean;
       } | null;
       /** Rol con el que Dirección previsualiza la interfaz ("Ver como"); profile.role ya lo refleja */
