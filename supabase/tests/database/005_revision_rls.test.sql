@@ -19,10 +19,17 @@ insert into public.companies (id, name, nit, nit_dv, is_nit_provisional, sector,
 values ('aaaaaaaa-0000-0000-0000-000000000001', 'Marisol SAS', '900123456',
         private.nit_check_digit('900123456'), false, 'Manufactura', 'mensual');
 
-insert into public.agreements_convenios (id, company_id, payroll_frequency, max_installments, status)
-values ('cccccccc-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'mensual', 2, 'borrador');
-insert into public.agreement_documents (agreement_id, document_name, document_type)
-values ('cccccccc-0000-0000-0000-000000000001', 'Convenio firmado', 'convenio_firmado');
+-- Flujo con aprobación previa de Dirección (parámetro de reversión, SRS 1.6)
+update public.system_settings set value = 1 where key = 'agreement_requires_direction_approval';
+insert into public.agreements_convenios (id, company_id, payroll_frequency, max_installments, status,
+  valid_from, valid_until)
+values ('cccccccc-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'mensual', 2, 'borrador',
+        private.today_co() - 1, private.today_co() + 365);
+insert into storage.objects (bucket_id, name, owner_id)
+values ('soportes', 'convenios/00000000-0000-0000-0000-0000000000c1/convenio.pdf', '00000000-0000-0000-0000-0000000000c1');
+insert into public.agreement_documents (agreement_id, document_name, document_type, file_path)
+values ('cccccccc-0000-0000-0000-000000000001', 'Convenio firmado', 'convenio_firmado',
+        'convenios/00000000-0000-0000-0000-0000000000c1/convenio.pdf');
 update public.agreements_convenios set status = 'pendiente_aprobacion', documents_verified = true
 where id = 'cccccccc-0000-0000-0000-000000000001';
 

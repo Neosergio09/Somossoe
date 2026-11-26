@@ -164,6 +164,7 @@ const tasksByRole: Record<string, Task[]> = {
     t(s.facturar.sin_factura, plural(s.facturar.sin_factura, 'orden sin factura', 'órdenes sin factura'), 'Vincule la factura de Alegra', '/?paso=facturar', 'warn'),
   ],
   direccion: [
+    t(s.convenios_por_revisar ?? 0, plural(s.convenios_por_revisar ?? 0, 'convenio activado por revisar', 'convenios activados por revisar'), 'Revise el PDF firmado y las condiciones', '/convenios?revision=pendiente', 'warn'),
     t(s.convenios_por_aprobar, plural(s.convenios_por_aprobar, 'convenio por aprobar', 'convenios por aprobar'), 'Revise la documentación verificada', '/convenios', 'warn'),
     t(s.cobrar.reclasificaciones, plural(s.cobrar.reclasificaciones, 'reclasificación por autorizar', 'reclasificaciones por autorizar'), 'Cartera de empleados retirados o incapacitados', '/recaudo?vista=reclasificaciones', 'warn'),
     t(s.producir.atrasadas, plural(s.producir.atrasadas, 'producción atrasada', 'producciones atrasadas'), 'Laboratorio fuera de la fecha prometida', '/?paso=producir', 'danger'),

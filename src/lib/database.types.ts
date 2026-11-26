@@ -25,14 +25,14 @@ export type Database = {
           Tables: {
             "agreement_documents": {
                   Row: {
-                    "agreement_id": string,"document_name": string,"document_type": Database["public"]['Enums']["agreement_document_type"],"file_path": string | null,"id": string,"updated_at": string,"uploaded_at": string,"uploaded_by": string | null
+                    "agreement_id": string,"document_name": string,"document_type": Database["public"]['Enums']["agreement_document_type"],"file_path": string | null,"id": string,"replace_reason": string | null,"replaces_id": string | null,"superseded_at": string | null,"updated_at": string,"uploaded_at": string,"uploaded_by": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "agreement_id": string,"document_name": string,"document_type": Database["public"]['Enums']["agreement_document_type"],"file_path"?: string | null,"id"?: string,"updated_at"?: string,"uploaded_at"?: string,"uploaded_by"?: string | null
+                    "agreement_id": string,"document_name": string,"document_type": Database["public"]['Enums']["agreement_document_type"],"file_path"?: string | null,"id"?: string,"replace_reason"?: string | null,"replaces_id"?: string | null,"superseded_at"?: string | null,"updated_at"?: string,"uploaded_at"?: string,"uploaded_by"?: string | null
                   }
                   Update: {
-                    "agreement_id"?: string,"document_name"?: string,"document_type"?: Database["public"]['Enums']["agreement_document_type"],"file_path"?: string | null,"id"?: string,"updated_at"?: string,"uploaded_at"?: string,"uploaded_by"?: string | null
+                    "agreement_id"?: string,"document_name"?: string,"document_type"?: Database["public"]['Enums']["agreement_document_type"],"file_path"?: string | null,"id"?: string,"replace_reason"?: string | null,"replaces_id"?: string | null,"superseded_at"?: string | null,"updated_at"?: string,"uploaded_at"?: string,"uploaded_by"?: string | null
                   }
                   Relationships: [
                     {
@@ -48,6 +48,12 @@ isOneToOne: false
       referencedRelation: "v_agreements"
       referencedColumns: ["id"]
     },{
+      foreignKeyName: "agreement_documents_replaces_id_fkey"
+      columns: ["replaces_id"]
+isOneToOne: false
+      referencedRelation: "agreement_documents"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "agreement_documents_uploaded_by_fkey"
       columns: ["uploaded_by"]
 isOneToOne: false
@@ -57,14 +63,14 @@ isOneToOne: false
                   ]
                 },"agreements_convenios": {
                   Row: {
-                    "approved_at": string | null,"approved_by": string | null,"cancel_reason": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"company_id": string,"created_at": string,"created_by": string | null,"deal_id": string | null,"documents_verified": boolean,"documents_verified_at": string | null,"documents_verified_by": string | null,"hr_approval_required": boolean,"id": string,"max_installments": number,"payroll_conditions": string | null,"payroll_frequency": Database["public"]['Enums']["payroll_frequency"],"status": Database["public"]['Enums']["agreement_status"],"updated_at": string,"valid_from": string | null,"valid_until": string | null
+                    "activated_by_migration": boolean,"approved_at": string | null,"approved_by": string | null,"cancel_reason": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"company_id": string,"created_at": string,"created_by": string | null,"deal_id": string | null,"documents_verified": boolean,"documents_verified_at": string | null,"documents_verified_by": string | null,"hr_approval_required": boolean,"id": string,"max_installments": number,"payroll_conditions": string | null,"payroll_frequency": Database["public"]['Enums']["payroll_frequency"],"reviewed_at": string | null,"reviewed_by": string | null,"status": Database["public"]['Enums']["agreement_status"],"updated_at": string,"valid_from": string | null,"valid_until": string | null,"validity_extended_at": string | null,"validity_extended_by": string | null,"validity_extension_reason": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "approved_at"?: string | null,"approved_by"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"company_id": string,"created_at"?: string,"created_by"?: string | null,"deal_id"?: string | null,"documents_verified"?: boolean,"documents_verified_at"?: string | null,"documents_verified_by"?: string | null,"hr_approval_required"?: boolean,"id"?: string,"max_installments": number,"payroll_conditions"?: string | null,"payroll_frequency": Database["public"]['Enums']["payroll_frequency"],"status"?: Database["public"]['Enums']["agreement_status"],"updated_at"?: string,"valid_from"?: string | null,"valid_until"?: string | null
+                    "activated_by_migration"?: boolean,"approved_at"?: string | null,"approved_by"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"company_id": string,"created_at"?: string,"created_by"?: string | null,"deal_id"?: string | null,"documents_verified"?: boolean,"documents_verified_at"?: string | null,"documents_verified_by"?: string | null,"hr_approval_required"?: boolean,"id"?: string,"max_installments": number,"payroll_conditions"?: string | null,"payroll_frequency": Database["public"]['Enums']["payroll_frequency"],"reviewed_at"?: string | null,"reviewed_by"?: string | null,"status"?: Database["public"]['Enums']["agreement_status"],"updated_at"?: string,"valid_from"?: string | null,"valid_until"?: string | null,"validity_extended_at"?: string | null,"validity_extended_by"?: string | null,"validity_extension_reason"?: string | null
                   }
                   Update: {
-                    "approved_at"?: string | null,"approved_by"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"company_id"?: string,"created_at"?: string,"created_by"?: string | null,"deal_id"?: string | null,"documents_verified"?: boolean,"documents_verified_at"?: string | null,"documents_verified_by"?: string | null,"hr_approval_required"?: boolean,"id"?: string,"max_installments"?: number,"payroll_conditions"?: string | null,"payroll_frequency"?: Database["public"]['Enums']["payroll_frequency"],"status"?: Database["public"]['Enums']["agreement_status"],"updated_at"?: string,"valid_from"?: string | null,"valid_until"?: string | null
+                    "activated_by_migration"?: boolean,"approved_at"?: string | null,"approved_by"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"company_id"?: string,"created_at"?: string,"created_by"?: string | null,"deal_id"?: string | null,"documents_verified"?: boolean,"documents_verified_at"?: string | null,"documents_verified_by"?: string | null,"hr_approval_required"?: boolean,"id"?: string,"max_installments"?: number,"payroll_conditions"?: string | null,"payroll_frequency"?: Database["public"]['Enums']["payroll_frequency"],"reviewed_at"?: string | null,"reviewed_by"?: string | null,"status"?: Database["public"]['Enums']["agreement_status"],"updated_at"?: string,"valid_from"?: string | null,"valid_until"?: string | null,"validity_extended_at"?: string | null,"validity_extended_by"?: string | null,"validity_extension_reason"?: string | null
                   }
                   Relationships: [
                     {
@@ -94,6 +100,18 @@ isOneToOne: false
     },{
       foreignKeyName: "agreements_convenios_documents_verified_by_fkey"
       columns: ["documents_verified_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "agreements_convenios_reviewed_by_fkey"
+      columns: ["reviewed_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "agreements_convenios_validity_extended_by_fkey"
+      columns: ["validity_extended_by"]
 isOneToOne: false
       referencedRelation: "users_profiles"
       referencedColumns: ["id"]
@@ -1768,13 +1786,19 @@ isOneToOne: false
           Views: {
             "v_agreements": {
                   Row: {
-                    "approved_at": string | null,"approved_by": string | null,"cancel_reason": string | null,"cancelled_at": string | null,"company_id": string,"company_name": string,"created_at": string,"deal_id": string | null,"deal_name_branch": string | null,"documents_count": number | null,"documents_pending_file": number | null,"documents_verified": boolean,"documents_verified_at": string | null,"documents_verified_by": string | null,"effective_status": string | null,"has_signed_document": boolean | null,"hr_approval_required": boolean,"id": string,"max_installments": number,"payroll_conditions": string | null,"payroll_frequency": Database["public"]['Enums']["payroll_frequency"],"status": Database["public"]['Enums']["agreement_status"],"updated_at": string,"valid_from": string | null,"valid_until": string | null
+                    "activated_by_migration": boolean,"approved_at": string | null,"approved_by": string | null,"cancel_reason": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"company_id": string,"company_name": string,"company_nit_provisional": boolean,"created_at": string,"deal_id": string | null,"deal_name_branch": string | null,"documents_count": number | null,"documents_pending_file": number | null,"documents_verified": boolean,"documents_verified_at": string | null,"documents_verified_by": string | null,"effective_status": string | null,"has_signed_document": boolean | null,"has_signed_file": boolean | null,"hr_approval_required": boolean,"id": string,"max_installments": number,"payroll_conditions": string | null,"payroll_frequency": Database["public"]['Enums']["payroll_frequency"],"reviewed_at": string | null,"reviewed_by": string | null,"status": Database["public"]['Enums']["agreement_status"],"updated_at": string,"valid_from": string | null,"valid_until": string | null,"validity_extended_at": string | null,"validity_extended_by": string | null,"validity_extension_reason": string | null
                   }
                   ComputedFields: never
                   Relationships: [
                     {
       foreignKeyName: "agreements_convenios_approved_by_fkey"
       columns: ["approved_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "agreements_convenios_cancelled_by_fkey"
+      columns: ["cancelled_by"]
 isOneToOne: false
       referencedRelation: "users_profiles"
       referencedColumns: ["id"]
@@ -1787,6 +1811,18 @@ isOneToOne: false
     },{
       foreignKeyName: "agreements_convenios_documents_verified_by_fkey"
       columns: ["documents_verified_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "agreements_convenios_reviewed_by_fkey"
+      columns: ["reviewed_by"]
+isOneToOne: false
+      referencedRelation: "users_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "agreements_convenios_validity_extended_by_fkey"
+      columns: ["validity_extended_by"]
 isOneToOne: false
       referencedRelation: "users_profiles"
       referencedColumns: ["id"]

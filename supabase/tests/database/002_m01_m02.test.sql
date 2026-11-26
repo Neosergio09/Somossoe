@@ -60,28 +60,29 @@ select is(
   'nit',
   'find_company_duplicates encuentra por NIT con DV'
 );
-select throws_ok($$
+-- SRS 1.6: Comercial también confirma el NIT en firme
+select lives_ok($$
   update public.companies set is_nit_provisional = false where name = 'Marisol SAS'
-$$, '42501', null, 'comercial no puede confirmar el NIT');
+$$, 'comercial confirma el NIT en firme de su empresa');
+select is(
+  (select nit_verified_by from public.companies where name = 'Marisol SAS'),
+  '00000000-0000-0000-0000-0000000000c1'::uuid,
+  'queda registrado quién verificó el NIT'
+);
 
 -- ---------------- Empresas (Administración) ----------------
 select pg_temp.login('00000000-0000-0000-0000-0000000000a1');
 select throws_ok($$
-  update public.companies set is_nit_provisional = false, nit_dv = (nit_dv + 1) % 10 where name = 'Marisol SAS'
+  update public.companies set nit_dv = (nit_dv + 1) % 10 where name = 'Marisol SAS'
 $$, '23514', null, 'DV incorrecto se rechaza');
 select lives_ok($$
-  update public.companies set is_nit_provisional = false where name = 'Marisol SAS'
-$$, 'administración confirma el NIT');
-select is(
-  (select nit_verified_by from public.companies where name = 'Marisol SAS'),
-  '00000000-0000-0000-0000-0000000000a1'::uuid,
-  'queda registrado quién verificó el NIT'
-);
+  update public.companies set is_nit_provisional = true where name = 'Marisol SAS'
+$$, 'administración devuelve el NIT a provisional');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
-select throws_ok($$
-  update public.companies set nit = '900123457' where name = 'Marisol SAS'
-$$, '42501', null, 'comercial no puede cambiar un NIT en firme');
+select lives_ok($$
+  update public.companies set is_nit_provisional = false where name = 'Marisol SAS'
+$$, 'sin convenio activo ni facturas, comercial vuelve a confirmar el NIT');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000b1');
 select throws_ok($$

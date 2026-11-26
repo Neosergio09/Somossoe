@@ -45,7 +45,7 @@ const groups: { phase: string; items: NavItem[] }[] = s
         items: [
           { href: '/empresas', label: 'Empresas', icon: 'building', module: 'empresas' },
           { href: '/oportunidades', label: 'Oportunidades', icon: 'target', module: 'oportunidades', count: s.vender.quietas, hot: s.vender.quietas > 0 },
-          { href: '/convenios', label: 'Convenios', icon: 'pen', module: 'convenios', count: s.convenios_por_aprobar },
+          { href: '/convenios', label: 'Convenios', icon: 'pen', module: 'convenios', count: s.convenios_por_aprobar + (isDireccion ? (s.convenios_por_revisar ?? 0) : 0) },
         ],
       },
       {
