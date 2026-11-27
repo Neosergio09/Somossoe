@@ -19,6 +19,12 @@ export function canManageUsers(locals: App.Locals): boolean {
   return !!p?.active && (p.role === 'superadmin' || p.role === 'direccion');
 }
 
+/** Cambiar la clave de otros usuarios: solo el Super administrador (Luis y Sergio). */
+export function canSetPasswords(locals: App.Locals): boolean {
+  const p = locals.profile;
+  return !!p?.active && p.role === 'superadmin';
+}
+
 /** «Ver como» está oculto para todos (27-nov-2026). */
 export function canUseViewAs(_role: AppRole | null | undefined): boolean {
   return false;
