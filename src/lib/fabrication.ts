@@ -27,8 +27,9 @@ export type FabricationSpec = {
   change_reason: string | null;
 };
 
-export type FabricationPurpose = 'captura' | 'validacion' | 'envio_laboratorio' | 'correccion';
-export const FABRICATION_PURPOSES: FabricationPurpose[] = ['captura', 'validacion', 'envio_laboratorio', 'correccion'];
+/** 'consulta': solo lectura del Super administrador */
+export type FabricationPurpose = 'captura' | 'validacion' | 'envio_laboratorio' | 'correccion' | 'consulta';
+export const FABRICATION_PURPOSES: FabricationPurpose[] = ['captura', 'validacion', 'envio_laboratorio', 'correccion', 'consulta'];
 
 export const FABRICATION_SOURCE_LABELS: Record<string, string> = {
   formula_optometra_jornada: 'Fórmula de la optómetra (jornada)',

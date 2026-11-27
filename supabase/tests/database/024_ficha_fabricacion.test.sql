@@ -2,7 +2,7 @@
 -- Todos los valores son ficticios.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(37);
+select plan(41);
 
 -- ---------------- Preparación (como postgres) ----------------
 insert into auth.users (id, email) values
@@ -133,10 +133,17 @@ select is((public.get_fabrication_spec(pg_temp.lens(), 'captura') ->> 'od_sphere
   'quien registró la orden la consulta para capturar');
 select pg_temp.login('00000000-0000-0000-0000-0000000000d1');
 select throws_ok($$ select public.get_fabrication_spec(pg_temp.lens(), 'captura') $$, '42501', null, 'Dirección no la consulta');
+select throws_ok($$ select public.get_fabrication_spec(pg_temp.lens(), 'consulta') $$, '42501', null,
+  'Dirección no usa la finalidad de consulta');
 select pg_temp.login('00000000-0000-0000-0000-0000000000e1');
 select throws_ok($$ select public.get_fabrication_spec(pg_temp.lens(), 'captura') $$, '42501', null, 'Socio no la consulta');
 select pg_temp.login('00000000-0000-0000-0000-0000000000f1');
-select throws_ok($$ select public.get_fabrication_spec(pg_temp.lens(), 'captura') $$, '42501', null, 'el Super administrador no la consulta');
+select is((public.get_fabrication_spec(pg_temp.lens(), 'consulta') ->> 'od_sphere')::numeric, -1.25,
+  'el Super administrador la consulta en solo lectura');
+select throws_ok($$ select public.get_fabrication_spec(pg_temp.lens(), 'captura') $$, '42501', null,
+  'el Super administrador no la consulta para capturar');
+select throws_ok($$ select public.validate_fabrication_spec(pg_temp.spec()) $$, '42501', null, 'el Super administrador no valida');
+select throws_ok($$ select public.void_fabrication_spec(pg_temp.spec(), 'x') $$, '42501', null, 'el Super administrador no anula');
 select throws_ok($$ select public.save_fabrication_spec(pg_temp.lens(), pg_temp.rx(), 'x') $$, '42501', null, 'el Super administrador no la registra');
 select pg_temp.login('00000000-0000-0000-0000-0000000000a1');
 select throws_ok($$ select public.get_fabrication_spec(pg_temp.lens(), 'captura') $$, '42501', null, 'Administración no la consulta');
@@ -177,8 +184,8 @@ select isnt((select validated_at from public.fabrication_spec_status(pg_temp.ord
 select is((select count(*)::int from public.fabrication_spec_events where order_id = pg_temp.ord()), 6,
   'Operación ve los 6 cambios (3 versiones y 3 validaciones)');
 select pg_temp.login('00000000-0000-0000-0000-0000000000d1');
-select is((select count(*)::int from public.fabrication_spec_access_logs where order_id = pg_temp.ord()), 2,
-  'Dirección ve las 2 lecturas registradas');
+select is((select count(*)::int from public.fabrication_spec_access_logs where order_id = pg_temp.ord()), 3,
+  'Dirección ve las 3 lecturas registradas (incluida la del Super administrador)');
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
 select is((select count(*)::int from public.fabrication_spec_access_logs), 0, 'Comercial no ve la bitácora de lecturas');
 update public.buyers set sensitive_data_consent_at = null where id = 'bbbbbbbb-0000-0000-0000-000000000001';
