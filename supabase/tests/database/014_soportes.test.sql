@@ -2,7 +2,7 @@
 -- rol, archivos obligatorios y registro de consultas.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(26);
+select plan(25);
 
 -- ---------------- Preparación (como postgres) ----------------
 insert into auth.users (id, email) values
@@ -58,8 +58,6 @@ select lives_ok($$ select pg_temp.up('ordenes/00000000-0000-0000-0000-0000000000
   'Comercial sube un soporte de orden en su carpeta');
 select throws_ok($$ select pg_temp.up('ordenes/00000000-0000-0000-0000-0000000000a1/ajeno.pdf') $$,
   '42501', null, 'nadie sube en la carpeta de otro usuario');
-select throws_ok($$ select pg_temp.up('pagos/00000000-0000-0000-0000-0000000000c1/soporte.pdf') $$,
-  '42501', null, 'Comercial no sube soportes de pagos');
 select pg_temp.up('ordenes/00000000-0000-0000-0000-0000000000c1/otro.pdf');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000a1');

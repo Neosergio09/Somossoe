@@ -17,8 +17,6 @@ interface Props {
   canCapture: boolean;
   /** Operación */
   canOperate: boolean;
-  /** Super administrador: solo lectura */
-  canRead: boolean;
   released: boolean;
   required: boolean;
   hasConsent: boolean;
@@ -30,12 +28,12 @@ interface Props {
   lastAction: string;
 }
 
-const { orderId, rows, canCapture, canOperate, canRead, released, required, hasConsent, consentAt, canRecordConsent, revealed, values: v, lastAction } =
+const { orderId, rows, canCapture, canOperate, released, required, hasConsent, consentAt, canRecordConsent, revealed, values: v, lastAction } =
   Astro.props;
 const canEditValues = (released ? canOperate : canCapture) && hasConsent;
-const canSee = canOperate || canCapture || canRead;
+const canSee = canOperate || canCapture;
 const purposeFor = (spec: FabricationStatus) =>
-  canOperate ? (spec.validated_at || released ? 'envio_laboratorio' : 'validacion') : canCapture ? 'captura' : 'consulta';
+  canOperate ? (spec.validated_at || released ? 'envio_laboratorio' : 'validacion') : 'captura';
 const field = (name: string, spec: FabricationSpec | null | undefined, itemId: string) =>
   lastAction === 'save_fabrication' && v.order_item_id === itemId ? (v[name] ?? '') : spec ? String(spec[name as keyof FabricationSpec] ?? '') : '';
 ---
@@ -212,8 +210,8 @@ const field = (name: string, spec: FabricationSpec | null | undefined, itemId: s
             </details>
           )}
 
-          {!canSee && r.spec_id && <p class="text-xs text-slate-500">Solo quien registró la orden (antes de liberarla), Operación y el Super administrador ven los valores.</p>}
-          {(canCapture || canOperate) && !hasConsent && !r.spec_id && <p class="text-xs text-amber-700">Registre primero la autorización de datos sensibles.</p>}
+          {!canSee && r.spec_id && <p class="text-xs text-slate-500">Su usuario no tiene acceso a los valores de la ficha.</p>}
+          {canSee && !hasConsent && !r.spec_id && <p class="text-xs text-amber-700">Registre primero la autorización de datos sensibles.</p>}
         </div>
       );
     })

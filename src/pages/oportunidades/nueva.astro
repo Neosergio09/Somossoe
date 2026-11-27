@@ -5,7 +5,7 @@ import { date, ensure, int, parseForm, runActions, text, uuid, z } from '../../l
 import { PAYROLL_LABELS } from '../../lib/labels';
 import { activeOrigins, activeUsers, operationalCities } from '../../lib/options';
 import type { TablesInsert } from '../../lib/database.types';
-import { denyUnless, isSuperadmin } from '../../lib/auth';
+import { denyUnless, hasFullAccess } from '../../lib/auth';
 
 const denied = denyUnless(Astro, '/oportunidades', 'comercial');
 if (denied) return denied;
@@ -53,7 +53,7 @@ const selectedCompanyId = v.company_id ?? companyId;
 
 const [{ data: companies }, cities, users, origins, settings] = await Promise.all([
   // Comercial abre oportunidades en sus empresas o en las que no tienen ejecutivo
-  (isSuperadmin(Astro.locals)
+  (hasFullAccess(Astro.locals)
     ? supabase.from('companies').select('id, name')
     : supabase.from('companies').select('id, name').or(`assigned_user_id.is.null,assigned_user_id.eq.${userId}`)
   ).order('name'),

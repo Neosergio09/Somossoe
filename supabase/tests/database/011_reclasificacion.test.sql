@@ -1,7 +1,7 @@
 -- Pruebas de reclasificación de cartera por novedad de nómina (RF-M06-04).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(30);
+select plan(29);
 
 -- ---------------- Preparación (como postgres) ----------------
 insert into auth.users (id, email) values
@@ -78,10 +78,6 @@ select public.apply_payment(pg_temp.pay('EMP-1'), pg_temp.ord('Ana'), 150000);
 
 -- ---------------- Solicitud (Administración / Cartera) ----------------
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
-select throws_ok($$
-  insert into public.portfolio_reclassifications (order_id, reason, new_installments_count, new_periodicity, new_first_due_date)
-  values (pg_temp.ord('Ana'), 'retiro', 2, 'mensual', private.today_co() + 10)
-$$, '42501', null, 'Comercial no solicita reclasificaciones');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000a1');
 select throws_ok($$

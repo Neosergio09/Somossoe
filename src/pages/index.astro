@@ -4,7 +4,6 @@
 import AppLayout from '../layouts/AppLayout.astro';
 import Icon from '../components/Icon.astro';
 import { hasRole, userRoles } from '../lib/auth';
-import { rolesLabel } from '../lib/profiles';
 import { cop, fmtDate, fmtTime, fmtWeekday, todayCo, addDays } from '../lib/format';
 import { CAMPAIGN_STATUS_LABELS, COLLECTION_RESPONSIBLE_LABELS, OPS_STATUS_LABELS, STAGE_LABELS, ACTIVE_CAMPAIGN_STATUSES } from '../lib/labels';
 import { orderNumber } from '../lib/orders';
@@ -208,7 +207,7 @@ const dot: Record<Tone, string> = { ok: 'bg-teal-500', warn: 'bg-amber-500', dan
 <AppLayout title="Circuito">
   <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
     <div>
-      <p class="mb-1 text-sm text-slate-600 first-letter:uppercase">{dateLabel} · {L.profile?.full_name}{role && ` · ${rolesLabel(role, L.profile?.extra_roles ?? [])}`}</p>
+      <p class="mb-1 text-sm text-slate-600 first-letter:uppercase">{dateLabel} · {L.profile?.full_name}</p>
       <h1 class="text-3xl">El circuito hoy</h1>
     </div>
     <p class="max-w-sm text-sm text-slate-600">Cada paso muestra cuántos casos esperan. Toque un paso para ver su lista.</p>

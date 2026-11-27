@@ -4,7 +4,7 @@ import AppLayout from '../../layouts/AppLayout.astro';
 import OrderItemFields from '../../components/OrderItemFields.astro';
 import SupportFile from '../../components/SupportFile.astro';
 import { filesRequired, supportPathFrom } from '../../lib/supports';
-import { denyUnless, hasRole, userRoles } from '../../lib/auth';
+import { denyUnless, hasFullAccess, hasRole, userRoles } from '../../lib/auth';
 import { itemFabricationValues } from '../../lib/fabrication';
 import { cop, fmtDate, fmtDateTime } from '../../lib/format';
 import { checkbox, date, ensure, FormError, int, parseForm, runActions, text, uuid, z } from '../../lib/forms';
@@ -23,7 +23,7 @@ const prefillName = params.get('full_name') ?? '';
 const canCreate = hasRole(Astro.locals, 'comercial');
 const canSaveBuyer = hasRole(Astro.locals, 'comercial', 'administracion_cartera');
 // RX en la venta: solo el rol Comercial real (el superadmin no recibe la ficha, RF-M04-07)
-const canRx = userRoles(Astro.locals).includes('comercial') && !Astro.locals.viewAs;
+const canRx = (hasFullAccess(Astro.locals) || userRoles(Astro.locals).includes('comercial')) && !Astro.locals.viewAs;
 
 const { data: campaign } = campaignId
   ? await supabase.from('v_campaigns').select('*').eq('id', campaignId).maybeSingle()

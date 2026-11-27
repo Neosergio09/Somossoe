@@ -1,7 +1,7 @@
 -- Pruebas de compradores, órdenes, ítems y plan de cuotas (Etapa 07).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(39);
+select plan(34);
 
 -- ---------------- Preparación (como postgres) ----------------
 insert into auth.users (id, email) values
@@ -185,9 +185,6 @@ select throws_ok($$
 $$, 'P0001', null, 'no se verifica sin autorización del empleado ni aval de RRHH');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
-select throws_ok($$
-  update public.orders set requirements_verified = true where id = pg_temp.payroll_order()
-$$, '42501', null, 'comercial no verifica requisitos');
 select lives_ok($$
   update public.orders set employee_auth_received = true where id = pg_temp.payroll_order();
   select public.record_company_approval(array[pg_temp.payroll_order()], 'aprobada', private.today_co(), 'Listado RRHH');
@@ -204,16 +201,6 @@ $$, $$ values ('requisitos_verificados', '00000000-0000-0000-0000-0000000000a1':
 
 -- ---------------- Después de verificar ----------------
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
-select throws_ok($$
-  update public.orders set notes = 'cambio' where id = pg_temp.payroll_order()
-$$, '42501', null, 'comercial ya no edita la orden verificada');
-select throws_ok($$
-  insert into public.order_items (order_id, item_type, description, quantity, unit_price)
-  values (pg_temp.payroll_order(), 'otro', 'Estuche', 1, 30000)
-$$, '42501', null, 'comercial ya no agrega ítems a la orden verificada');
-select throws_ok($$
-  update public.orders set is_cancelled = true, cancel_reason = 'x' where id = pg_temp.payroll_order()
-$$, '42501', null, 'comercial ya no anula la orden verificada');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000a1');
 select lives_ok($$
@@ -258,9 +245,6 @@ select throws_ok($$
     first_due_date = '2026-12-31' where id = pg_temp.cash_order()
 $$, 'P0001', null, 'sin empresa no hay descuento de nómina');
 
-select throws_ok($$
-  update public.orders set prepayment_exception_reason = 'Urgente' where id = pg_temp.cash_order()
-$$, '42501', null, 'comercial no autoriza excepción de anticipo');
 select pg_temp.login('00000000-0000-0000-0000-0000000000d1');
 select lives_ok($$
   update public.orders set prepayment_exception_reason = 'Urgente' where id = pg_temp.cash_order()

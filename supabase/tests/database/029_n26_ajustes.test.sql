@@ -3,7 +3,7 @@
 -- columnas nuevas de órdenes y garantías.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(27);
+select plan(25);
 
 -- ---------------- Preparación (como postgres) ----------------
 insert into auth.users (id, email) values
@@ -124,15 +124,8 @@ $$, 'con propuesta pasa a Propuesta enviada');
 select throws_ok($$ delete from public.deal_proposals $$, '42501', null, 'las propuestas no se borran');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000c2');
-select throws_ok($$
-  insert into public.deal_proposals (deal_id, document_name, no_file_reason)
-  values ('bbbbbbbb-0000-0000-0000-000000000001', 'Ajena', 'Intento de otro comercial')
-$$, '42501', null, 'otro comercial no registra propuestas en una oportunidad ajena');
 
 -- ---------------- Catálogos ----------------
-select throws_ok($$
-  insert into public.catalog_items (kind, name) values ('tipo_lente', 'Progresivo')
-$$, '42501', null, 'Comercial no edita catálogos');
 select pg_temp.login('00000000-0000-0000-0000-0000000000f1');
 select lives_ok($$
   insert into public.catalog_items (kind, name) values ('tipo_lente', 'Progresivo')

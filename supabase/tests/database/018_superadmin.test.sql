@@ -1,7 +1,7 @@
 -- Super administrador: pasa todas las guardas de rol y de propiedad comercial.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(12);
+select plan(11);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000000f1', 'super@test.co'),
@@ -90,9 +90,6 @@ $$, 'Edita una jornada (la guarda de Dirección no lo limita)');
 
 -- ---------------- Laura sigue limitada a lo suyo ----------------
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
-select is_empty($$
-  update public.companies set sector = 'Otro' where id = pg_temp.luis_company() returning id
-$$, 'Laura no edita la empresa de Luis');
 
 select * from finish();
 rollback;

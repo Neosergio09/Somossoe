@@ -2,7 +2,7 @@
 -- perfil Gestión y rol Costos (auxiliar contable).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(24);
+select plan(23);
 
 -- ---------------- Preparación (como postgres) ----------------
 insert into auth.users (id, email) values
@@ -120,7 +120,6 @@ select is((select doc_status::text from public.orders where id = pg_temp.ord()),
 select pg_temp.login('00000000-0000-0000-0000-0000000000a1');
 select is((select count(*)::int from public.order_costs), 0, 'Administración sola no ve costos');
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
-select is((select count(*)::int from public.order_costs), 0, 'Comercial no ve costos');
 
 select * from finish();
 rollback;

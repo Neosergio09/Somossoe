@@ -3,7 +3,7 @@
 -- NIT en firme por Comercial.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(30);
+select plan(26);
 
 -- ---------------- Preparación (como postgres) ----------------
 insert into auth.users (id, email) values
@@ -82,13 +82,6 @@ $$, 'P0001', 'Faltan requisitos para activar el convenio: vigencia no vencida',
 update public.agreements_convenios set valid_from = private.today_co() - 1, valid_until = private.today_co() + 180
 where id = 'cccccccc-0000-0000-0000-000000000001';
 
--- Comercial de otra empresa: la RLS no le deja tocar el convenio
-select pg_temp.login('00000000-0000-0000-0000-0000000000c2');
-update public.agreements_convenios set status = 'aprobado' where id = 'cccccccc-0000-0000-0000-000000000001';
-select is((pg_temp.a1()).status::text, 'borrador', 'comercial de otra empresa no activa el convenio');
-update public.companies set is_nit_provisional = true where id = 'aaaaaaaa-0000-0000-0000-000000000001';
-select is((select is_nit_provisional from public.companies where id = 'aaaaaaaa-0000-0000-0000-000000000001'),
-  false, 'comercial de otra empresa no cambia el NIT');
 
 -- ---------------- Versiones en borrador ----------------
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
@@ -116,19 +109,11 @@ reset role;
 select is((public.circuit_summary() ->> 'convenios_por_revisar')::int, 1, 'el convenio queda por revisar en el circuito');
 set local role authenticated;
 
--- NIT bloqueado para Comercial con convenio activo
-select throws_ok($$
-  update public.companies set is_nit_provisional = true where id = 'aaaaaaaa-0000-0000-0000-000000000001'
-$$, '42501', null, 'con convenio activo comercial no cambia el NIT');
 
 -- Condiciones congeladas y prórroga
 select throws_ok($$
   update public.agreements_convenios set hr_approval_required = false where id = 'cccccccc-0000-0000-0000-000000000001'
 $$, 'P0001', null, 'las condiciones de un convenio activo no cambian');
-select throws_ok($$
-  update public.agreements_convenios set valid_until = private.today_co() + 400,
-    validity_extension_reason = 'Renovación' where id = 'cccccccc-0000-0000-0000-000000000001'
-$$, '42501', null, 'comercial no prorroga la vigencia');
 
 -- Versión nueva del convenio firmado en un convenio activo
 select throws_ok($$

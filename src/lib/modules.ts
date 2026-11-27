@@ -18,7 +18,7 @@ export type ModuleKey =
 const ALL: ModuleKey[] = ['empresas', 'oportunidades', 'convenios', 'jornadas', 'ordenes', 'produccion', 'posventa', 'facturas', 'recaudo'];
 
 export const ROLE_MODULES: Record<AppRole, ModuleKey[]> = {
-  comercial: ['empresas', 'oportunidades', 'convenios', 'jornadas', 'ordenes'],
+  comercial: ALL,
   operacion: ['jornadas', 'ordenes', 'produccion', 'posventa'],
   administracion_cartera: ['empresas', 'convenios', 'ordenes', 'facturas', 'recaudo'],
   direccion: ALL,
