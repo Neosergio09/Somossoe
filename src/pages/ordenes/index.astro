@@ -75,18 +75,18 @@ const link = (params: Record<string, string>) => {
         ))
       }
     </nav>
-    <form method="get" class="ml-auto flex flex-wrap gap-2">
+    <form method="get" class="filters">
       {status && <input type="hidden" name="estado" value={status} />}
-      <select class="input w-auto" name="modalidad">
+      <select class="input sm:w-auto" name="modalidad">
         <option value="">Toda modalidad</option>
         {Object.entries(PAYMENT_MODALITY_LABELS).map(([value, label]) => <option value={value} selected={modality === value}>{label}</option>)}
       </select>
-      <select class="input w-auto" name="laboratorio">
+      <select class="input sm:w-auto" name="laboratorio">
         <option value="">Todo laboratorio</option>
         {labs?.map((l) => <option value={l.id} selected={lab === l.id}>{l.name}</option>)}
       </select>
-      <input class="input w-40" name="lente" value={lens} placeholder="Tipo de lente" />
-      <input class="input w-56" name="q" value={q} placeholder="N.º, comprador, documento o empresa" />
+      <input class="input sm:w-40" name="lente" value={lens} placeholder="Tipo de lente" />
+      <input class="input sm:w-56" name="q" value={q} placeholder="N.º, comprador, documento o empresa" />
       <button class="btn" type="submit">Buscar</button>
     </form>
   </div>

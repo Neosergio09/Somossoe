@@ -48,9 +48,9 @@ const tabs: [string, string][] = [
         ))
       }
     </nav>
-    <form method="get" class="ml-auto flex gap-2">
+    <form method="get" class="filters">
       <input type="hidden" name="vista" value={view} />
-      <input class="input w-64" name="q" value={q} placeholder={view === 'por_facturar' ? 'Comprador, documento o empresa' : 'Número o cliente facturado'} />
+      <input class="input sm:w-64" name="q" value={q} placeholder={view === 'por_facturar' ? 'Comprador, documento o empresa' : 'Número o cliente facturado'} />
       <button class="btn" type="submit">Buscar</button>
     </form>
   </div>

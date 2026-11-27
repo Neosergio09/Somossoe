@@ -425,22 +425,24 @@ const nitDisplay = company.nit ? `${company.nit}${company.nit_dv != null ? `-${c
       </section>
       <section class="card">
         <h2 class="mb-3">Oportunidades</h2>
-        <table class="table">
-          <thead><tr><th>Negocio</th><th>Ciudad</th><th>Etapa</th><th>Facturación estimada</th><th>Ejecutivo</th><th>Inactividad</th></tr></thead>
-          <tbody>
-            {deals.data?.map((d) => (
-              <tr>
-                <td><a href={`/oportunidades/${d.id}`}>{d.deal_name_branch}</a></td>
-                <td>{d.city_name}</td>
-                <td>{d.stage ? STAGE_LABELS[d.stage] : ''}</td>
-                <td>{cop(d.estimated_billing_amount)}</td>
-                <td>{d.assigned_user_name}</td>
-                <td>{d.days_inactive} días</td>
-              </tr>
-            ))}
-            {!deals.data?.length && <tr><td colspan="6" class="text-slate-500">Sin oportunidades.</td></tr>}
-          </tbody>
-        </table>
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr><th>Negocio</th><th>Ciudad</th><th>Etapa</th><th>Facturación estimada</th><th>Ejecutivo</th><th>Inactividad</th></tr></thead>
+            <tbody>
+              {deals.data?.map((d) => (
+                <tr>
+                  <td><a href={`/oportunidades/${d.id}`}>{d.deal_name_branch}</a></td>
+                  <td>{d.city_name}</td>
+                  <td>{d.stage ? STAGE_LABELS[d.stage] : ''}</td>
+                  <td>{cop(d.estimated_billing_amount)}</td>
+                  <td>{d.assigned_user_name}</td>
+                  <td>{d.days_inactive} días</td>
+                </tr>
+              ))}
+              {!deals.data?.length && <tr><td colspan="6" class="text-slate-500">Sin oportunidades.</td></tr>}
+            </tbody>
+          </table>
+        </div>
       </section>
     </div>
     <div class="space-y-4">

@@ -26,7 +26,18 @@
     @apply bg-canvas text-slate-800 antialiased;
   }
   h1 {
-    @apply font-display text-2xl font-bold tracking-tight text-ink;
+    @apply font-display text-xl font-bold tracking-tight text-ink sm:text-2xl;
+    overflow-wrap: anywhere;
+  }
+  /* Un fieldset por defecto no se encoge (min-width: min-content) y
+     desborda la pantalla del celular con grillas o tablas adentro */
+  fieldset {
+    min-width: 0;
+  }
+  /* Los hijos de una grilla tampoco se encogen por defecto: con una tabla
+     adentro, la columna crecía más que la pantalla */
+  .grid > * {
+    min-width: 0;
   }
   h2 {
     @apply font-display text-base font-semibold text-ink;
@@ -38,7 +49,7 @@
 
 @layer components {
   .card {
-    @apply rounded-2xl border border-slate-200 bg-white p-5;
+    @apply min-w-0 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5;
   }
   .label {
     @apply mb-1 block text-xs font-medium text-slate-600;
@@ -81,6 +92,43 @@
   }
   .table td {
     @apply border-b border-slate-100 px-2 py-2 align-top;
+  }
+  /* Tablas: en el celular se desplazan dentro de su tarjeta en vez de
+     ensanchar la página; los encabezados no se parten y las columnas no se
+     aplastan hasta dejar una palabra por línea. */
+  .table-wrap {
+    @apply max-w-full overflow-x-auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  @media (max-width: 639px) {
+    .table th {
+      @apply whitespace-nowrap;
+    }
+    .table:not(.table-compact) td {
+      min-width: 6.5rem;
+    }
+    .table:not(.table-compact) td:first-child {
+      min-width: 5rem;
+    }
+    /* La tabla ocupa todo el ancho de la tarjeta (sin el relleno lateral) */
+    .card > .table-wrap,
+    .card > div > .table-wrap {
+      @apply -mx-4 px-4;
+      width: calc(100% + 2rem);
+      max-width: none;
+    }
+  }
+  /* Filtros de los listados: en el celular, grilla de dos columnas a lo
+     ancho; desde sm, en línea y alineados a la derecha */
+  .filters {
+    @apply grid w-full grid-cols-2 items-center gap-2 sm:ml-auto sm:flex sm:w-auto sm:flex-wrap;
+  }
+  .filters .input {
+    @apply w-full sm:w-auto;
+  }
+  .filters > input[name="q"],
+  .filters > label {
+    @apply col-span-2;
   }
   .grid-form {
     @apply grid grid-cols-1 gap-3 sm:grid-cols-2;

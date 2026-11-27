@@ -288,58 +288,60 @@ const previousDocs = allDocs.filter((d) => d.superseded_at);
           {status === 'aprobado' && ' Con el convenio activo, los documentos no se borran: una corrección se carga como versión nueva.'}
           {!requireFiles && status !== 'aprobado' && ' Los demás documentos pueden registrarse recibidos en papel.'}
         </p>
-        <table class="table">
-          <thead><tr><th>Documento</th><th>Tipo</th><th>Archivo</th><th>Registrado</th><th></th></tr></thead>
-          <tbody>
-            {currentDocs.map((d) => (
-              <tr>
-                <td>
-                  {d.document_name}
-                  {d.replace_reason && <div class="text-xs text-slate-500">Versión nueva: {d.replace_reason}</div>}
-                </td>
-                <td>{DOCUMENT_TYPE_LABELS[d.document_type]}</td>
-                <td>
-                  {d.file_path ? (
-                    <a class="badge badge-green" href={supportHref(d.file_path)} target="_blank" rel="noopener">Ver archivo</a>
-                  ) : canUpload ? (
-                    <form method="post" class="min-w-48 space-y-1">
-                      <input type="hidden" name="_action" value="attach_document" />
-                      <input type="hidden" name="document_id" value={d.id} />
-                      <SupportFile kind="convenios" name="file_path" label="Adjuntar archivo" compact />
-                      <button class="btn btn-sm" type="submit">Guardar archivo</button>
-                    </form>
-                  ) : (
-                    <span class="badge">Pendiente</span>
-                  )}
-                </td>
-                <td class="text-xs text-slate-500">{fmtDateTime(d.uploaded_at)} · {d.users_profiles?.full_name}</td>
-                <td class="space-y-1">
-                  {canEdit && (
-                    <form method="post">
-                      <input type="hidden" name="_action" value="delete_document" />
-                      <input type="hidden" name="document_id" value={d.id} />
-                      <button class="btn btn-sm btn-danger" type="submit">Eliminar</button>
-                    </form>
-                  )}
-                  {canUpload && (
-                    <details>
-                      <summary class="cursor-pointer text-xs text-brand-700">Nueva versión</summary>
-                      <form method="post" class="mt-2 min-w-56 space-y-2">
-                        <input type="hidden" name="_action" value="replace_document" />
-                        <input type="hidden" name="replaces_id" value={d.id} />
-                        <input class="input" name="document_name" required value={d.document_name} />
-                        <input class="input" name="replace_reason" required maxlength="300" placeholder="Motivo (ej. otrosí, escaneo legible)" />
-                        <SupportFile kind="convenios" name="file_path" label="Archivo" required compact />
-                        <button class="btn btn-sm" type="submit">Guardar versión</button>
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr><th>Documento</th><th>Tipo</th><th>Archivo</th><th>Registrado</th><th></th></tr></thead>
+            <tbody>
+              {currentDocs.map((d) => (
+                <tr>
+                  <td>
+                    {d.document_name}
+                    {d.replace_reason && <div class="text-xs text-slate-500">Versión nueva: {d.replace_reason}</div>}
+                  </td>
+                  <td>{DOCUMENT_TYPE_LABELS[d.document_type]}</td>
+                  <td>
+                    {d.file_path ? (
+                      <a class="badge badge-green" href={supportHref(d.file_path)} target="_blank" rel="noopener">Ver archivo</a>
+                    ) : canUpload ? (
+                      <form method="post" class="min-w-48 space-y-1">
+                        <input type="hidden" name="_action" value="attach_document" />
+                        <input type="hidden" name="document_id" value={d.id} />
+                        <SupportFile kind="convenios" name="file_path" label="Adjuntar archivo" compact />
+                        <button class="btn btn-sm" type="submit">Guardar archivo</button>
                       </form>
-                    </details>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {!currentDocs.length && <tr><td colspan="5" class="text-slate-500">Sin documentos registrados.</td></tr>}
-          </tbody>
-        </table>
+                    ) : (
+                      <span class="badge">Pendiente</span>
+                    )}
+                  </td>
+                  <td class="text-xs text-slate-500">{fmtDateTime(d.uploaded_at)} · {d.users_profiles?.full_name}</td>
+                  <td class="space-y-1">
+                    {canEdit && (
+                      <form method="post">
+                        <input type="hidden" name="_action" value="delete_document" />
+                        <input type="hidden" name="document_id" value={d.id} />
+                        <button class="btn btn-sm btn-danger" type="submit">Eliminar</button>
+                      </form>
+                    )}
+                    {canUpload && (
+                      <details>
+                        <summary class="cursor-pointer text-xs text-brand-700">Nueva versión</summary>
+                        <form method="post" class="mt-2 min-w-56 space-y-2">
+                          <input type="hidden" name="_action" value="replace_document" />
+                          <input type="hidden" name="replaces_id" value={d.id} />
+                          <input class="input" name="document_name" required value={d.document_name} />
+                          <input class="input" name="replace_reason" required maxlength="300" placeholder="Motivo (ej. otrosí, escaneo legible)" />
+                          <SupportFile kind="convenios" name="file_path" label="Archivo" required compact />
+                          <button class="btn btn-sm" type="submit">Guardar versión</button>
+                        </form>
+                      </details>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {!currentDocs.length && <tr><td colspan="5" class="text-slate-500">Sin documentos registrados.</td></tr>}
+            </tbody>
+          </table>
+        </div>
         {
           previousDocs.length > 0 && (
             <details class="mt-3 text-sm">

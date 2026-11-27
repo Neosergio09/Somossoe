@@ -100,15 +100,17 @@ const field = (name: string, spec: FabricationSpec | null | undefined, itemId: s
 
           {isRevealed && spec && (
             <div class="space-y-2">
-              <table class="table text-xs">
-                <thead>
-                  <tr><th></th>{EYE_FIELDS.map((f) => <th>{f.label}</th>)}</tr>
-                </thead>
-                <tbody>
-                  <tr><th>OD</th>{EYE_FIELDS.map((f) => <td>{fmtRx(spec[`od_${f.key}` as keyof FabricationSpec], f.kind)}</td>)}</tr>
-                  <tr><th>OI</th>{EYE_FIELDS.map((f) => <td>{fmtRx(spec[`os_${f.key}` as keyof FabricationSpec], f.kind)}</td>)}</tr>
-                </tbody>
-              </table>
+              <div class="table-wrap">
+                <table class="table text-xs">
+                  <thead>
+                    <tr><th></th>{EYE_FIELDS.map((f) => <th>{f.label}</th>)}</tr>
+                  </thead>
+                  <tbody>
+                    <tr><th>OD</th>{EYE_FIELDS.map((f) => <td>{fmtRx(spec[`od_${f.key}` as keyof FabricationSpec], f.kind)}</td>)}</tr>
+                    <tr><th>OI</th>{EYE_FIELDS.map((f) => <td>{fmtRx(spec[`os_${f.key}` as keyof FabricationSpec], f.kind)}</td>)}</tr>
+                  </tbody>
+                </table>
+              </div>
               <p class="text-xs text-slate-600">
                 DP total: {spec.pd_total_mm ?? '—'} · Fecha de la fórmula: {fmtDate(spec.prescription_date)} · Fuente:{' '}
                 {FABRICATION_SOURCE_LABELS[spec.source] ?? spec.source}

@@ -219,20 +219,22 @@ const origin = (o: (typeof orders)[number]) =>
               <div class="grid gap-4 lg:grid-cols-3">
                 <div>
                   {plan.length ? (
-                    <table class="table text-xs">
-                      <thead><tr><th>Cuota</th><th>Vence</th><th class="text-right">Valor</th><th class="text-right">Pagado</th><th></th></tr></thead>
-                      <tbody>
-                        {plan.map((c) => (
-                          <tr class:list={[c.superseded_by_reclassification_id && 'text-slate-400 line-through']}>
-                            <td>{c.installment_number}</td>
-                            <td>{fmtDate(c.due_date)}</td>
-                            <td class="text-right">{cop(c.expected_amount)}</td>
-                            <td class="text-right">{cop(c.paid_amount)}</td>
-                            <td>{c.superseded_by_reclassification_id ? 'Reemplazada' : <span class={INSTALLMENT_STATUS_BADGE[c.status ?? 'pendiente']}>{INSTALLMENT_STATUS_LABELS[c.status ?? 'pendiente']}</span>}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    <div class="table-wrap">
+                      <table class="table text-xs">
+                        <thead><tr><th>Cuota</th><th>Vence</th><th class="text-right">Valor</th><th class="text-right">Pagado</th><th></th></tr></thead>
+                        <tbody>
+                          {plan.map((c) => (
+                            <tr class:list={[c.superseded_by_reclassification_id && 'text-slate-400 line-through']}>
+                              <td>{c.installment_number}</td>
+                              <td>{fmtDate(c.due_date)}</td>
+                              <td class="text-right">{cop(c.expected_amount)}</td>
+                              <td class="text-right">{cop(c.paid_amount)}</td>
+                              <td>{c.superseded_by_reclassification_id ? 'Reemplazada' : <span class={INSTALLMENT_STATUS_BADGE[c.status ?? 'pendiente']}>{INSTALLMENT_STATUS_LABELS[c.status ?? 'pendiente']}</span>}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   ) : (
                     <p class="text-slate-500">Sin plan de cuotas.</p>
                   )}
