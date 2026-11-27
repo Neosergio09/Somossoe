@@ -6,13 +6,13 @@
  * por el canal autorizado.
  */
 import AppLayout from '../../../layouts/AppLayout.astro';
-import { hasRole } from '../../../lib/auth';
+import { userRoles } from '../../../lib/auth';
 import { fmtDate, fmtDateTime } from '../../../lib/format';
 import { orderNumber } from '../../../lib/orders';
 import { EYE_FIELDS, FABRICATION_SOURCE_LABELS, fmtRx, type FabricationSpec } from '../../../lib/fabrication';
 
 const id = Astro.params.id!;
-if (!hasRole(Astro.locals, 'operacion') || Astro.locals.viewAs) return Astro.redirect(`/ordenes/${id}`);
+if (!userRoles(Astro.locals).includes('operacion') || Astro.locals.viewAs) return Astro.redirect(`/ordenes/${id}`);
 const { supabase } = Astro.locals;
 
 const { data: o } = await supabase.from('v_orders').select('id, order_number, buyer_name, company_name').eq('id', id).maybeSingle();
