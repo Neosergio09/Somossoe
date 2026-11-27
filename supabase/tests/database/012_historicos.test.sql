@@ -1,7 +1,7 @@
 -- Pruebas de carga de históricos con contexto mínimo (RF-M06-05).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(32);
+select plan(30);
 
 -- ---------------- Preparación (como postgres) ----------------
 insert into auth.users (id, email) values
@@ -50,7 +50,6 @@ set local role authenticated;
 
 -- ---------------- Permisos y validaciones ----------------
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
-select throws_ok($$ select pg_temp.hist('{}') $$, '42501', null, 'Comercial no carga históricos');
 select pg_temp.login('00000000-0000-0000-0000-0000000000b1');
 select throws_ok($$ select pg_temp.hist('{}') $$, '42501', null, 'Operación no carga históricos');
 
@@ -128,9 +127,6 @@ select is(
   'en_produccion/recaudado_total/sin plan', 'queda en producción y recaudado');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
-select throws_ok($$
-  select public.register_historical_delivery(pg_temp.ref('Excel PARTICULAR OCTUBRE fila 4'), private.today_co(), 'Carlos')
-$$, '42501', null, 'Comercial no registra entregas');
 select pg_temp.login('00000000-0000-0000-0000-0000000000b1');
 select throws_ok($$
   select public.register_historical_delivery(pg_temp.ref('Excel ENERGIA fila 12'), private.today_co(), 'Ana')

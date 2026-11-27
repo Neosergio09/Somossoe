@@ -2,7 +2,7 @@
 -- oportunidades, Facturación Estimada, bitácora y embudo.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(39);
+select plan(38);
 
 -- ---------------- Preparación (como postgres) ----------------
 insert into auth.users (id, email) values
@@ -44,8 +44,8 @@ select lives_ok($$
 $$, 'comercial crea una empresa');
 select is(
   (select is_nit_provisional from public.companies where name = 'Marisol SAS'),
-  true,
-  'la empresa creada por comercial queda con NIT provisional'
+  false,
+  'Comercial (acceso total) crea la empresa con NIT en firme'
 );
 select throws_ok($$
   insert into public.companies (name, sector) values ('MARISOL S.A.S', 'Manufactura')
@@ -216,9 +216,6 @@ select throws_ok($$
   update public.deals_opportunities set target_employees_n = 500
   where deal_name_branch = 'Marisol SAS - Sede Medellín'
 $$, 'P0001', null, 'N no puede superar el total de empleados de la empresa');
-select throws_ok($$
-  select public.recalculate_deal_forecast((select id from public.deals_opportunities limit 1))
-$$, '42501', null, 'comercial no puede recalcular la Facturación Estimada');
 
 -- ---------------- Congelamiento de C y T (Dirección) ----------------
 select pg_temp.login('00000000-0000-0000-0000-0000000000d1');

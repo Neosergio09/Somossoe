@@ -1,15 +1,27 @@
 import type { AstroGlobal } from 'astro';
 import { setFlash } from './flash';
-import { ROLE_LABELS, type AppRole } from './labels';
+import type { AppRole } from './labels';
 
-/** Super administrador: pasa todas las guardas de rol y de propiedad (igual que en la BD). */
-export function isSuperadmin(locals: App.Locals): boolean {
-  return !!locals.profile?.active && locals.profile.role === 'superadmin';
+/**
+ * Acceso total (27-nov-2026): Super administrador o cualquier usuario con el
+ * rol Comercial. Pasa todas las guardas de rol y de propiedad (igual que
+ * private.has_full_access en la BD), salvo la gestión de usuarios.
+ */
+export function hasFullAccess(locals: App.Locals): boolean {
+  const p = locals.profile;
+  if (!p?.active || !p.role) return false;
+  return p.role === 'superadmin' || [p.role, ...(p.extra_roles ?? [])].includes('comercial');
 }
 
-/** Roles que pueden usar "Ver como" (previsualizar la interfaz de otro rol). */
-export function canUseViewAs(role: AppRole | null | undefined): boolean {
-  return role === 'direccion' || role === 'superadmin';
+/** Gestión de usuarios: solo Super administrador y Dirección (private.can_manage_users). */
+export function canManageUsers(locals: App.Locals): boolean {
+  const p = locals.profile;
+  return !!p?.active && (p.role === 'superadmin' || p.role === 'direccion');
+}
+
+/** «Ver como» está oculto para todos (27-nov-2026). */
+export function canUseViewAs(_role: AppRole | null | undefined): boolean {
+  return false;
 }
 
 /** Rol principal más roles adicionales del usuario activo (SRS 1.6 §3.3). */
@@ -25,7 +37,7 @@ export function userRoles(locals: App.Locals): AppRole[] {
  */
 export function hasRole(locals: App.Locals, ...roles: AppRole[]): boolean {
   const mine = userRoles(locals);
-  return mine.includes('superadmin') || mine.some((r) => roles.includes(r));
+  return hasFullAccess(locals) || mine.some((r) => roles.includes(r));
 }
 
 /**
@@ -38,7 +50,7 @@ export function isOwnerComercial(
   { allowUnassigned = false } = {},
 ): boolean {
   if (!hasRole(locals, 'comercial')) return false;
-  if (isSuperadmin(locals)) return true;
+  if (hasFullAccess(locals)) return true;
   if (assignedUserId == null) return allowUnassigned;
   return assignedUserId === locals.userId;
 }
@@ -49,7 +61,7 @@ export function isOwnerComercial(
  */
 export function denyUnless(Astro: AstroGlobal, back: string, ...roles: AppRole[]): Response | null {
   if (hasRole(Astro.locals, ...roles)) return null;
-  const who = roles.map((r) => ROLE_LABELS[r]).join(' o ');
-  setFlash(Astro.cookies, { type: 'error', message: `Esta acción le corresponde a ${who}.` });
+  // Sin nombres de roles: los roles están ocultos para todos (27-nov-2026)
+  setFlash(Astro.cookies, { type: 'error', message: 'Su usuario no tiene permiso para esta acción.' });
   return Astro.redirect(back);
 }

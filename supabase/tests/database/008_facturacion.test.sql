@@ -1,7 +1,7 @@
 -- Pruebas de facturas de Alegra, estado contable y etapa 7 (Etapa 10).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(26);
+select plan(25);
 
 -- ---------------- Preparación (como postgres) ----------------
 insert into auth.users (id, email) values
@@ -75,10 +75,6 @@ select public.create_order(
   jsonb_build_array(jsonb_build_object('item_type', 'montura', 'frame_description', 'C', 'quantity', 1, 'unit_price', 150000)));
 
 -- ---------------- Registro de facturas ----------------
-select throws_ok($$
-  insert into public.alegra_invoices (alegra_invoice_number, invoice_date, invoiced_amount, company_id)
-  values ('FE-1', private.today_co(), 1000, 'aaaaaaaa-0000-0000-0000-000000000001')
-$$, '42501', null, 'Comercial no registra facturas');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000a1');
 select throws_ok($$

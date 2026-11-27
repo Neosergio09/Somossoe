@@ -1,7 +1,7 @@
 -- Pruebas de producción, entregas y posventa (Etapas 08, 09 y 12).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(37);
+select plan(35);
 
 -- ---------------- Preparación (como postgres) ----------------
 insert into auth.users (id, email) values
@@ -88,10 +88,6 @@ select pg_temp.login('00000000-0000-0000-0000-0000000000a1');
 update public.orders set requirements_verified = true where notes in ('Nómina', 'Contado');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
-select throws_ok($$
-  insert into public.order_productions (order_id, lab_provider_id, promised_date)
-  values (pg_temp.ord('Nómina'), '11111111-0000-0000-0000-000000000001', private.today_co() + 7)
-$$, '42501', null, 'Comercial no libera a producción');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000b1');
 select lives_ok($$
@@ -194,10 +190,6 @@ select throws_ok($$
 $$, 'P0001', null, 'no hay posventa sin productos entregados');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
-select throws_ok($$
-  insert into public.post_sale_warranties (order_id, incident_type, description, responsible_user_id)
-  values (pg_temp.ord('Nómina'), 'garantia', 'x', '00000000-0000-0000-0000-0000000000b1')
-$$, '42501', null, 'Comercial no registra garantías');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000b1');
 select lives_ok($$

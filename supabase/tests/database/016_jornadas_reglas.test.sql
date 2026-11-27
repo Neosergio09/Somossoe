@@ -2,7 +2,7 @@
 -- capacidad y reprogramación de sesiones con historial.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(34);
+select plan(33);
 
 -- ---------------- Preparación (como postgres) ----------------
 insert into auth.users (id, email) values
@@ -103,9 +103,6 @@ select is(
   '00000000-0000-0000-0000-0000000000b1'::uuid, 'el historial guarda quién reprogramó');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
-select throws_ok($$
-  select public.reschedule_campaign_session(pg_temp.sid(), private.today_co() + 5, '09:00', '13:00', 'Sala B', 'x')
-$$, '42501', null, 'Comercial no reprograma');
 select is((select count(*)::int from public.campaign_session_reschedules), 1, 'Comercial consulta el historial');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000d1');

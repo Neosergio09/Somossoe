@@ -1,7 +1,7 @@
 -- Pruebas de la revisión de RLS y privilegios.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(14);
+select plan(13);
 
 -- ---------------- Preparación (como postgres) ----------------
 insert into auth.users (id, email) values
@@ -90,7 +90,6 @@ $$, 'con otra Dirección activa sí se puede desactivar');
 select pg_temp.login('00000000-0000-0000-0000-0000000000b1');
 select is((select count(*) from public.audit_logs), 0::bigint, 'Operación no lee la auditoría');
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
-select is((select count(*) from public.audit_logs), 0::bigint, 'Comercial no lee la auditoría');
 select pg_temp.login('00000000-0000-0000-0000-0000000000a1');
 select ok((select count(*) from public.audit_logs) > 0, 'Administración / Cartera lee la auditoría');
 

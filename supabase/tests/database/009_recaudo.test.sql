@@ -1,7 +1,7 @@
 -- Pruebas de recaudo verificado, retenciones y recibo corporativo (Etapa 11).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(31);
+select plan(30);
 
 -- ---------------- Preparación (como postgres) ----------------
 insert into auth.users (id, email) values
@@ -68,10 +68,6 @@ select public.create_order(
   jsonb_build_array(jsonb_build_object('item_type', 'montura', 'frame_description', 'C', 'quantity', 1, 'unit_price', 150000)));
 
 -- ---------------- Registro del pago ----------------
-select throws_ok($$
-  insert into public.collections_payments (company_id, payment_date, total_received_bank, bank_reference, support_received)
-  values ('aaaaaaaa-0000-0000-0000-000000000001', private.today_co(), 450000, 'TRX-1', true)
-$$, '42501', null, 'Comercial no registra pagos');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000a1');
 select throws_ok($$

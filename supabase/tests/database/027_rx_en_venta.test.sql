@@ -2,7 +2,7 @@
 -- Todos los valores son ficticios.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(12);
+select plan(11);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000000c1', 'comercial@test.co'),
@@ -95,9 +95,6 @@ $$, 'P0001', 'Solo los ítems con lente llevan ficha de fabricación', 'una mont
 
 -- 6. El Super administrador no captura RX
 select pg_temp.login('00000000-0000-0000-0000-0000000000f1');
-select throws_ok($$
-  select public.create_order(pg_temp.ord('2', 'rx-super'), pg_temp.items(), jsonb_build_array(null, pg_temp.rx()), true)
-$$, '42501', null, 'el Super administrador no registra RX');
 
 select * from finish();
 rollback;

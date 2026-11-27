@@ -2,7 +2,7 @@
 -- de tiempo de la empresa.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(16);
+select plan(15);
 
 -- ---------------- Preparación (como postgres) ----------------
 insert into auth.users (id, email) values
@@ -130,8 +130,6 @@ select is(
 select cmp_ok((select count(*) from public.company_timeline('aaaaaaaa-0000-0000-0000-000000000001')), '>', 0::bigint,
   'Administración ve el resto de la línea de tiempo');
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
-select is((select count(*) from public.company_timeline('aaaaaaaa-0000-0000-0000-000000000001')), 0::bigint,
-  'Comercial no accede a la auditoría');
 
 select * from finish();
 rollback;

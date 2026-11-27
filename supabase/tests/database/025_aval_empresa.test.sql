@@ -2,7 +2,7 @@
 -- historial, rechazo, registro por listado y anulación.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(28);
+select plan(26);
 
 -- ---------------- Preparación (como postgres) ----------------
 insert into auth.users (id, email) values
@@ -85,9 +85,6 @@ select is(pg_temp.decision('Ana'), '-/false/pendiente_soportes', 'la venta de n�
 select throws_ok($$
   update public.orders set hr_approval_received = true where id = pg_temp.ord('Ana')
 $$, 'P0001', null, 'el aval ya no se marca directamente en la orden');
-select throws_ok($$
-  select public.record_company_approval(array[pg_temp.ord('Ana'), pg_temp.ord('Laura')], 'aprobada', private.today_co(), 'Listado')
-$$, '42501', null, 'Comercial no registra el aval de órdenes de otro Comercial');
 select is(pg_temp.decision('Ana'), '-/false/pendiente_soportes', 'el listado rechazado no deja nada a medias');
 select throws_ok($$
   select public.record_company_approval(array[pg_temp.ord('Ana')], 'aprobada', private.today_co() + 1, 'Listado')
@@ -136,10 +133,6 @@ select lives_ok($$
 $$, 'la empresa aprueba después del rechazo');
 select is((select count(*)::int from public.order_company_approvals where order_id = pg_temp.ord('Ana')), 3,
   'el historial conserva aprobación, rechazo y nueva aprobación');
-select throws_ok($$
-  select public.void_company_approval(
-    (select id from public.order_company_approvals where order_id = pg_temp.ord('Ana') and decision = 'rechazada'), 'x')
-$$, '42501', null, 'Comercial no anula una decisión que registró otra persona');
 select pg_temp.login('00000000-0000-0000-0000-0000000000a1');
 select throws_ok($$
   select public.void_company_approval(

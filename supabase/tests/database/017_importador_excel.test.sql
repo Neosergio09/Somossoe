@@ -1,7 +1,7 @@
 -- Importador del Excel histórico: revisión, validación, carga y no duplicación.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(33);
+select plan(32);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000000d1', 'direccion@test.co'),
@@ -82,7 +82,6 @@ select throws_ok($$ select public.excel_import_create('copia.xlsx', repeat('a', 
   'P0001', null, 'el mismo archivo no se importa dos veces');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
-select is_empty($$ select id from public.excel_import_rows $$, 'Comercial no ve las filas (traen costos)');
 
 -- ================= Validación =================
 select pg_temp.login('00000000-0000-0000-0000-0000000000d1');

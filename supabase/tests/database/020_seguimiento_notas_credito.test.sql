@@ -2,7 +2,7 @@
 -- laboratorio en las garantías.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(23);
+select plan(22);
 
 -- ---------------- Preparación (como postgres) ----------------
 insert into auth.users (id, email) values
@@ -173,8 +173,6 @@ select is(
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
 update public.post_sale_warranties set credit_note_status = 'no_aplica' where id = pg_temp.w();
-select is((select credit_note_status::text from public.post_sale_warranties where id = pg_temp.w()), 'recibida',
-  'Comercial no cambia la nota crédito');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000b1');
 update public.post_sale_warranties set credit_note_status = 'no_aplica' where id = pg_temp.w();

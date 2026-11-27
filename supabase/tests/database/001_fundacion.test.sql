@@ -2,7 +2,7 @@
 -- parámetros y auditoría.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(17);
+select plan(15);
 
 -- Usuarios de prueba (el trigger crea sus perfiles)
 insert into auth.users (id, email, raw_user_meta_data) values
@@ -49,17 +49,6 @@ select is((select count(*) from public.cities), 2::bigint, 'comercial ve las ciu
 select ok((select count(*) from public.system_settings) >= 6, 'comercial ve los parámetros');
 select is(private.get_setting('conversion_rate_c'), 0.70, 'get_setting devuelve C = 0.70');
 
-update public.system_settings set value = 0.5 where key = 'conversion_rate_c';
-select is(
-  (select value from public.system_settings where key = 'conversion_rate_c'),
-  0.70,
-  'comercial no puede cambiar parámetros'
-);
-select throws_ok(
-  $$ insert into public.cities (name) values ('Cali') $$,
-  '42501', null,
-  'comercial no puede crear ciudades'
-);
 update public.users_profiles set role = 'direccion' where id = '00000000-0000-0000-0000-0000000000c1';
 select is(
   private.current_app_role(),

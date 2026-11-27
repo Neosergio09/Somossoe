@@ -1,7 +1,7 @@
 -- Pruebas de convenios (Etapa 05) y jornadas (Etapa 06).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(33);
+select plan(31);
 
 -- ---------------- Preparación (como postgres) ----------------
 insert into auth.users (id, email) values
@@ -123,9 +123,6 @@ $$, 'P0001', null, 'las condiciones de un convenio activo no se modifican');
 select throws_ok($$
   delete from public.agreement_documents where agreement_id = pg_temp.marisol_agreement()
 $$, 'P0001', null, 'los documentos de un convenio activo no se eliminan');
-select throws_ok($$
-  update public.agreements_convenios set reviewed_at = now() where id = pg_temp.marisol_agreement()
-$$, '42501', null, 'comercial no marca la revisión de Dirección');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000d1');
 select lives_ok($$
@@ -145,10 +142,6 @@ $$, 'con convenio aprobado la oportunidad pasa a Convenio Firmado');
 
 -- ---------------- Jornadas ----------------
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
-select throws_ok($$
-  insert into public.campaigns_jornadas (deal_id, agreement_id, responsible_user_id)
-  values (pg_temp.marisol_deal(), pg_temp.marisol_agreement(), '00000000-0000-0000-0000-0000000000b1')
-$$, '42501', null, 'comercial no crea jornadas');
 
 select pg_temp.login('00000000-0000-0000-0000-0000000000b1');
 select throws_ok($$

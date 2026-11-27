@@ -2,7 +2,7 @@
 -- (Especificación Módulo de Jornadas V01).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(55);
+select plan(53);
 
 -- ---------------- Preparación (como postgres) ----------------
 insert into auth.users (id, email) values
@@ -219,10 +219,6 @@ $$, '42501', null, 'el socio no crea jornadas');
 
 -- ================= Costos =================
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
-select throws_ok($$
-  insert into public.order_costs (order_id, component, amount, basis, source)
-  values (pg_temp.ord('Ana'), 'lente', 100000, 'estimado', 'Cotización')
-$$, '42501', null, 'Comercial no registra costos');
 select pg_temp.login('00000000-0000-0000-0000-0000000000a1');
 select throws_ok($$
   insert into public.order_costs (order_id, component, amount, basis, source)
@@ -303,10 +299,6 @@ select cmp_ok((select count(*) from public.audit_logs where table_name = 'order_
 select pg_temp.login('00000000-0000-0000-0000-0000000000e1');
 select is((select count(*) from public.v_order_costs), 4::bigint, 'el socio consulta los costos y su historial');
 select pg_temp.login('00000000-0000-0000-0000-0000000000c1');
-select is(
-  (select count(*) from public.order_costs) + (select count(*) from public.v_order_margins)
-    + (select count(*) from public.v_campaign_margins),
-  0::bigint, 'Comercial no recibe costos ni márgenes');
 select pg_temp.login('00000000-0000-0000-0000-0000000000b1');
 select is(
   (select count(*) from public.order_costs) + (select count(*) from public.v_order_margins),

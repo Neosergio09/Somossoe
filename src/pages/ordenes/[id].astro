@@ -10,7 +10,7 @@ import DeliveriesPanel from '../../components/DeliveriesPanel.astro';
 import { activeLabs, fulfillmentActions } from '../../lib/fulfillment';
 import { itemLabel, loadDeliveries } from '../../lib/deliveries';
 import { activeUsers } from '../../lib/options';
-import { hasRole, isSuperadmin, userRoles } from '../../lib/auth';
+import { hasFullAccess, hasRole, userRoles } from '../../lib/auth';
 import { cop, fmtDate, fmtDateTime, pct, todayCo } from '../../lib/format';
 import { checkbox, date, ensure, ensureFresh, FormError, formVersion, int, parseForm, runActions, text, uuid, VERSION_FIELD, z } from '../../lib/forms';
 import {
@@ -497,10 +497,9 @@ const canVoidDecision = (r: { recorded_by: string | null }) => canDecide && (isA
 const fabricationRows = !isCancelled && !o.is_historical_migration
   ? ((await supabase.rpc('fabrication_spec_status', { p_order_id: id })).data ?? [])
   : [];
-const fabCanCapture = userRoles(Astro.locals).includes('comercial') && o.created_by === Astro.locals.userId && !released && !Astro.locals.viewAs;
-// Ficha RX: roles reales (sin el comodín del superadmin, igual que la BD)
-const fabCanOperate = userRoles(Astro.locals).includes('operacion') && !Astro.locals.viewAs;
-const fabCanRead = isSuperadmin(Astro.locals) && !Astro.locals.viewAs;
+const fabCanCapture = (hasFullAccess(Astro.locals) || (userRoles(Astro.locals).includes('comercial') && o.created_by === Astro.locals.userId)) && !released && !Astro.locals.viewAs;
+// Ficha RX: Operación real o acceso total (igual que la BD)
+const fabCanOperate = (hasFullAccess(Astro.locals) || userRoles(Astro.locals).includes('operacion')) && !Astro.locals.viewAs;
 let fabRevealed: { itemId: string; spec: FabricationSpec | null } | null = null;
 let fabError: string | null = null;
 const revealItem = Astro.url.searchParams.get('ver_ficha');
@@ -783,7 +782,6 @@ const plannedLabId = (await supabase.from('orders').select('planned_lab_provider
             rows={fabricationRows}
             canCapture={fabCanCapture}
             canOperate={fabCanOperate}
-            canRead={fabCanRead}
             released={released}
             required={fabRequired}
             hasConsent={!!buyer.data?.sensitive_data_consent_at}
