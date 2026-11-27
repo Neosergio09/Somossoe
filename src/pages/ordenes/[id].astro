@@ -542,7 +542,7 @@ const plannedLabId = (await supabase.from('orders').select('planned_lab_provider
       </p>
       <p class="text-xs text-slate-500">Registrada por {o.created_by_name ?? '—'} el {fmtDateTime(o.created_at)}</p>
     </div>
-    <div class="text-right">
+    <div class="sm:text-right">
       <div class="text-2xl font-semibold">{cop(o.total_amount)}</div>
       <div class="text-sm text-slate-600">
         {PAYMENT_MODALITY_LABELS[o.payment_modality!]}
@@ -696,26 +696,28 @@ const plannedLabId = (await supabase.from('orders').select('planned_lab_provider
               Cobro a: <strong>{COLLECTION_RESPONSIBLE_LABELS[o.collection_responsible!]}</strong>
               {o.collection_responsible === 'empleado' && <span class="text-slate-500"> (reclasificada; la modalidad original sigue siendo descuento de nómina)</span>}
             </p>
-            <table class="table">
-              <thead><tr><th>Cuota</th><th>Vence</th><th class="text-right">Valor</th><th class="text-right">Pagado</th><th>Estado</th></tr></thead>
-              <tbody>
-                {plan.map((c) => (
-                  <tr class:list={[c.superseded_by_reclassification_id && 'text-slate-400']}>
-                    <td>{c.installment_number}</td>
-                    <td class:list={[c.superseded_by_reclassification_id && 'line-through']}>{fmtDate(c.due_date)}</td>
-                    <td class:list={['text-right', c.superseded_by_reclassification_id && 'line-through']}>{cop(c.expected_amount)}</td>
-                    <td class="text-right">{cop(c.paid_amount)}</td>
-                    <td>
-                      {c.superseded_by_reclassification_id ? (
-                        <span class="badge">Reemplazada</span>
-                      ) : (
-                        <span class={INSTALLMENT_STATUS_BADGE[c.status ?? 'pendiente']}>{INSTALLMENT_STATUS_LABELS[c.status ?? 'pendiente']}</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div class="table-wrap">
+              <table class="table">
+                <thead><tr><th>Cuota</th><th>Vence</th><th class="text-right">Valor</th><th class="text-right">Pagado</th><th>Estado</th></tr></thead>
+                <tbody>
+                  {plan.map((c) => (
+                    <tr class:list={[c.superseded_by_reclassification_id && 'text-slate-400']}>
+                      <td>{c.installment_number}</td>
+                      <td class:list={[c.superseded_by_reclassification_id && 'line-through']}>{fmtDate(c.due_date)}</td>
+                      <td class:list={['text-right', c.superseded_by_reclassification_id && 'line-through']}>{cop(c.expected_amount)}</td>
+                      <td class="text-right">{cop(c.paid_amount)}</td>
+                      <td>
+                        {c.superseded_by_reclassification_id ? (
+                          <span class="badge">Reemplazada</span>
+                        ) : (
+                          <span class={INSTALLMENT_STATUS_BADGE[c.status ?? 'pendiente']}>{INSTALLMENT_STATUS_LABELS[c.status ?? 'pendiente']}</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <p class="mt-2 text-xs text-slate-500">
               El descuento reportado por la empresa no acredita pago: las cuotas solo se abonan con pagos verificados en bancos (M06).
             </p>

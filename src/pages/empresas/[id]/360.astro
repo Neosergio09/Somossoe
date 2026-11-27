@@ -168,24 +168,26 @@ const hasFilter = Object.values(filters).some(Boolean);
     <!-- 2. Convenios y documentación -->
     <section class="card" id="convenios">
       <h2 class="mb-3">2. Convenios y documentación</h2>
-      <table class="table text-sm">
-        <thead><tr><th>Convenio</th><th>Estado</th><th>Vigencia</th><th>Condiciones</th><th>Documentos</th></tr></thead>
-        <tbody>
-          {agreements.data?.map((a) => (
-            <tr>
-              <td><a href={`/convenios/${a.id}`}>{a.deal_name_branch ?? 'Convenio marco'}</a></td>
-              <td><span class={AGREEMENT_STATUS_BADGE[a.effective_status ?? 'borrador']}>{AGREEMENT_STATUS_LABELS[a.effective_status ?? 'borrador']}</span></td>
-              <td class="whitespace-nowrap text-xs">{fmtDate(a.valid_from)} – {fmtDate(a.valid_until)}</td>
-              <td class="text-xs">Hasta {a.max_installments} cuotas {a.payroll_frequency}{a.hr_approval_required && ' · requiere aval de RRHH'}</td>
-              <td class="text-xs">
-                {a.documents_count} doc.{a.has_signed_document ? ' · convenio firmado ✓' : <span class="text-amber-700"> · sin convenio firmado</span>}
-                {Number(a.documents_pending_file) > 0 && <span class="text-slate-500"> · {a.documents_pending_file} sin archivo</span>}
-              </td>
-            </tr>
-          ))}
-          {!agreements.data?.length && <tr><td colspan="5" class="text-slate-500">Sin convenios.</td></tr>}
-        </tbody>
-      </table>
+      <div class="table-wrap">
+        <table class="table text-sm">
+          <thead><tr><th>Convenio</th><th>Estado</th><th>Vigencia</th><th>Condiciones</th><th>Documentos</th></tr></thead>
+          <tbody>
+            {agreements.data?.map((a) => (
+              <tr>
+                <td><a href={`/convenios/${a.id}`}>{a.deal_name_branch ?? 'Convenio marco'}</a></td>
+                <td><span class={AGREEMENT_STATUS_BADGE[a.effective_status ?? 'borrador']}>{AGREEMENT_STATUS_LABELS[a.effective_status ?? 'borrador']}</span></td>
+                <td class="whitespace-nowrap text-xs">{fmtDate(a.valid_from)} – {fmtDate(a.valid_until)}</td>
+                <td class="text-xs">Hasta {a.max_installments} cuotas {a.payroll_frequency}{a.hr_approval_required && ' · requiere aval de RRHH'}</td>
+                <td class="text-xs">
+                  {a.documents_count} doc.{a.has_signed_document ? ' · convenio firmado ✓' : <span class="text-amber-700"> · sin convenio firmado</span>}
+                  {Number(a.documents_pending_file) > 0 && <span class="text-slate-500"> · {a.documents_pending_file} sin archivo</span>}
+                </td>
+              </tr>
+            ))}
+            {!agreements.data?.length && <tr><td colspan="5" class="text-slate-500">Sin convenios.</td></tr>}
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <!-- 3. Embudo, bitácora y jornadas -->
@@ -216,23 +218,25 @@ const hasFilter = Object.values(filters).some(Boolean);
       <div class="mt-4 grid gap-4 lg:grid-cols-2">
         <div>
           <h3 class="mb-1 text-sm font-semibold">Jornadas</h3>
-          <table class="table text-sm">
-            <thead><tr><th>Jornada</th><th>Estado</th><th class="text-right">Atendidos</th><th class="text-right">Conversión</th></tr></thead>
-            <tbody>
-              {campaigns.data?.map((j) => {
-                const buyers = buyersByCampaign.get(j.id!)?.size ?? 0;
-                return (
-                  <tr>
-                    <td><a href={`/jornadas/${j.id}`}>{fmtDate(j.first_session_date)}</a><div class="text-xs text-slate-500">{j.city_name}{j.branch_name && ` · ${j.branch_name}`}</div></td>
-                    <td><span class={CAMPAIGN_STATUS_BADGE[j.status!]}>{CAMPAIGN_STATUS_LABELS[j.status!]}</span></td>
-                    <td class="text-right">{j.attended_headcount}</td>
-                    <td class="text-right text-xs">{buyers} compradores{Number(j.attended_headcount) > 0 && ` · ${pct(buyers / Number(j.attended_headcount))}`}</td>
-                  </tr>
-                );
-              })}
-              {!campaigns.data?.length && <tr><td colspan="4" class="text-slate-500">Sin jornadas.</td></tr>}
-            </tbody>
-          </table>
+          <div class="table-wrap">
+            <table class="table text-sm">
+              <thead><tr><th>Jornada</th><th>Estado</th><th class="text-right">Atendidos</th><th class="text-right">Conversión</th></tr></thead>
+              <tbody>
+                {campaigns.data?.map((j) => {
+                  const buyers = buyersByCampaign.get(j.id!)?.size ?? 0;
+                  return (
+                    <tr>
+                      <td><a href={`/jornadas/${j.id}`}>{fmtDate(j.first_session_date)}</a><div class="text-xs text-slate-500">{j.city_name}{j.branch_name && ` · ${j.branch_name}`}</div></td>
+                      <td><span class={CAMPAIGN_STATUS_BADGE[j.status!]}>{CAMPAIGN_STATUS_LABELS[j.status!]}</span></td>
+                      <td class="text-right">{j.attended_headcount}</td>
+                      <td class="text-right text-xs">{buyers} compradores{Number(j.attended_headcount) > 0 && ` · ${pct(buyers / Number(j.attended_headcount))}`}</td>
+                    </tr>
+                  );
+                })}
+                {!campaigns.data?.length && <tr><td colspan="4" class="text-slate-500">Sin jornadas.</td></tr>}
+              </tbody>
+            </table>
+          </div>
         </div>
         <div>
           <h3 class="mb-1 text-sm font-semibold">Bitácora reciente</h3>
@@ -328,22 +332,24 @@ const hasFilter = Object.values(filters).some(Boolean);
             </p>
           )}
           <h3 class="mb-1 mt-4 text-sm font-semibold">Recibos de caja corporativos</h3>
-          <table class="table text-sm">
-            <thead><tr><th>Recibo</th><th>Fecha</th><th>Referencia</th><th class="text-right">Recibido</th><th class="text-right">Asignado</th><th class="text-right">Sin asignar</th></tr></thead>
-            <tbody>
-              {payments.data?.map((p) => (
-                <tr class:list={[p.is_voided && 'opacity-50 line-through']}>
-                  <td><a href={`/recaudo/${p.id}`}>RC-{String(p.payment_number).padStart(5, '0')}</a></td>
-                  <td class="whitespace-nowrap">{fmtDate(p.payment_date)}</td>
-                  <td>{p.bank_reference}</td>
-                  <td class="text-right whitespace-nowrap">{cop(p.total_received_bank)}</td>
-                  <td class="text-right whitespace-nowrap">{cop(p.allocated_amount)}</td>
-                  <td class="text-right whitespace-nowrap">{cop(p.unassigned_amount)}</td>
-                </tr>
-              ))}
-              {!payments.data?.length && <tr><td colspan="6" class="text-slate-500">Sin pagos de la empresa.</td></tr>}
-            </tbody>
-          </table>
+          <div class="table-wrap">
+            <table class="table text-sm">
+              <thead><tr><th>Recibo</th><th>Fecha</th><th>Referencia</th><th class="text-right">Recibido</th><th class="text-right">Asignado</th><th class="text-right">Sin asignar</th></tr></thead>
+              <tbody>
+                {payments.data?.map((p) => (
+                  <tr class:list={[p.is_voided && 'opacity-50 line-through']}>
+                    <td><a href={`/recaudo/${p.id}`}>RC-{String(p.payment_number).padStart(5, '0')}</a></td>
+                    <td class="whitespace-nowrap">{fmtDate(p.payment_date)}</td>
+                    <td>{p.bank_reference}</td>
+                    <td class="text-right whitespace-nowrap">{cop(p.total_received_bank)}</td>
+                    <td class="text-right whitespace-nowrap">{cop(p.allocated_amount)}</td>
+                    <td class="text-right whitespace-nowrap">{cop(p.unassigned_amount)}</td>
+                  </tr>
+                ))}
+                {!payments.data?.length && <tr><td colspan="6" class="text-slate-500">Sin pagos de la empresa.</td></tr>}
+              </tbody>
+            </table>
+          </div>
         </section>
       )
     }

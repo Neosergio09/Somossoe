@@ -101,68 +101,72 @@ const tiles: { label: string; value: string | number; href: string; tone?: strin
     <section class="card" id="producir">
       <h2 class="mb-1">1. ¿Qué está listo para producir?</h2>
       <p class="mb-3 text-xs text-slate-500">Requisitos verificados y sin liberar; abajo, lo que está bloqueado y por qué.</p>
-      <table class="table text-sm">
-        <thead><tr><th>Orden</th><th>Comprador</th><th class="text-right">Valor</th><th>Situación</th></tr></thead>
-        <tbody>
-          {ready.slice(0, 10).map((o) => (
-            <tr>
-              <td><a href={`/ordenes/${o.id}`}>{orderNumber(o.order_number)}</a></td>
-              <td>{o.buyer_name}<div class="text-xs text-slate-500">{o.company_name ?? 'Particular'}</div></td>
-              <td class="text-right whitespace-nowrap">{cop(o.total_amount)}</td>
-              <td><span class="badge badge-green">Lista para liberar</span></td>
-            </tr>
-          ))}
-          {blocked.slice(0, 10).map((o) => (
-            <tr>
-              <td><a href={`/ordenes/${o.id}`}>{orderNumber(o.order_number)}</a></td>
-              <td>{o.buyer_name}<div class="text-xs text-slate-500">{o.company_name ?? 'Particular'}</div></td>
-              <td class="text-right whitespace-nowrap">{cop(o.total_amount)}</td>
-              <td class="text-xs text-amber-700">{o.release_blockers?.join('; ')}</td>
-            </tr>
-          ))}
-          {(missingDocs.data ?? []).slice(0, 10).map((o) => (
-            <tr>
-              <td><a href={`/ordenes/${o.id}`}>{orderNumber(o.order_number)}</a></td>
-              <td>{o.buyer_name}<div class="text-xs text-slate-500">{o.company_name ?? 'Particular'}</div></td>
-              <td></td>
-              <td class="text-xs text-amber-700">
-                {o.missing_requirements?.length ? `Falta: ${o.missing_requirements.join('; ')}` : 'Pendiente de verificación de Administración'}
-              </td>
-            </tr>
-          ))}
-          {!releaseRows.length && !missingDocs.data?.length && <tr><td colspan="4" class="text-slate-500">Nada pendiente de liberar.</td></tr>}
-        </tbody>
-      </table>
+      <div class="table-wrap">
+        <table class="table text-sm">
+          <thead><tr><th>Orden</th><th>Comprador</th><th class="text-right">Valor</th><th>Situación</th></tr></thead>
+          <tbody>
+            {ready.slice(0, 10).map((o) => (
+              <tr>
+                <td><a href={`/ordenes/${o.id}`}>{orderNumber(o.order_number)}</a></td>
+                <td>{o.buyer_name}<div class="text-xs text-slate-500">{o.company_name ?? 'Particular'}</div></td>
+                <td class="text-right whitespace-nowrap">{cop(o.total_amount)}</td>
+                <td><span class="badge badge-green">Lista para liberar</span></td>
+              </tr>
+            ))}
+            {blocked.slice(0, 10).map((o) => (
+              <tr>
+                <td><a href={`/ordenes/${o.id}`}>{orderNumber(o.order_number)}</a></td>
+                <td>{o.buyer_name}<div class="text-xs text-slate-500">{o.company_name ?? 'Particular'}</div></td>
+                <td class="text-right whitespace-nowrap">{cop(o.total_amount)}</td>
+                <td class="text-xs text-amber-700">{o.release_blockers?.join('; ')}</td>
+              </tr>
+            ))}
+            {(missingDocs.data ?? []).slice(0, 10).map((o) => (
+              <tr>
+                <td><a href={`/ordenes/${o.id}`}>{orderNumber(o.order_number)}</a></td>
+                <td>{o.buyer_name}<div class="text-xs text-slate-500">{o.company_name ?? 'Particular'}</div></td>
+                <td></td>
+                <td class="text-xs text-amber-700">
+                  {o.missing_requirements?.length ? `Falta: ${o.missing_requirements.join('; ')}` : 'Pendiente de verificación de Administración'}
+                </td>
+              </tr>
+            ))}
+            {!releaseRows.length && !missingDocs.data?.length && <tr><td colspan="4" class="text-slate-500">Nada pendiente de liberar.</td></tr>}
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <!-- 2. Falta producir o entregar -->
     <section class="card">
       <h2 class="mb-1">2. ¿Qué falta producir o entregar?</h2>
       <p class="mb-3 text-xs text-slate-500">En laboratorio (las atrasadas frente a la fecha prometida, en rojo) y órdenes listas o con entrega parcial.</p>
-      <table class="table text-sm">
-        <thead><tr><th>Orden</th><th>Comprador</th><th>Laboratorio</th><th>Estado</th></tr></thead>
-        <tbody>
-          {labRows.slice(0, 12).map((p) => (
-            <tr class:list={[p.is_overdue && 'bg-red-50']}>
-              <td><a href={p.warranty_id ? `/garantias/${p.warranty_id}` : `/ordenes/${p.order_id}`}>{orderNumber(p.order_number)}</a>{p.warranty_id && <span class="badge ml-1">Garantía</span>}</td>
-              <td>{p.buyer_name}<div class="text-xs text-slate-500">{p.company_name ?? 'Particular'}</div></td>
-              <td>{p.lab_name}{p.lab_order_reference && <div class="text-xs text-slate-500">Pedido {p.lab_order_reference}</div>}</td>
-              <td class="whitespace-nowrap">
-                {p.is_overdue ? <span class="badge badge-red">Atrasada · {fmtDate(p.promised_date)}</span> : <span class="text-xs">Prometida {fmtDate(p.promised_date)}</span>}
-              </td>
-            </tr>
-          ))}
-          {(toDeliver.data ?? []).slice(0, 12).map((o) => (
-            <tr>
-              <td><a href={`/ordenes/${o.id}`}>{orderNumber(o.order_number)}</a></td>
-              <td>{o.buyer_name}<div class="text-xs text-slate-500">{o.company_name ?? 'Particular'}</div></td>
-              <td></td>
-              <td><span class={OPS_STATUS_BADGE[o.ops_status!]}>{OPS_STATUS_LABELS[o.ops_status!]}</span></td>
-            </tr>
-          ))}
-          {!labRows.length && !toDeliver.data?.length && <tr><td colspan="4" class="text-slate-500">Nada en laboratorio ni por entregar.</td></tr>}
-        </tbody>
-      </table>
+      <div class="table-wrap">
+        <table class="table text-sm">
+          <thead><tr><th>Orden</th><th>Comprador</th><th>Laboratorio</th><th>Estado</th></tr></thead>
+          <tbody>
+            {labRows.slice(0, 12).map((p) => (
+              <tr class:list={[p.is_overdue && 'bg-red-50']}>
+                <td><a href={p.warranty_id ? `/garantias/${p.warranty_id}` : `/ordenes/${p.order_id}`}>{orderNumber(p.order_number)}</a>{p.warranty_id && <span class="badge ml-1">Garantía</span>}</td>
+                <td>{p.buyer_name}<div class="text-xs text-slate-500">{p.company_name ?? 'Particular'}</div></td>
+                <td>{p.lab_name}{p.lab_order_reference && <div class="text-xs text-slate-500">Pedido {p.lab_order_reference}</div>}</td>
+                <td class="whitespace-nowrap">
+                  {p.is_overdue ? <span class="badge badge-red">Atrasada · {fmtDate(p.promised_date)}</span> : <span class="text-xs">Prometida {fmtDate(p.promised_date)}</span>}
+                </td>
+              </tr>
+            ))}
+            {(toDeliver.data ?? []).slice(0, 12).map((o) => (
+              <tr>
+                <td><a href={`/ordenes/${o.id}`}>{orderNumber(o.order_number)}</a></td>
+                <td>{o.buyer_name}<div class="text-xs text-slate-500">{o.company_name ?? 'Particular'}</div></td>
+                <td></td>
+                <td><span class={OPS_STATUS_BADGE[o.ops_status!]}>{OPS_STATUS_LABELS[o.ops_status!]}</span></td>
+              </tr>
+            ))}
+            {!labRows.length && !toDeliver.data?.length && <tr><td colspan="4" class="text-slate-500">Nada en laboratorio ni por entregar.</td></tr>}
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <!-- 3. Falta facturar o cobrar -->
@@ -182,37 +186,41 @@ const tiles: { label: string; value: string | number; href: string; tone?: strin
           )}
 
           <h3 class="mb-1 text-sm font-semibold">Cuotas</h3>
-          <table class="table mb-3 text-sm">
-            <thead><tr><th>Vence</th><th>Orden</th><th>Comprador</th><th>Cobro a</th><th class="text-right">Pendiente</th></tr></thead>
-            <tbody>
-              {installments.slice(0, 15).map((i) => (
-                <tr class:list={[i.is_overdue && 'bg-red-50']}>
-                  <td class="whitespace-nowrap">{i.is_overdue ? <span class="badge badge-red">{fmtDate(i.due_date)}</span> : fmtDate(i.due_date)}</td>
-                  <td><a href={`/ordenes/${i.order_id}`}>{orderNumber(i.order_number)}</a> <span class="text-xs text-slate-500">cuota {i.installment_number}</span></td>
-                  <td>{i.buyer_name}<div class="text-xs text-slate-500">{i.company_name ?? 'Particular'}</div></td>
-                  <td class="text-xs">{COLLECTION_RESPONSIBLE_LABELS[i.collection_responsible!]}</td>
-                  <td class="text-right whitespace-nowrap">{cop(i.pending_amount)}</td>
-                </tr>
-              ))}
-              {!installments.length && <tr><td colspan="5" class="text-slate-500">Sin cuotas vencidas ni próximas.</td></tr>}
-            </tbody>
-          </table>
+          <div class="table-wrap">
+            <table class="table mb-3 text-sm">
+              <thead><tr><th>Vence</th><th>Orden</th><th>Comprador</th><th>Cobro a</th><th class="text-right">Pendiente</th></tr></thead>
+              <tbody>
+                {installments.slice(0, 15).map((i) => (
+                  <tr class:list={[i.is_overdue && 'bg-red-50']}>
+                    <td class="whitespace-nowrap">{i.is_overdue ? <span class="badge badge-red">{fmtDate(i.due_date)}</span> : fmtDate(i.due_date)}</td>
+                    <td><a href={`/ordenes/${i.order_id}`}>{orderNumber(i.order_number)}</a> <span class="text-xs text-slate-500">cuota {i.installment_number}</span></td>
+                    <td>{i.buyer_name}<div class="text-xs text-slate-500">{i.company_name ?? 'Particular'}</div></td>
+                    <td class="text-xs">{COLLECTION_RESPONSIBLE_LABELS[i.collection_responsible!]}</td>
+                    <td class="text-right whitespace-nowrap">{cop(i.pending_amount)}</td>
+                  </tr>
+                ))}
+                {!installments.length && <tr><td colspan="5" class="text-slate-500">Sin cuotas vencidas ni próximas.</td></tr>}
+              </tbody>
+            </table>
+          </div>
           {installments.length > 15 && <p class="mb-3 text-xs"><a href="/recaudo?vista=cartera">Ver toda la cartera ({installments.length} cuotas)</a></p>}
 
           <h3 class="mb-1 text-sm font-semibold">Sin factura vinculada</h3>
-          <table class="table text-sm">
-            <thead><tr><th>Orden</th><th>Comprador</th><th class="text-right">Por facturar</th></tr></thead>
-            <tbody>
-              {invoiceRows.slice(0, 10).map((o) => (
-                <tr>
-                  <td><a href={`/ordenes/${o.id}`}>{orderNumber(o.order_number)}</a></td>
-                  <td>{o.buyer_name}<div class="text-xs text-slate-500">{o.company_name ?? 'Particular'}</div></td>
-                  <td class="text-right whitespace-nowrap">{cop(o.pending_amount)}</td>
-                </tr>
-              ))}
-              {!invoiceRows.length && <tr><td colspan="3" class="text-slate-500">Todo lo verificado tiene factura vinculada.</td></tr>}
-            </tbody>
-          </table>
+          <div class="table-wrap">
+            <table class="table text-sm">
+              <thead><tr><th>Orden</th><th>Comprador</th><th class="text-right">Por facturar</th></tr></thead>
+              <tbody>
+                {invoiceRows.slice(0, 10).map((o) => (
+                  <tr>
+                    <td><a href={`/ordenes/${o.id}`}>{orderNumber(o.order_number)}</a></td>
+                    <td>{o.buyer_name}<div class="text-xs text-slate-500">{o.company_name ?? 'Particular'}</div></td>
+                    <td class="text-right whitespace-nowrap">{cop(o.pending_amount)}</td>
+                  </tr>
+                ))}
+                {!invoiceRows.length && <tr><td colspan="3" class="text-slate-500">Todo lo verificado tiene factura vinculada.</td></tr>}
+              </tbody>
+            </table>
+          </div>
 
           {(pendingReclass.data?.length ?? 0) > 0 && (
             <p class="mt-3 text-sm">
@@ -228,23 +236,25 @@ const tiles: { label: string; value: string | number; href: string; tone?: strin
     <section class="card" id="quietas">
       <h2 class="mb-1">4. ¿Qué oportunidades están quietas?</h2>
       <p class="mb-3 text-xs text-slate-500">Sin interacción por encima del umbral o con la siguiente acción vencida.</p>
-      <table class="table text-sm">
-        <thead><tr><th>Negocio</th><th>Etapa</th><th>Ejecutivo</th><th>Alerta</th></tr></thead>
-        <tbody>
-          {(quietDeals.data ?? []).slice(0, 15).map((d) => (
-            <tr>
-              <td><a href={`/oportunidades/${d.id}`}>{d.deal_name_branch}</a><div class="text-xs text-slate-500">{d.company_name}</div></td>
-              <td class="text-xs">{d.stage ? STAGE_LABELS[d.stage] : ''}</td>
-              <td class="text-xs">{d.assigned_user_name ?? '—'}</td>
-              <td class="text-xs">
-                {d.inactivity_alert && <span class="badge badge-amber">{d.days_inactive} días sin interacción</span>}
-                {d.next_action_overdue && <div class="mt-1 text-red-700">Acción vencida {fmtDate(d.next_action_due_date)}: {d.next_action}</div>}
-              </td>
-            </tr>
-          ))}
-          {!quietDeals.data?.length && <tr><td colspan="4" class="text-slate-500">Ninguna oportunidad quieta.</td></tr>}
-        </tbody>
-      </table>
+      <div class="table-wrap">
+        <table class="table text-sm">
+          <thead><tr><th>Negocio</th><th>Etapa</th><th>Ejecutivo</th><th>Alerta</th></tr></thead>
+          <tbody>
+            {(quietDeals.data ?? []).slice(0, 15).map((d) => (
+              <tr>
+                <td><a href={`/oportunidades/${d.id}`}>{d.deal_name_branch}</a><div class="text-xs text-slate-500">{d.company_name}</div></td>
+                <td class="text-xs">{d.stage ? STAGE_LABELS[d.stage] : ''}</td>
+                <td class="text-xs">{d.assigned_user_name ?? '—'}</td>
+                <td class="text-xs">
+                  {d.inactivity_alert && <span class="badge badge-amber">{d.days_inactive} días sin interacción</span>}
+                  {d.next_action_overdue && <div class="mt-1 text-red-700">Acción vencida {fmtDate(d.next_action_due_date)}: {d.next_action}</div>}
+                </td>
+              </tr>
+            ))}
+            {!quietDeals.data?.length && <tr><td colspan="4" class="text-slate-500">Ninguna oportunidad quieta.</td></tr>}
+          </tbody>
+        </table>
+      </div>
     </section>
   </div>
 </AppLayout>

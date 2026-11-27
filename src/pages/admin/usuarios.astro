@@ -142,7 +142,7 @@ const [{ data: users }, { data: labs }] = await Promise.all([
           </optgroup>
         </select>
       </div>
-      <button class="btn btn-primary" type="submit">Crear y activar</button>
+      <button class="btn btn-primary order-last sm:order-none" type="submit">Crear y activar</button>
       {labs?.length ? (
         <div class="sm:col-span-2">
           <label class="label">Laboratorio (solo rol Laboratorio)</label>
@@ -164,7 +164,7 @@ const [{ data: users }, { data: labs }] = await Promise.all([
 
   <section class="card overflow-x-auto p-0">
     <table class="table">
-      <thead><tr><th>Usuario</th><th>Perfil o rol</th><th>Laboratorio</th><th>Activo</th><th>Alta</th><th></th></tr></thead>
+      <thead class="hidden sm:table-header-group"><tr><th>Usuario</th><th>Perfil o rol</th><th>Laboratorio</th><th>Activo</th><th>Alta</th><th></th></tr></thead>
       <tbody>
         {
           users?.map((u) => (

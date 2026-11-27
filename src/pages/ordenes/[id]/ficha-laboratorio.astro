@@ -54,13 +54,15 @@ for (const r of rows ?? []) {
           {sh.spec ? (
             <>
               {!sh.validated && <p class="font-medium text-amber-700">Ficha sin validar por Operación.</p>}
-              <table class="table text-xs">
-                <thead><tr><th></th>{EYE_FIELDS.map((f) => <th>{f.label}</th>)}</tr></thead>
-                <tbody>
-                  <tr><th>OD</th>{EYE_FIELDS.map((f) => <td>{fmtRx(sh.spec![`od_${f.key}` as keyof FabricationSpec], f.kind)}</td>)}</tr>
-                  <tr><th>OI</th>{EYE_FIELDS.map((f) => <td>{fmtRx(sh.spec![`os_${f.key}` as keyof FabricationSpec], f.kind)}</td>)}</tr>
-                </tbody>
-              </table>
+              <div class="table-wrap">
+                <table class="table text-xs">
+                  <thead><tr><th></th>{EYE_FIELDS.map((f) => <th>{f.label}</th>)}</tr></thead>
+                  <tbody>
+                    <tr><th>OD</th>{EYE_FIELDS.map((f) => <td>{fmtRx(sh.spec![`od_${f.key}` as keyof FabricationSpec], f.kind)}</td>)}</tr>
+                    <tr><th>OI</th>{EYE_FIELDS.map((f) => <td>{fmtRx(sh.spec![`os_${f.key}` as keyof FabricationSpec], f.kind)}</td>)}</tr>
+                  </tbody>
+                </table>
+              </div>
               <p class="text-xs">
                 DP total: {sh.spec.pd_total_mm ?? '—'} · Fórmula del {fmtDate(sh.spec.prescription_date)} ·{' '}
                 {FABRICATION_SOURCE_LABELS[sh.spec.source] ?? sh.spec.source} · Versión {sh.spec.version}

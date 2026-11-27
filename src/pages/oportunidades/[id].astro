@@ -168,7 +168,7 @@ const payrollDiffers = !!(companyPayroll && deal.payroll_frequency && companyPay
         {flags?.next_action_overdue && <span class="badge badge-red">Siguiente acción vencida</span>}
       </div>
     </div>
-    <div class="text-right">
+    <div class="sm:text-right">
       <div class="text-xs text-slate-500">Facturación estimada</div>
       <div class="text-2xl font-semibold text-brand-800">{cop(deal.estimated_billing_amount)}</div>
       <div class="text-xs text-slate-500">
@@ -234,27 +234,29 @@ const payrollDiffers = !!(companyPayroll && deal.payroll_frequency && companyPay
       <section class="card">
         <h2 class="mb-1">Propuestas comerciales</h2>
         <p class="mb-3 text-xs text-slate-500">Para pasar a Propuesta enviada se necesita al menos una. Las versiones anteriores se conservan.</p>
-        <table class="table">
-          <thead><tr><th>Versión</th><th>Documento</th><th>Enviada</th><th>Soporte</th><th>Registró</th></tr></thead>
-          <tbody>
-            {proposals.data?.map((p) => (
-              <tr>
-                <td>v{p.version}</td>
-                <td>{p.document_name}</td>
-                <td>{fmtDate(p.sent_on)}</td>
-                <td>
-                  {p.file_path ? (
-                    <a class="badge badge-green" href={supportHref(p.file_path)} target="_blank" rel="noopener">Ver archivo</a>
-                  ) : (
-                    <span class="text-xs text-slate-600">Sin archivo: {p.no_file_reason}</span>
-                  )}
-                </td>
-                <td class="text-xs text-slate-500">{p.users_profiles?.full_name} · {fmtDateTime(p.created_at)}</td>
-              </tr>
-            ))}
-            {!proposals.data?.length && <tr><td colspan="5" class="text-slate-500">Sin propuestas registradas.</td></tr>}
-          </tbody>
-        </table>
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr><th>Versión</th><th>Documento</th><th>Enviada</th><th>Soporte</th><th>Registró</th></tr></thead>
+            <tbody>
+              {proposals.data?.map((p) => (
+                <tr>
+                  <td>v{p.version}</td>
+                  <td>{p.document_name}</td>
+                  <td>{fmtDate(p.sent_on)}</td>
+                  <td>
+                    {p.file_path ? (
+                      <a class="badge badge-green" href={supportHref(p.file_path)} target="_blank" rel="noopener">Ver archivo</a>
+                    ) : (
+                      <span class="text-xs text-slate-600">Sin archivo: {p.no_file_reason}</span>
+                    )}
+                  </td>
+                  <td class="text-xs text-slate-500">{p.users_profiles?.full_name} · {fmtDateTime(p.created_at)}</td>
+                </tr>
+              ))}
+              {!proposals.data?.length && <tr><td colspan="5" class="text-slate-500">Sin propuestas registradas.</td></tr>}
+            </tbody>
+          </table>
+        </div>
         {
           canLog && !closedForGood && (
             <details class="mt-3">
@@ -290,20 +292,22 @@ const payrollDiffers = !!(companyPayroll && deal.payroll_frequency && companyPay
           <h2>Convenios</h2>
           {canCreateAgreement && <a class="btn btn-sm" href={`/convenios/nuevo?deal_id=${id}`}>Nuevo convenio</a>}
         </div>
-        <table class="table">
-          <thead><tr><th>Alcance</th><th>Estado</th><th>Cuotas</th><th>Vigencia</th></tr></thead>
-          <tbody>
-            {agreements.data?.map((a) => (
-              <tr>
-                <td><a href={`/convenios/${a.id}`}>{a.deal_name_branch ? 'Esta oportunidad' : 'Marco (todas las sedes)'}</a></td>
-                <td><span class={AGREEMENT_STATUS_BADGE[a.effective_status ?? 'borrador']}>{AGREEMENT_STATUS_LABELS[a.effective_status ?? 'borrador']}</span></td>
-                <td>{a.max_installments} {a.payroll_frequency ? PAYROLL_LABELS[a.payroll_frequency].toLowerCase() : ''}</td>
-                <td>{fmtDate(a.valid_until)}</td>
-              </tr>
-            ))}
-            {!agreements.data?.length && <tr><td colspan="4" class="text-slate-500">Sin convenios.</td></tr>}
-          </tbody>
-        </table>
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr><th>Alcance</th><th>Estado</th><th>Cuotas</th><th>Vigencia</th></tr></thead>
+            <tbody>
+              {agreements.data?.map((a) => (
+                <tr>
+                  <td><a href={`/convenios/${a.id}`}>{a.deal_name_branch ? 'Esta oportunidad' : 'Marco (todas las sedes)'}</a></td>
+                  <td><span class={AGREEMENT_STATUS_BADGE[a.effective_status ?? 'borrador']}>{AGREEMENT_STATUS_LABELS[a.effective_status ?? 'borrador']}</span></td>
+                  <td>{a.max_installments} {a.payroll_frequency ? PAYROLL_LABELS[a.payroll_frequency].toLowerCase() : ''}</td>
+                  <td>{fmtDate(a.valid_until)}</td>
+                </tr>
+              ))}
+              {!agreements.data?.length && <tr><td colspan="4" class="text-slate-500">Sin convenios.</td></tr>}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section class="card">
@@ -311,21 +315,23 @@ const payrollDiffers = !!(companyPayroll && deal.payroll_frequency && companyPay
           <h2>Jornadas</h2>
           {canCreateCampaign && <a class="btn btn-sm" href={`/jornadas/nueva?deal_id=${id}`}>Nueva jornada</a>}
         </div>
-        <table class="table">
-          <thead><tr><th>Primera sesión</th><th>Estado</th><th>Sesiones</th><th>Asistencia</th><th>Responsable</th></tr></thead>
-          <tbody>
-            {campaigns.data?.map((j) => (
-              <tr>
-                <td><a href={`/jornadas/${j.id}`}>{fmtDate(j.first_session_date)}</a></td>
-                <td><span class={j.status ? CAMPAIGN_STATUS_BADGE[j.status] : 'badge'}>{j.status ? CAMPAIGN_STATUS_LABELS[j.status] : ''}</span></td>
-                <td>{j.sessions_count}</td>
-                <td>{j.attended_headcount}</td>
-                <td>{j.responsible_user_name}</td>
-              </tr>
-            ))}
-            {!campaigns.data?.length && <tr><td colspan="5" class="text-slate-500">Sin jornadas.</td></tr>}
-          </tbody>
-        </table>
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr><th>Primera sesión</th><th>Estado</th><th>Sesiones</th><th>Asistencia</th><th>Responsable</th></tr></thead>
+            <tbody>
+              {campaigns.data?.map((j) => (
+                <tr>
+                  <td><a href={`/jornadas/${j.id}`}>{fmtDate(j.first_session_date)}</a></td>
+                  <td><span class={j.status ? CAMPAIGN_STATUS_BADGE[j.status] : 'badge'}>{j.status ? CAMPAIGN_STATUS_LABELS[j.status] : ''}</span></td>
+                  <td>{j.sessions_count}</td>
+                  <td>{j.attended_headcount}</td>
+                  <td>{j.responsible_user_name}</td>
+                </tr>
+              ))}
+              {!campaigns.data?.length && <tr><td colspan="5" class="text-slate-500">Sin jornadas.</td></tr>}
+            </tbody>
+          </table>
+        </div>
       </section>
     </div>
 

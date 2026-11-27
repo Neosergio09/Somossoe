@@ -25,7 +25,7 @@ const rxVal = (field: string) => {
   <legend class="px-1 text-xs font-medium text-slate-600">Ficha de fabricación (RX) · dato sensible</legend>
   <p class="text-xs text-amber-700" data-rx-locked>Marque la autorización de datos sensibles del comprador para capturar el RX.</p>
   <div class="overflow-x-auto">
-    <table class="table text-xs">
+    <table class="table table-compact text-xs">
       <thead>
         <tr><th></th>{EYE_FIELDS.map((f) => <th>{f.label}{f.required && ' *'}</th>)}</tr>
       </thead>
@@ -36,7 +36,7 @@ const rxVal = (field: string) => {
             {EYE_FIELDS.map((f) => (
               <td>
                 <input
-                  class="input w-20"
+                  class="input w-[4.5rem] px-2 sm:w-20"
                   name={rxName(`${eye}_${f.key}`)}
                   type="number"
                   step={f.step}

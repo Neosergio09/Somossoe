@@ -65,28 +65,30 @@ const [{ data: settings }, { data: cities }, { data: origins }, { data: labs }] 
   <div class="grid gap-4 lg:grid-cols-2">
     <section class="card lg:col-span-2">
       <h2 class="mb-3">Parámetros globales</h2>
-      <table class="table">
-        <thead><tr><th>Parámetro</th><th>Valor</th><th>Última modificación</th></tr></thead>
-        <tbody>
-          {settings?.map((s) => (
-            <tr>
-              <td>
-                <div class="font-medium">{s.description}</div>
-                <code class="text-xs text-slate-500">{s.key}</code>
-              </td>
-              <td>
-                <form method="post" class="flex gap-2">
-                  <input type="hidden" name="_action" value="update_setting" />
-                  <input type="hidden" name="key" value={s.key} />
-                  <input class="input w-32" name="value" type="number" step="any" value={s.value} required />
-                  <button class="btn btn-sm" type="submit">Guardar</button>
-                </form>
-              </td>
-              <td class="text-xs text-slate-500">{fmtDateTime(s.updated_at)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Parámetro</th><th>Valor</th><th>Última modificación</th></tr></thead>
+          <tbody>
+            {settings?.map((s) => (
+              <tr>
+                <td>
+                  <div class="font-medium">{s.description}</div>
+                  <code class="text-xs text-slate-500">{s.key}</code>
+                </td>
+                <td>
+                  <form method="post" class="flex gap-2">
+                    <input type="hidden" name="_action" value="update_setting" />
+                    <input type="hidden" name="key" value={s.key} />
+                    <input class="input w-32" name="value" type="number" step="any" value={s.value} required />
+                    <button class="btn btn-sm" type="submit">Guardar</button>
+                  </form>
+                </td>
+                <td class="text-xs text-slate-500">{fmtDateTime(s.updated_at)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <section class="card">

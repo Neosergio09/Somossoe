@@ -62,17 +62,17 @@ const days = (n: number | null) => (n == null ? '—' : n === 1 ? '1 día' : `${
         ))
       }
     </nav>
-    <form method="get" class="ml-auto flex flex-wrap items-center gap-2">
+    <form method="get" class="filters">
       <input type="hidden" name="estado" value={status} />
-      <select class="input w-auto" name="empresa">
+      <select class="input sm:w-auto" name="empresa">
         <option value="">Toda empresa</option>
         {companies?.map((c) => <option value={c.id} selected={company === c.id}>{c.name}</option>)}
       </select>
-      <select class="input w-auto" name="laboratorio">
+      <select class="input sm:w-auto" name="laboratorio">
         <option value="">Todo laboratorio</option>
         {labs?.map((l) => <option value={l.id} selected={lab === l.id}>{l.name}</option>)}
       </select>
-      <select class="input w-auto" name="responsable">
+      <select class="input sm:w-auto" name="responsable">
         <option value="">Todo responsable</option>
         {users.map((u) => <option value={u.id} selected={responsible === u.id}>{u.full_name}</option>)}
       </select>
