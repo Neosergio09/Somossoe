@@ -1,6 +1,6 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
-import { canManageUsers } from '../../lib/auth';
+import { canManageUsers, canSetPasswords } from '../../lib/auth';
 import { fmtDateTime } from '../../lib/format';
 import { checkbox, ensure, FormError, parseForm, runActions, text, uuid, z } from '../../lib/forms';
 import { createSupabaseAdminClient } from '../../lib/supabase';
@@ -11,6 +11,7 @@ import { createSupabaseAdminClient } from '../../lib/supabase';
 if (!canManageUsers(Astro.locals)) return Astro.redirect('/');
 
 const { supabase } = Astro.locals;
+const canSetPassword = canSetPasswords(Astro.locals);
 
 const outcome = await runActions(Astro, {
   create_user: async (form) => {
@@ -69,6 +70,22 @@ const outcome = await runActions(Astro, {
     );
     return { message: 'Usuario actualizado.' };
   },
+  set_password: async (form) => {
+    if (!canSetPassword) throw new FormError('Solo el Super administrador cambia claves.');
+    const input = parseForm(
+      z.object({
+        user_id: uuid(),
+        password: z.string().min(10, { error: 'mínimo 10 caracteres' }),
+      }),
+      form,
+    );
+    const { data: target } = await supabase.from('users_profiles').select('email').eq('id', input.user_id).maybeSingle();
+    if (!target) throw new FormError('Usuario no encontrado.');
+    // La clave secreta no sale del servidor.
+    const { error } = await createSupabaseAdminClient().auth.admin.updateUserById(input.user_id, { password: input.password });
+    if (error) throw new FormError('No se pudo cambiar la clave.');
+    return { message: `Clave de ${target.email} cambiada. Compártala por un canal seguro.` };
+  },
 });
 if (outcome?.kind === 'redirect') return outcome.response;
 const error = outcome?.kind === 'error' ? outcome.error : null;
@@ -115,6 +132,20 @@ const { data: users } = await supabase
                   <span class="text-xs text-slate-500">{fmtDateTime(u.created_at)}</span>
                   <button class="btn btn-sm" type="submit">Guardar</button>
                 </form>
+                {canSetPassword && (
+                  <details class="px-2 pb-2 text-sm">
+                    <summary class="cursor-pointer text-brand-700">Cambiar clave</summary>
+                    <form method="post" class="mt-2 flex flex-wrap items-end gap-2">
+                      <input type="hidden" name="_action" value="set_password" />
+                      <input type="hidden" name="user_id" value={u.id} />
+                      <div>
+                        <label class="label">Clave nueva</label>
+                        <input class="input" name="password" type="text" minlength="10" required autocomplete="off" />
+                      </div>
+                      <button class="btn btn-sm btn-primary" type="submit">Cambiar clave</button>
+                    </form>
+                  </details>
+                )}
               </td>
             </tr>
           ))
